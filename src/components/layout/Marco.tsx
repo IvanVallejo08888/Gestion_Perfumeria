@@ -10,6 +10,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useIntervalo } from "@/hooks/useIntervalo";
+import { useAlCambiarNotificaciones } from "@/hooks/useNotificaciones";
 import { api } from "@/lib/http";
 import { BotonInstalar } from "../pwa/BotonInstalar";
 import { ControlTexto } from "./ControlTexto";
@@ -64,19 +66,12 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
   }, []);
 
   useEffect(() => {
-    if (!notificaciones) return;
-    consultar();
-    const id = setInterval(consultar, INTERVALO_NOTIFICACIONES_MS);
-    // Volver a consultar al regresar a la pestaña
-    const alVolver = () => document.visibilityState === "visible" && consultar();
-    document.addEventListener("visibilitychange", alVolver);
-    window.addEventListener("notificaciones:actualizar", consultar);
-    return () => {
-      clearInterval(id);
-      document.removeEventListener("visibilitychange", alVolver);
-      window.removeEventListener("notificaciones:actualizar", consultar);
-    };
+    if (notificaciones) consultar();
   }, [notificaciones, consultar]);
+  // Cada minuto y al regresar a la pestaña
+  useIntervalo(consultar, INTERVALO_NOTIFICACIONES_MS, { activo: notificaciones, alVolver: true });
+  // Cuando otra pantalla avisa que algo cambió (venta, abono, stock…)
+  useAlCambiarNotificaciones(consultar, notificaciones);
 
   async function salir() {
     await api("/api/auth/logout", { method: "POST" }).catch(() => {});

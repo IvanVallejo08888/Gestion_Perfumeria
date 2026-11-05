@@ -7,13 +7,15 @@
  */
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { DetalleFactura } from "@/components/facturacion/DetalleFactura";
 import { Boton } from "@/components/ui/Boton";
 import { Campo, CampoDinero } from "@/components/ui/Campo";
 import { Cargando, EncabezadoPagina, Insignia, Mensaje, Tarjeta, Vacio } from "@/components/ui/Basicos";
 import { Modal } from "@/components/ui/Modal";
 import { useAvisos } from "@/components/ui/Avisos";
+import { useConsulta } from "@/hooks/useConsulta";
+import { avisarCambioNotificaciones } from "@/hooks/useNotificaciones";
 import { aInputFechaHora, fechaHora, numeroFactura, pesos } from "@/lib/formato";
 import { api } from "@/lib/http";
 import type { FacturaDetalle } from "@/tipos";
@@ -38,26 +40,16 @@ export function GestionCreditos({ identificacionInicial }: { identificacionInici
   const avisos = useAvisos();
   const [identificacion, setIdentificacion] = useState(identificacionInicial);
   const [buscada, setBuscada] = useState(identificacionInicial);
-  const [creditos, setCreditos] = useState<Credito[] | null>(null);
   const [abonando, setAbonando] = useState<string | null>(null);
   const [cuotasDe, setCuotasDe] = useState<string | null>(null);
   const [detalleId, setDetalleId] = useState<string | null>(null);
 
-  const cargar = useCallback(async () => {
-    setCreditos(null);
-    try {
-      const q = buscada ? `?identificacion=${encodeURIComponent(buscada)}` : "";
-      setCreditos((await api<{ creditos: Credito[] }>(`/api/creditos${q}`)).creditos);
-    } catch (e) {
-      avisos.error((e as Error).message);
-      setCreditos([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buscada]);
-
-  useEffect(() => {
-    cargar();
-  }, [cargar]);
+  const consulta = useConsulta<{ creditos: Credito[] }>(
+    `/api/creditos${buscada ? `?identificacion=${encodeURIComponent(buscada)}` : ""}`,
+    { alError: avisos.error },
+  );
+  const creditos = consulta.cargando ? null : (consulta.datos?.creditos ?? (consulta.error ? [] : null));
+  const cargar = consulta.recargar;
 
   function buscar(e: FormEvent) {
     e.preventDefault();
@@ -184,7 +176,7 @@ export function GestionCreditos({ identificacionInicial }: { identificacionInici
             setAbonando(null);
             if (f.estado === "COMPLETADA") avisos.exito(`¡Crédito de ${f.clienteNombre} pagado! Pasó a ventas completadas.`);
             else avisos.exito(`Abono registrado. Saldo pendiente: ${pesos(f.saldo)}`);
-            window.dispatchEvent(new Event("notificaciones:actualizar"));
+            avisarCambioNotificaciones();
             cargar();
           }}
         />
@@ -198,17 +190,13 @@ export function GestionCreditos({ identificacionInicial }: { identificacionInici
 /* --------------------------------- Abonar --------------------------------- */
 
 function ModalAbono({ facturaId, onCerrar, onListo }: { facturaId: string; onCerrar: () => void; onListo: (f: FacturaDetalle) => void }) {
-  const [factura, setFactura] = useState<FacturaDetalle | null>(null);
+  const consulta = useConsulta<{ factura: FacturaDetalle }>(`/api/facturas/${facturaId}`);
+  const factura = consulta.datos?.factura ?? null;
   const [valor, setValor] = useState(0);
   const [nota, setNota] = useState("");
-  const [error, setError] = useState("");
+  const [errorGuardar, setError] = useState("");
+  const error = errorGuardar || consulta.error;
   const [cargando, setCargando] = useState(false);
-
-  useEffect(() => {
-    api<{ factura: FacturaDetalle }>(`/api/facturas/${facturaId}`)
-      .then((d) => setFactura(d.factura))
-      .catch((e) => setError((e as Error).message));
-  }, [facturaId]);
 
   const proxima = factura?.cuotas.find((c) => c.estado === "PENDIENTE");
   const valorProxima = proxima ? proxima.valor - proxima.valorPagado : 0;
@@ -282,24 +270,16 @@ function ModalAbono({ facturaId, onCerrar, onListo }: { facturaId: string; onCer
 
 function ModalCuotas({ facturaId, onCerrar, onCambio }: { facturaId: string; onCerrar: () => void; onCambio: () => void }) {
   const avisos = useAvisos();
-  const [factura, setFactura] = useState<FacturaDetalle | null>(null);
   const [fechas, setFechas] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState<string | null>(null);
-  const [error, setError] = useState("");
 
-  const cargar = useCallback(async () => {
-    try {
-      const { factura: f } = await api<{ factura: FacturaDetalle }>(`/api/facturas/${facturaId}`);
-      setFactura(f);
-      setFechas(Object.fromEntries(f.cuotas.map((c) => [c.id, aInputFechaHora(new Date(c.fechaVencimiento))])));
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }, [facturaId]);
-
-  useEffect(() => {
-    cargar();
-  }, [cargar]);
+  const consulta = useConsulta<{ factura: FacturaDetalle }>(`/api/facturas/${facturaId}`, {
+    alCargar: ({ factura: f }) =>
+      setFechas(Object.fromEntries(f.cuotas.map((c) => [c.id, aInputFechaHora(new Date(c.fechaVencimiento))]))),
+  });
+  const factura = consulta.datos?.factura ?? null;
+  const error = consulta.error;
+  const cargar = consulta.recargar;
 
   async function guardarFecha(cuotaId: string) {
     const valor = fechas[cuotaId];
@@ -308,7 +288,7 @@ function ModalCuotas({ facturaId, onCerrar, onCambio }: { facturaId: string; onC
     try {
       await api(`/api/creditos/cuotas/${cuotaId}`, { method: "PUT", json: { fechaVencimiento: new Date(valor).toISOString() } });
       avisos.exito("Fecha de cobro actualizada.");
-      window.dispatchEvent(new Event("notificaciones:actualizar"));
+      avisarCambioNotificaciones();
       await cargar();
       onCambio();
     } catch (e) {

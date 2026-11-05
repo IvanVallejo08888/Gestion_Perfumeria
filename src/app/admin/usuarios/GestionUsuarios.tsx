@@ -6,13 +6,15 @@
  */
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Boton } from "@/components/ui/Boton";
 import { Campo, CampoPassword, Selector } from "@/components/ui/Campo";
 import { Cargando, EncabezadoPagina, Insignia, Mensaje, Tarjeta, Vacio } from "@/components/ui/Basicos";
 import { Confirmar, Modal } from "@/components/ui/Modal";
 import { useAvisos } from "@/components/ui/Avisos";
 import { ReglasPassword } from "@/components/ui/ReglasPassword";
+import { useConsulta } from "@/hooks/useConsulta";
+import { useValorDiferido } from "@/hooks/useValorDiferido";
 import { fecha } from "@/lib/formato";
 import { api } from "@/lib/http";
 import { passwordEsValida } from "@/lib/validaciones";
@@ -59,34 +61,18 @@ export function GestionUsuarios({ estadoInicial }: { estadoInicial: string }) {
   const avisos = useAvisos();
   const [estado, setEstado] = useState(estadoInicial);
   const [texto, setTexto] = useState("");
-  const [usuarios, setUsuarios] = useState<Usuario[] | null>(null);
-  const [locales, setLocales] = useState<LocalOpcion[]>([]);
   const [accion, setAccion] = useState<Accion | null>(null);
 
-  const cargar = useCallback(async () => {
-    const params = new URLSearchParams();
-    if (estado) params.set("estado", estado);
-    if (texto.trim()) params.set("texto", texto.trim());
-    try {
-      setUsuarios((await api<{ usuarios: Usuario[] }>(`/api/admin/usuarios?${params}`)).usuarios);
-    } catch (e) {
-      avisos.error((e as Error).message);
-      setUsuarios([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [estado, texto]);
-
   // Búsqueda con una pequeña espera para no consultar con cada letra
-  useEffect(() => {
-    const t = setTimeout(cargar, 300);
-    return () => clearTimeout(t);
-  }, [cargar]);
+  const textoBuscado = useValorDiferido(texto.trim(), 300);
+  const params = new URLSearchParams();
+  if (estado) params.set("estado", estado);
+  if (textoBuscado) params.set("texto", textoBuscado);
+  const consulta = useConsulta<{ usuarios: Usuario[] }>(`/api/admin/usuarios?${params}`, { alError: avisos.error });
+  const usuarios = consulta.datos?.usuarios ?? (consulta.error ? [] : null);
+  const cargar = consulta.recargar;
 
-  useEffect(() => {
-    api<{ locales: LocalOpcion[] }>("/api/admin/locales")
-      .then((d) => setLocales(d.locales))
-      .catch(() => {});
-  }, []);
+  const locales = useConsulta<{ locales: LocalOpcion[] }>("/api/admin/locales").datos?.locales ?? [];
 
   const terminar = (mensaje: string) => {
     avisos.exito(mensaje);

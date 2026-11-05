@@ -3,12 +3,13 @@
  */
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Boton } from "@/components/ui/Boton";
 import { Campo } from "@/components/ui/Campo";
 import { Cargando, EncabezadoPagina, Insignia, Mensaje, Tarjeta, Vacio } from "@/components/ui/Basicos";
 import { Modal } from "@/components/ui/Modal";
 import { useAvisos } from "@/components/ui/Avisos";
+import { useConsulta } from "@/hooks/useConsulta";
 import { api } from "@/lib/http";
 
 interface Local {
@@ -25,25 +26,13 @@ const FORM_VACIO = { nombre: "", direccion: "", telefono: "", activo: true };
 
 export default function PaginaLocales() {
   const avisos = useAvisos();
-  const [locales, setLocales] = useState<Local[] | null>(null);
+  const consulta = useConsulta<{ locales: Local[] }>("/api/admin/locales", { alError: avisos.error });
+  const locales = consulta.datos?.locales ?? (consulta.error ? [] : null);
+  const cargar = consulta.recargar;
   const [editando, setEditando] = useState<Local | "nuevo" | null>(null);
   const [form, setForm] = useState(FORM_VACIO);
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
-
-  const cargar = useCallback(async () => {
-    try {
-      setLocales((await api<{ locales: Local[] }>("/api/admin/locales")).locales);
-    } catch (e) {
-      avisos.error((e as Error).message);
-      setLocales([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    cargar();
-  }, [cargar]);
 
   function abrir(local: Local | "nuevo") {
     setError("");

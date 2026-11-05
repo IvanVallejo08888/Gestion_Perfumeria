@@ -4,25 +4,17 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
-import { api } from "@/lib/http";
+import { useConsulta } from "@/hooks/useConsulta";
 import type { FacturaDetalle } from "@/tipos";
 import { Cargando, Mensaje } from "../ui/Basicos";
 import { Modal } from "../ui/Modal";
 import { VistaFactura } from "./VistaFactura";
 
 export function DetalleFactura({ facturaId, onCerrar }: { facturaId: string | null; onCerrar: () => void }) {
-  const [factura, setFactura] = useState<FacturaDetalle | null>(null);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!facturaId) return;
-    setFactura(null);
-    setError("");
-    api<{ factura: FacturaDetalle }>(`/api/facturas/${facturaId}`)
-      .then((d) => setFactura(d.factura))
-      .catch((e) => setError((e as Error).message));
-  }, [facturaId]);
+  const url = facturaId ? `/api/facturas/${facturaId}` : null;
+  const { datos, urlDatos, error } = useConsulta<{ factura: FacturaDetalle }>(url);
+  // Mientras carga otra factura no se muestra la anterior
+  const factura = urlDatos === url ? (datos?.factura ?? null) : null;
 
   return (
     <Modal abierto={facturaId !== null} onCerrar={onCerrar} titulo={factura ? `Factura de ${factura.clienteNombre}` : "Detalle de factura"} tamano="xl">
