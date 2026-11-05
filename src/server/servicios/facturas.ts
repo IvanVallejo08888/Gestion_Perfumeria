@@ -1,0 +1,266 @@
+/**
+ * Servicio de facturación.
+ *
+ * Al registrar una factura, TODO ocurre dentro de una transacción:
+ *   1. Guarda o actualiza el cliente.
+ *   2. Descuenta el stock de cada producto (si no alcanza, se cancela toda la venta).
+ *   3. Asigna el número consecutivo del local.
+ *   4. Guarda la factura, sus productos y (si es crédito) sus cuotas.
+ * Si algo falla, no se guarda nada y el inventario queda intacto.
+ */
+import "server-only";
+import { and, asc, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
+import { db } from "@/db";
+import { abonos, clientes, cuotas, facturaItems, facturas, locales, productos } from "@/db/schema";
+import { ApiError, type VendedorSesion } from "@/lib/api";
+import type { ClienteDatos, FacturaDetalle, FacturaResumen } from "@/tipos";
+
+export interface DatosNuevaFactura {
+  tipo: "NORMAL" | "CREDITO";
+  cliente: ClienteDatos;
+  items: { productoId: string; cantidad: number }[];
+  adicional: number;
+  descuento: number;
+  notas?: string;
+  cuotas?: { fechaVencimiento: string }[];
+}
+
+export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFactura): Promise<string> {
+  const localId = vendedor.localId;
+
+  // Si el mismo producto viene dos veces, se suman las cantidades
+  const cantidades = new Map<string, number>();
+  for (const item of datos.items) cantidades.set(item.productoId, (cantidades.get(item.productoId) ?? 0) + item.cantidad);
+
+  return db.transaction(async (tx) => {
+    /* 1. Cliente: se crea o se actualizan sus datos */
+    const [cliente] = await tx
+      .insert(clientes)
+      .values({ localId, ...datos.cliente })
+      .onConflictDoUpdate({
+        target: [clientes.localId, clientes.identificacion],
+        set: {
+          nombre: datos.cliente.nombre,
+          telefono: datos.cliente.telefono,
+          direccion: datos.cliente.direccion,
+          sector: datos.cliente.sector,
+          actualizadoEn: new Date(),
+        },
+      })
+      .returning();
+
+    /* 2. Descontar inventario (solo si hay stock suficiente) */
+    const lineas: { productoId: string; nombre: string; precio: number; cantidad: number }[] = [];
+    for (const [productoId, cantidad] of cantidades) {
+      const [actualizado] = await tx
+        .update(productos)
+        .set({ stock: sql`${productos.stock} - ${cantidad}` })
+        .where(
+          and(
+            eq(productos.id, productoId),
+            eq(productos.localId, localId),
+            eq(productos.activo, true),
+            sql`${productos.stock} >= ${cantidad}`,
+          ),
+        )
+        .returning({ nombre: productos.nombre, precio: productos.precio });
+
+      if (!actualizado) {
+        const producto = await tx.query.productos.findFirst({
+          where: and(eq(productos.id, productoId), eq(productos.localId, localId)),
+        });
+        if (!producto || !producto.activo) throw new ApiError(404, "Uno de los productos ya no existe en el inventario.");
+        throw new ApiError(
+          409,
+          producto.stock === 0
+            ? `No hay stock de "${producto.nombre}". No se puede vender.`
+            : `Stock insuficiente de "${producto.nombre}": solo quedan ${producto.stock} unidades.`,
+        );
+      }
+      lineas.push({ productoId, nombre: actualizado.nombre, precio: actualizado.precio, cantidad });
+    }
+
+    /* 3. Totales (el precio SIEMPRE se toma del inventario, nunca del navegador) */
+    const subtotal = lineas.reduce((acc, l) => acc + l.precio * l.cantidad, 0);
+    const total = subtotal + datos.adicional - datos.descuento;
+    if (total < 0) throw new ApiError(400, "El descuento no puede ser mayor que el valor de la factura.");
+    if (datos.tipo === "CREDITO" && total === 0) throw new ApiError(400, "Un crédito debe tener un valor mayor que cero.");
+
+    /* 4. Número consecutivo del local (operación atómica) */
+    const [local] = await tx
+      .update(locales)
+      .set({ consecutivoFactura: sql`${locales.consecutivoFactura} + 1` })
+      .where(eq(locales.id, localId))
+      .returning({ numero: locales.consecutivoFactura });
+
+    const esCredito = datos.tipo === "CREDITO";
+    const ahora = new Date();
+
+    const [factura] = await tx
+      .insert(facturas)
+      .values({
+        numero: local.numero,
+        tipo: datos.tipo,
+        estado: esCredito ? "PENDIENTE" : "COMPLETADA",
+        localId,
+        usuarioId: vendedor.id,
+        vendedorNombre: vendedor.nombre,
+        clienteId: cliente.id,
+        clienteIdentificacion: cliente.identificacion,
+        clienteNombre: cliente.nombre,
+        clienteTelefono: cliente.telefono,
+        clienteDireccion: cliente.direccion,
+        clienteSector: cliente.sector,
+        subtotal,
+        adicional: datos.adicional,
+        descuento: datos.descuento,
+        total,
+        saldo: esCredito ? total : 0,
+        notas: datos.notas || null,
+        completadaEn: esCredito ? null : ahora,
+      })
+      .returning({ id: facturas.id });
+
+    await tx.insert(facturaItems).values(
+      lineas.map((l) => ({
+        facturaId: factura.id,
+        productoId: l.productoId,
+        nombreProducto: l.nombre,
+        precioUnitario: l.precio,
+        cantidad: l.cantidad,
+        subtotal: l.precio * l.cantidad,
+      })),
+    );
+
+    /* 5. Cuotas: el valor se reparte en partes iguales; la última absorbe la diferencia de redondeo */
+    if (esCredito && datos.cuotas?.length) {
+      const fechas = datos.cuotas.map((c) => new Date(c.fechaVencimiento)).sort((a, b) => a.getTime() - b.getTime());
+      const n = fechas.length;
+      const base = Math.floor(total / n);
+      await tx.insert(cuotas).values(
+        fechas.map((f, i) => ({
+          facturaId: factura.id,
+          numero: i + 1,
+          fechaVencimiento: f,
+          valor: i === n - 1 ? total - base * (n - 1) : base,
+        })),
+      );
+    }
+
+    return factura.id;
+  });
+}
+
+/* ------------------------------- Consultas ------------------------------- */
+
+export async function listarFacturas(
+  localId: string,
+  filtros: { estado?: string; tipo?: string; texto?: string; pagina?: number },
+): Promise<{ facturas: FacturaResumen[]; hayMas: boolean }> {
+  const POR_PAGINA = 30;
+  const pagina = Math.max(1, filtros.pagina ?? 1);
+  const condiciones: SQL[] = [eq(facturas.localId, localId)];
+
+  if (filtros.estado === "PENDIENTE" || filtros.estado === "COMPLETADA") condiciones.push(eq(facturas.estado, filtros.estado));
+  if (filtros.tipo === "NORMAL" || filtros.tipo === "CREDITO") condiciones.push(eq(facturas.tipo, filtros.tipo));
+  if (filtros.texto?.trim()) {
+    const t = filtros.texto.trim();
+    const opciones: SQL[] = [ilike(facturas.clienteNombre, `%${t}%`), ilike(facturas.clienteIdentificacion, `%${t}%`)];
+    if (/^\d+$/.test(t)) opciones.push(eq(facturas.numero, Number(t)));
+    condiciones.push(or(...opciones)!);
+  }
+
+  const filas = await db
+    .select({
+      id: facturas.id,
+      numero: facturas.numero,
+      tipo: facturas.tipo,
+      estado: facturas.estado,
+      clienteNombre: facturas.clienteNombre,
+      clienteIdentificacion: facturas.clienteIdentificacion,
+      total: facturas.total,
+      saldo: facturas.saldo,
+      creadoEn: facturas.creadoEn,
+      completadaEn: facturas.completadaEn,
+    })
+    .from(facturas)
+    .where(and(...condiciones))
+    // Las ventas completadas se ordenan por la fecha en que se completaron
+    .orderBy(desc(sql`coalesce(${facturas.completadaEn}, ${facturas.creadoEn})`))
+    .limit(POR_PAGINA + 1)
+    .offset((pagina - 1) * POR_PAGINA);
+
+  return {
+    facturas: filas.slice(0, POR_PAGINA).map(serializarResumen),
+    hayMas: filas.length > POR_PAGINA,
+  };
+}
+
+export async function obtenerFactura(localId: string, id: string): Promise<FacturaDetalle> {
+  const f = await db.query.facturas.findFirst({
+    where: and(eq(facturas.id, id), eq(facturas.localId, localId)),
+    with: {
+      local: { columns: { nombre: true, direccion: true, telefono: true } },
+      items: true,
+      cuotas: { orderBy: asc(cuotas.numero) },
+      abonos: { orderBy: desc(abonos.creadoEn) },
+    },
+  });
+  if (!f) throw new ApiError(404, "La factura no existe.");
+
+  return {
+    ...serializarResumen(f),
+    clienteTelefono: f.clienteTelefono,
+    clienteDireccion: f.clienteDireccion,
+    clienteSector: f.clienteSector,
+    vendedorNombre: f.vendedorNombre,
+    subtotal: f.subtotal,
+    adicional: f.adicional,
+    descuento: f.descuento,
+    notas: f.notas,
+    local: f.local,
+    items: f.items.map((i) => ({
+      id: i.id,
+      nombreProducto: i.nombreProducto,
+      precioUnitario: i.precioUnitario,
+      cantidad: i.cantidad,
+      subtotal: i.subtotal,
+    })),
+    cuotas: f.cuotas.map((c) => ({
+      id: c.id,
+      numero: c.numero,
+      fechaVencimiento: c.fechaVencimiento.toISOString(),
+      valor: c.valor,
+      valorPagado: c.valorPagado,
+      estado: c.estado,
+      pagadaEn: c.pagadaEn?.toISOString() ?? null,
+    })),
+    abonos: f.abonos.map((a) => ({ id: a.id, valor: a.valor, nota: a.nota, creadoEn: a.creadoEn.toISOString() })),
+  };
+}
+
+function serializarResumen(f: {
+  id: string;
+  numero: number;
+  tipo: "NORMAL" | "CREDITO";
+  estado: "PENDIENTE" | "COMPLETADA";
+  clienteNombre: string;
+  clienteIdentificacion: string;
+  total: number;
+  saldo: number;
+  creadoEn: Date;
+  completadaEn: Date | null;
+}): FacturaResumen {
+  return {
+    id: f.id,
+    numero: f.numero,
+    tipo: f.tipo,
+    estado: f.estado,
+    clienteNombre: f.clienteNombre,
+    clienteIdentificacion: f.clienteIdentificacion,
+    total: f.total,
+    saldo: f.saldo,
+    creadoEn: f.creadoEn.toISOString(),
+    completadaEn: f.completadaEn?.toISOString() ?? null,
+  };
+}

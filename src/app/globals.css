@@ -1,0 +1,105 @@
+/*
+ * ============================================================
+ *  Estilos globales — pensados para personas adultas:
+ *  - Letra base de 18px (y botón para agrandarla aún más).
+ *  - Colores con alto contraste (cumplen WCAG AA).
+ *  - Botones y campos de mínimo 48px de alto: fáciles de tocar.
+ *  - Contorno de enfoque visible para quien navega con teclado.
+ * ============================================================
+ */
+@import "tailwindcss";
+
+@theme {
+  /* Tipografía muy legible (Atkinson Hyperlegible, diseñada para baja visión) */
+  --font-sans: "Atkinson Hyperlegible", "Segoe UI", Roboto, Arial, sans-serif;
+
+  /* Color principal: morado profundo (contraste 8.6:1 sobre blanco) */
+  --color-marca-50: #f5f3ff;
+  --color-marca-100: #ede9fe;
+  --color-marca-200: #ddd6fe;
+  --color-marca-600: #6d28d9;
+  --color-marca-700: #5b21b6;
+  --color-marca-800: #4c1d95;
+  --color-marca-900: #3b1773;
+
+  /* Colores de estado (siempre se acompañan de texto o ícono, nunca solo color) */
+  --color-exito-50: #ecfdf5;
+  --color-exito-700: #047857;
+  --color-exito-800: #065f46;
+  --color-alerta-50: #fffbeb;
+  --color-alerta-700: #b45309;
+  --color-alerta-800: #92400e;
+  --color-peligro-50: #fef2f2;
+  --color-peligro-700: #b91c1c;
+  --color-peligro-800: #991b1b;
+  --color-info-50: #eff6ff;
+  --color-info-700: #1d4ed8;
+  --color-info-800: #1e40af;
+
+  /* Neutros */
+  --color-texto: #111827;
+  --color-texto-suave: #374151;
+  --color-borde: #9ca3af;
+  --color-fondo: #f6f5fb;
+}
+
+/* Tamaño de letra: normal (18px), grande (20px) y muy grande (22px) */
+html {
+  font-size: 112.5%;
+  -webkit-text-size-adjust: 100%;
+}
+html[data-texto="grande"] {
+  font-size: 125%;
+}
+html[data-texto="muy-grande"] {
+  font-size: 137.5%;
+}
+
+body {
+  background: var(--color-fondo);
+  color: var(--color-texto);
+  font-family: var(--font-sans);
+  line-height: 1.55;
+}
+
+/* Enfoque muy visible para teclado */
+:focus-visible {
+  outline: 3px solid var(--color-marca-600);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* Quitar flechas de los campos numéricos (se confunden al tocar en celular) */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Respetar a quien prefiere menos animaciones */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Impresión: solo se imprime la factura */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #factura-imprimible,
+  #factura-imprimible * {
+    visibility: visible;
+  }
+  #factura-imprimible {
+    position: absolute;
+    inset: 0 auto auto 0;
+  }
+}
