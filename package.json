@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "iconos": "node scripts/generar-iconos.mjs",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx src/db/seed.ts",
@@ -37,6 +38,7 @@
     "@types/react-dom": "^19.3.0",
     "dotenv": "^18.0.9",
     "drizzle-kit": "^0.31.11",
+    "sharp": "^0.35.5",
     "tailwindcss": "^4.3.4",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3"
