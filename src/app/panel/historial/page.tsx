@@ -6,14 +6,15 @@
  */
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { DetalleFactura } from "@/components/facturacion/DetalleFactura";
 import { Boton } from "@/components/ui/Boton";
 import { Campo } from "@/components/ui/Campo";
 import { Cargando, EncabezadoPagina, Insignia, Tarjeta, Vacio } from "@/components/ui/Basicos";
 import { useAvisos } from "@/components/ui/Avisos";
+import { useConsultaPaginada } from "@/hooks/useConsultaPaginada";
+import { useValorDiferido } from "@/hooks/useValorDiferido";
 import { fechaHora, numeroFactura, pesos } from "@/lib/formato";
-import { api } from "@/lib/http";
 import type { FacturaResumen } from "@/tipos";
 
 const FILTROS = [
@@ -26,41 +27,23 @@ export default function PaginaHistorial() {
   const avisos = useAvisos();
   const [estado, setEstado] = useState("COMPLETADA");
   const [texto, setTexto] = useState("");
-  const [facturas, setFacturas] = useState<FacturaResumen[] | null>(null);
-  const [pagina, setPagina] = useState(1);
-  const [hayMas, setHayMas] = useState(false);
-  const [cargandoMas, setCargandoMas] = useState(false);
   const [detalleId, setDetalleId] = useState<string | null>(null);
+  const textoBuscado = useValorDiferido(texto.trim(), 300);
 
-  const cargar = useCallback(
-    async (numeroPagina: number) => {
-      const params = new URLSearchParams({ pagina: String(numeroPagina) });
-      if (estado) params.set("estado", estado);
-      if (texto.trim()) params.set("q", texto.trim());
-      try {
-        const datos = await api<{ facturas: FacturaResumen[]; hayMas: boolean }>(`/api/facturas?${params}`);
-        setFacturas((previas) => (numeroPagina === 1 ? datos.facturas : [...(previas ?? []), ...datos.facturas]));
-        setHayMas(datos.hayMas);
-        setPagina(numeroPagina);
-      } catch (e) {
-        avisos.error((e as Error).message);
-        setFacturas((f) => f ?? []);
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [estado, texto],
+  const params = new URLSearchParams();
+  if (estado) params.set("estado", estado);
+  if (textoBuscado) params.set("q", textoBuscado);
+
+  const {
+    items: facturas,
+    hayMas,
+    cargandoMas,
+    cargarMas,
+  } = useConsultaPaginada(
+    `/api/facturas?${params}`,
+    (r: { facturas: FacturaResumen[]; hayMas: boolean }) => ({ items: r.facturas, hayMas: r.hayMas }),
+    { alError: avisos.error },
   );
-
-  useEffect(() => {
-    const t = setTimeout(() => cargar(1), 300);
-    return () => clearTimeout(t);
-  }, [cargar]);
-
-  async function cargarMas() {
-    setCargandoMas(true);
-    await cargar(pagina + 1);
-    setCargandoMas(false);
-  }
 
   return (
     <>

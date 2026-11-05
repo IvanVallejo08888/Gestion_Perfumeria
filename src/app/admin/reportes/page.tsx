@@ -6,45 +6,33 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { VistaEstadisticas } from "@/components/compartidos/VistaEstadisticas";
 import { Cargando, EncabezadoPagina, Mensaje, Tarjeta, Vacio } from "@/components/ui/Basicos";
 import { Selector } from "@/components/ui/Campo";
 import { Icono } from "@/components/ui/Icono";
+import { useConsulta } from "@/hooks/useConsulta";
 import { MESES } from "@/lib/formato";
-import { api } from "@/lib/http";
 import type { Estadisticas } from "@/tipos";
 
 const ANIO_ACTUAL = new Date().getFullYear();
 const ANIOS = Array.from({ length: 6 }, (_, i) => ANIO_ACTUAL - i);
 
 export default function ReportesAdmin() {
-  const [locales, setLocales] = useState<{ id: string; nombre: string }[] | null>(null);
   const [localId, setLocalId] = useState("");
   const [anio, setAnio] = useState(ANIO_ACTUAL);
   const [mes, setMes] = useState(0); // 0 = todo el año
-  const [datos, setDatos] = useState<Estadisticas | null>(null);
-  const [cargando, setCargando] = useState(false);
-  const [error, setError] = useState("");
 
-  useEffect(() => {
-    api<{ locales: { id: string; nombre: string }[] }>("/api/admin/locales")
-      .then((d) => {
-        setLocales(d.locales);
-        if (d.locales[0]) setLocalId(d.locales[0].id);
-      })
-      .catch((e) => setError((e as Error).message));
-  }, []);
+  const consultaLocales = useConsulta<{ locales: { id: string; nombre: string }[] }>("/api/admin/locales", {
+    alCargar: (d) => {
+      if (d.locales[0]) setLocalId((actual) => actual || d.locales[0].id);
+    },
+  });
+  const locales = consultaLocales.datos?.locales ?? null;
 
-  useEffect(() => {
-    if (!localId) return;
-    setCargando(true);
-    setError("");
-    api<Estadisticas>(`/api/admin/estadisticas?localId=${localId}&anio=${anio}`)
-      .then(setDatos)
-      .catch((e) => setError((e as Error).message))
-      .finally(() => setCargando(false));
-  }, [localId, anio]);
+  const consultaDatos = useConsulta<Estadisticas>(localId ? `/api/admin/estadisticas?localId=${localId}&anio=${anio}` : null);
+  const { datos, cargando } = consultaDatos;
+  const error = consultaLocales.error || consultaDatos.error;
 
   const urlExcel = (conMes: boolean) =>
     `/api/admin/reportes/excel?localId=${localId}&anio=${anio}${conMes && mes ? `&mes=${mes}` : ""}`;

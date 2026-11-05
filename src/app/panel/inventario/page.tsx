@@ -6,12 +6,15 @@
  */
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Boton } from "@/components/ui/Boton";
 import { Campo, CampoDinero } from "@/components/ui/Campo";
 import { Cargando, EncabezadoPagina, Insignia, Mensaje, Tarjeta, Vacio } from "@/components/ui/Basicos";
 import { Confirmar, Modal } from "@/components/ui/Modal";
 import { useAvisos } from "@/components/ui/Avisos";
+import { useConsulta } from "@/hooks/useConsulta";
+import { avisarCambioNotificaciones } from "@/hooks/useNotificaciones";
+import { useValorDiferido } from "@/hooks/useValorDiferido";
 import { pesos } from "@/lib/formato";
 import { api } from "@/lib/http";
 import type { Producto } from "@/tipos";
@@ -21,27 +24,17 @@ const FORM_VACIO = { nombre: "", codigo: "", precio: 0, stock: 0, stockMinimo: 3
 export default function PaginaInventario() {
   const avisos = useAvisos();
   const [texto, setTexto] = useState("");
-  const [productos, setProductos] = useState<Producto[] | null>(null);
+  const textoBuscado = useValorDiferido(texto.trim(), 300);
+  const consulta = useConsulta<{ productos: Producto[] }>(
+    `/api/productos${textoBuscado ? `?q=${encodeURIComponent(textoBuscado)}` : ""}`,
+    { alError: avisos.error },
+  );
+  const productos = consulta.datos?.productos ?? (consulta.error ? [] : null);
+  const cargar = consulta.recargar;
   const [editando, setEditando] = useState<Producto | "nuevo" | null>(null);
   const [ajustando, setAjustando] = useState<Producto | null>(null);
   const [eliminando, setEliminando] = useState<Producto | null>(null);
   const [cargandoAccion, setCargandoAccion] = useState(false);
-
-  const cargar = useCallback(async () => {
-    try {
-      const q = texto.trim() ? `?q=${encodeURIComponent(texto.trim())}` : "";
-      setProductos((await api<{ productos: Producto[] }>(`/api/productos${q}`)).productos);
-    } catch (e) {
-      avisos.error((e as Error).message);
-      setProductos([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [texto]);
-
-  useEffect(() => {
-    const t = setTimeout(cargar, 300);
-    return () => clearTimeout(t);
-  }, [cargar]);
 
   async function eliminar() {
     if (!eliminando) return;
@@ -128,7 +121,7 @@ export default function PaginaInventario() {
             avisos.exito(m);
             setEditando(null);
             cargar();
-            window.dispatchEvent(new Event("notificaciones:actualizar"));
+            avisarCambioNotificaciones();
           }}
         />
       )}
@@ -140,7 +133,7 @@ export default function PaginaInventario() {
             avisos.exito(m);
             setAjustando(null);
             cargar();
-            window.dispatchEvent(new Event("notificaciones:actualizar"));
+            avisarCambioNotificaciones();
           }}
         />
       )}

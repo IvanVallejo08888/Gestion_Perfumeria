@@ -7,12 +7,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
 import { Cargando, EncabezadoPagina, Insignia, Mensaje, Vacio } from "@/components/ui/Basicos";
 import { Boton } from "@/components/ui/Boton";
 import { Icono } from "@/components/ui/Icono";
+import { useConsulta } from "@/hooks/useConsulta";
+import { useIntervalo } from "@/hooks/useIntervalo";
 import { fechaHora } from "@/lib/formato";
-import { api } from "@/lib/http";
 import type { Notificacion } from "@/tipos";
 
 const NIVEL: Record<Notificacion["nivel"], { texto: string; tono: "peligro" | "alerta" | "info" }> = {
@@ -24,23 +24,9 @@ const NIVEL: Record<Notificacion["nivel"], { texto: string; tono: "peligro" | "a
 };
 
 export default function PaginaNotificaciones() {
-  const [lista, setLista] = useState<Notificacion[] | null>(null);
-  const [error, setError] = useState("");
-
-  const cargar = useCallback(async () => {
-    try {
-      setLista((await api<{ notificaciones: Notificacion[] }>("/api/notificaciones")).notificaciones);
-      setError("");
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }, []);
-
-  useEffect(() => {
-    cargar();
-    const id = setInterval(cargar, 60_000);
-    return () => clearInterval(id);
-  }, [cargar]);
+  const { datos, error, recargar: cargar } = useConsulta<{ notificaciones: Notificacion[] }>("/api/notificaciones");
+  const lista = datos?.notificaciones ?? null;
+  useIntervalo(cargar, 60_000);
 
   const cobros = lista?.filter((n) => n.tipo === "COBRO") ?? [];
   const stock = lista?.filter((n) => n.tipo === "STOCK") ?? [];

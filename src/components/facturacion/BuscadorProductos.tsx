@@ -7,9 +7,10 @@
  */
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
+import { useConsulta } from "@/hooks/useConsulta";
+import { useValorDiferido } from "@/hooks/useValorDiferido";
 import { pesos } from "@/lib/formato";
-import { api } from "@/lib/http";
 import type { ProductoVenta } from "@/tipos";
 import { Insignia, Mensaje } from "../ui/Basicos";
 import { Icono } from "../ui/Icono";
@@ -23,41 +24,23 @@ interface Props {
 
 export function BuscadorProductos({ onAgregar, enFactura }: Props) {
   const [texto, setTexto] = useState("");
-  const [resultados, setResultados] = useState<ProductoVenta[]>([]);
-  const [buscando, setBuscando] = useState(false);
   const [advertencia, setAdvertencia] = useState("");
-  const [buscado, setBuscado] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const idCampo = useId();
 
   // Búsqueda con una pequeña espera (250 ms) para no consultar con cada letra
-  useEffect(() => {
-    const consulta = texto.trim();
-    if (consulta.length < 2) {
-      setResultados([]);
-      setBuscado(false);
-      return;
-    }
-    let cancelado = false;
-    setBuscando(true);
-    const t = setTimeout(async () => {
-      try {
-        const { productos } = await api<{ productos: ProductoVenta[] }>(`/api/productos/buscar?q=${encodeURIComponent(consulta)}`);
-        if (!cancelado) {
-          setResultados(productos);
-          setBuscado(true);
-        }
-      } catch {
-        if (!cancelado) setResultados([]);
-      } finally {
-        if (!cancelado) setBuscando(false);
-      }
-    }, 250);
-    return () => {
-      cancelado = true;
-      clearTimeout(t);
-    };
-  }, [texto]);
+  const consulta = texto.trim();
+  const diferida = useValorDiferido(consulta, 250);
+  const busquedaValida = consulta.length >= 2;
+  const urlActual = `/api/productos/buscar?q=${encodeURIComponent(consulta)}`;
+  const { datos, urlDatos, error, cargando } = useConsulta<{ productos: ProductoVenta[] }>(
+    diferida.length >= 2 ? `/api/productos/buscar?q=${encodeURIComponent(diferida)}` : null,
+  );
+  // Solo se muestran resultados que correspondan EXACTAMENTE a lo escrito
+  // (así Enter nunca agrega un producto de una búsqueda anterior).
+  const buscado = busquedaValida && !error && urlDatos === urlActual;
+  const resultados = buscado ? (datos?.productos ?? []) : [];
+  const buscando = busquedaValida && !error && (cargando || urlDatos !== urlActual);
 
   function elegir(p: ProductoVenta) {
     if (p.stock <= 0) {
@@ -71,7 +54,6 @@ export function BuscadorProductos({ onAgregar, enFactura }: Props) {
     }
     setAdvertencia("");
     setTexto("");
-    setResultados([]);
     inputRef.current?.focus();
   }
 

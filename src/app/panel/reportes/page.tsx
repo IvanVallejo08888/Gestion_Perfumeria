@@ -1,12 +1,12 @@
 /** Reportes y estadísticas del local del vendedor (por año, con detalle mensual). */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { VistaEstadisticas } from "@/components/compartidos/VistaEstadisticas";
 import { Cargando, EncabezadoPagina, Mensaje, Tarjeta } from "@/components/ui/Basicos";
 import { Selector } from "@/components/ui/Campo";
+import { useConsulta } from "@/hooks/useConsulta";
 import { MESES } from "@/lib/formato";
-import { api } from "@/lib/http";
 import type { Estadisticas } from "@/tipos";
 
 const ANIO_ACTUAL = new Date().getFullYear();
@@ -15,15 +15,7 @@ const ANIOS = Array.from({ length: 6 }, (_, i) => ANIO_ACTUAL - i);
 export default function ReportesVendedor() {
   const [anio, setAnio] = useState(ANIO_ACTUAL);
   const [mes, setMes] = useState(0);
-  const [datos, setDatos] = useState<Estadisticas | null>(null);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    setDatos(null);
-    api<Estadisticas>(`/api/estadisticas?anio=${anio}`)
-      .then(setDatos)
-      .catch((e) => setError((e as Error).message));
-  }, [anio]);
+  const { datos, error, cargando } = useConsulta<Estadisticas>(`/api/estadisticas?anio=${anio}`);
 
   return (
     <>
@@ -49,7 +41,7 @@ export default function ReportesVendedor() {
         </div>
       </Tarjeta>
 
-      {error ? <Mensaje tono="peligro">{error}</Mensaje> : !datos ? <Cargando /> : <VistaEstadisticas datos={datos} mes={mes || undefined} />}
+      {error ? <Mensaje tono="peligro">{error}</Mensaje> : !datos || cargando ? <Cargando /> : <VistaEstadisticas datos={datos} mes={mes || undefined} />}
     </>
   );
 }

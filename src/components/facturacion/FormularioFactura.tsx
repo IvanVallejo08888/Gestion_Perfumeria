@@ -11,6 +11,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { avisarCambioNotificaciones } from "@/hooks/useNotificaciones";
 import { pesos } from "@/lib/formato";
 import { api } from "@/lib/http";
 import { clienteSchema } from "@/lib/validaciones";
@@ -157,7 +158,7 @@ export function FormularioFactura({ tipo }: { tipo: TipoFactura }) {
       avisos.exito(esCredito ? "Crédito registrado correctamente." : "Factura registrada correctamente.");
       limpiar();
       // Actualiza el contador de notificaciones (nuevos cobros o stock bajo)
-      window.dispatchEvent(new Event("notificaciones:actualizar"));
+      avisarCambioNotificaciones();
     } catch (err) {
       setErrorGeneral((err as Error).message);
     } finally {
