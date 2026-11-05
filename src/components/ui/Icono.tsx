@@ -26,6 +26,7 @@ const RUTAS = {
   info: "M12 16v-4m0-4h.01M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z",
   descargar: "M12 3v12m0 0 5-5m-5 5-5-5M4 21h16",
   compartir: "M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm12 7a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM8.6 13.5l6.8 4M15.4 6.5l-6.8 4",
+  compartirIos: "M12 15V3m0 0L8 7m4-4 4 4M8 11H5v10h14V11h-3",
   imprimir: "M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v7H6z",
   pausa: "M9 5v14M15 5v14",
   play: "M7 4l13 8-13 8V4Z",

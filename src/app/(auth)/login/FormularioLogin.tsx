@@ -7,6 +7,7 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
+import { BotonInstalar } from "@/components/pwa/BotonInstalar";
 import { Boton } from "@/components/ui/Boton";
 import { Campo, CampoPassword } from "@/components/ui/Campo";
 import { Mensaje } from "@/components/ui/Basicos";
@@ -85,6 +86,9 @@ export function FormularioLogin({ sesionExpirada }: { sesionExpirada: boolean })
         >
           Crear una cuenta
         </Link>
+        <div className="mt-3">
+          <BotonInstalar />
+        </div>
       </div>
     </div>
   );

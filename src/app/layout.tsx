@@ -1,10 +1,14 @@
 import type { Metadata, Viewport } from "next";
+import { RegistroPWA } from "@/components/pwa/RegistroPWA";
 import { ProveedorAvisos } from "@/components/ui/Avisos";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: { default: "Gestión de Perfumerías", template: "%s · Gestión de Perfumerías" },
   description: "Facturación, créditos, inventario y reportes de tus locales.",
+  // Metadatos para instalar en iPhone/iPad (el manifiesto lo agrega Next.js desde app/manifest.ts)
+  appleWebApp: { capable: true, title: "Perfumerías", statusBarStyle: "default" },
+  icons: { icon: "/icon.svg", apple: "/icons/apple-touch-icon.png" },
 };
 
 // Permite hacer zoom (importante para accesibilidad) y adapta la app a celulares
@@ -13,6 +17,12 @@ export const viewport: Viewport = {
   initialScale: 1,
   themeColor: "#5b21b6",
 };
+
+/**
+ * Guarda el aviso de "se puede instalar" apenas llega: ocurre una sola vez y puede ser antes
+ * de que React cargue o de que se abra el menú del celular (ver BotonInstalar.tsx).
+ */
+const scriptInstalacion = `(function(){function c(e){window.__eventoInstalacion=e;window.dispatchEvent(new Event("pwa:instalacion"))}window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();c(e)});window.addEventListener("appinstalled",function(){c(null)})})()`;
 
 /** Script mínimo que aplica el tamaño de letra guardado ANTES de pintar (evita saltos). */
 const scriptTamanoTexto = `try{var t=localStorage.getItem("tamano-texto");if(t)document.documentElement.dataset.texto=t}catch(e){}`;
@@ -29,6 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap"
         />
         <script dangerouslySetInnerHTML={{ __html: scriptTamanoTexto }} />
+        <script dangerouslySetInnerHTML={{ __html: scriptInstalacion }} />
       </head>
       <body className="min-h-dvh antialiased">
         {/* Enlace para saltar al contenido (lectores de pantalla y teclado) */}
@@ -39,6 +50,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Saltar al contenido principal
         </a>
         <ProveedorAvisos>{children}</ProveedorAvisos>
+        <RegistroPWA />
       </body>
     </html>
   );
