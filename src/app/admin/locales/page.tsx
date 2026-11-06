@@ -1,9 +1,11 @@
 /**
  * Gestión de locales (solo administrador): crear, editar y activar/desactivar.
+ * Desde cada local también se administran sus sectores de la ciudad y sus categorías de gastos.
  */
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { GestorNombres } from "@/components/compartidos/GestorNombres";
 import { Boton } from "@/components/ui/Boton";
 import { Campo } from "@/components/ui/Campo";
 import { Cargando, EncabezadoPagina, Insignia, Mensaje, Tarjeta, Vacio } from "@/components/ui/Basicos";
@@ -30,6 +32,7 @@ export default function PaginaLocales() {
   const locales = consulta.datos?.locales ?? (consulta.error ? [] : null);
   const cargar = consulta.recargar;
   const [editando, setEditando] = useState<Local | "nuevo" | null>(null);
+  const [sectoresDe, setSectoresDe] = useState<Local | null>(null);
   const [form, setForm] = useState(FORM_VACIO);
   const [error, setError] = useState("");
   const [guardando, setGuardando] = useState(false);
@@ -110,9 +113,12 @@ export default function PaginaLocales() {
                     <dd className="inline">{l.totalProductos}</dd>
                   </div>
                 </dl>
-                <div className="mt-4">
+                <div className="mt-4 flex flex-wrap gap-2">
                   <Boton variante="secundario" icono="editar" onClick={() => abrir(l)}>
                     Editar
+                  </Boton>
+                  <Boton variante="secundario" icono="sector" onClick={() => setSectoresDe(l)}>
+                    Sectores de la ciudad
                   </Boton>
                 </div>
               </Tarjeta>
@@ -140,6 +146,36 @@ export default function PaginaLocales() {
             Guardar
           </Boton>
         </form>
+
+        {editando && editando !== "nuevo" && (
+          <section className="mt-8 border-t-2 border-gray-200 pt-6">
+            <h3 className="mb-1 text-2xl font-bold">Categorías de gastos</h3>
+            <p className="mb-4 text-lg text-texto-suave">Son las que eligen los vendedores al registrar un gasto.</p>
+            <GestorNombres
+              urlLista={`/api/admin/locales/${editando.id}/categorias-gasto`}
+              clave="categorias"
+              urlElemento={(id) => `/api/admin/categorias-gasto/${id}`}
+              singular="categoría"
+              plural="categorías"
+              permiteEliminar={false}
+              avisoQuitar="Dejará de aparecer para los vendedores. Los gastos ya registrados no cambian."
+            />
+          </section>
+        )}
+      </Modal>
+
+      <Modal abierto={sectoresDe !== null} onCerrar={() => setSectoresDe(null)} titulo={sectoresDe ? `Sectores de ${sectoresDe.nombre}` : "Sectores"} tamano="lg">
+        {sectoresDe && (
+          <GestorNombres
+            urlLista={`/api/admin/locales/${sectoresDe.id}/sectores`}
+            clave="sectores"
+            urlElemento={(id) => `/api/admin/sectores/${id}`}
+            singular="sector"
+            plural="sectores"
+            permiteEliminar
+            avisoQuitar="Si el sector ya se usó en facturas, solo se desactiva para no afectar el historial."
+          />
+        )}
       </Modal>
     </>
   );

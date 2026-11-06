@@ -141,7 +141,7 @@ export const clienteSchema = z.object({
   nombre: texto("El nombre del cliente"),
   telefono: telefonoSchema,
   direccion: texto("La dirección", 160),
-  sector: texto("El sector o barrio", 80),
+  sector: texto("El sector", 80),
 });
 
 /* --------------------------------- Facturas -------------------------------- */
@@ -155,6 +155,17 @@ export const cuotaSchema = z.object({
   fechaVencimiento: z.iso.datetime({ offset: true, error: "Fecha de cuota no válida." }),
 });
 
+const medioPagoSchema = z.enum(["EFECTIVO", "TRANSFERENCIA", "MIXTO"], { error: "Elige el medio de pago." });
+
+/**
+ * Valores que envía el navegador en un pago mixto. El servidor los recalcula
+ * y rechaza el pago si no cuadran con el total que él mismo obtiene.
+ */
+const valoresPago = {
+  valorTransferencia: dineroSchema("El valor de la transferencia").optional(),
+  valorEfectivo: dineroSchema("El valor en efectivo").optional(),
+};
+
 export const crearFacturaSchema = z
   .object({
     tipo: z.enum(["NORMAL", "CREDITO"]),
@@ -164,6 +175,13 @@ export const crearFacturaSchema = z
     descuento: dineroSchema("El descuento").default(0),
     notas: z.string().trim().max(300).optional(),
     cuotas: z.array(cuotaSchema).max(60, "Máximo 60 cuotas.").optional(),
+    // Solo para ventas de contado: en el crédito el dinero entra con cada abono
+    medioPago: medioPagoSchema.optional(),
+    ...valoresPago,
+  })
+  .refine((d) => d.tipo === "CREDITO" || d.medioPago, {
+    message: "Elige el medio de pago.",
+    path: ["medioPago"],
   })
   .refine((d) => d.tipo === "NORMAL" || (d.cuotas && d.cuotas.length >= 1), {
     message: "Un crédito debe tener al menos una cuota.",
@@ -173,7 +191,59 @@ export const crearFacturaSchema = z
 export const abonoSchema = z.object({
   valor: dineroSchema("El valor del abono").refine((v) => v > 0, "El abono debe ser mayor que cero."),
   nota: z.string().trim().max(200).optional(),
+  medioPago: medioPagoSchema,
+  ...valoresPago,
 });
+
+/* --------------------------------- Sectores -------------------------------- */
+
+const nombreSector = texto("El nombre del sector", 80);
+
+/** Varios nombres a la vez (el administrador puede pegar una lista). */
+export const agregarSectoresSchema = z.object({
+  nombres: z.array(nombreSector).min(1, "Escribe al menos un sector.").max(300, "Máximo 300 sectores a la vez."),
+});
+
+export const editarSectorSchema = z.object({
+  nombre: nombreSector.optional(),
+  activo: z.boolean().optional(),
+});
+
+/* ---------------------------------- Gastos --------------------------------- */
+
+const nombreCategoria = texto("El nombre de la categoría", 60);
+
+export const agregarCategoriasSchema = z.object({
+  nombres: z.array(nombreCategoria).min(1, "Escribe al menos una categoría.").max(100, "Máximo 100 categorías a la vez."),
+});
+
+export const editarCategoriaSchema = z.object({
+  nombre: nombreCategoria.optional(),
+  activo: z.boolean().optional(),
+});
+
+export const gastoSchema = z.object({
+  categoriaId: z.uuid("Elige una categoría."),
+  valor: dineroSchema("El valor del gasto").refine((v) => v > 0, "El gasto debe ser mayor que cero."),
+  medioPago: z.enum(["EFECTIVO", "TRANSFERENCIA"], { error: "Elige cómo se pagó el gasto." }),
+  fecha: z.iso.date("Escribe una fecha válida."),
+  descripcion: z.string().trim().max(200, "La descripción es demasiado larga.").optional(),
+});
+
+/** Filtros de la lista de gastos (vienen en la dirección de la petición). */
+export const filtroGastosSchema = z.object({
+  anio: z.coerce.number().int().min(2000).max(2100),
+  mes: z.coerce.number().int().min(1).max(12).optional(),
+  categoriaId: z.uuid("Categoría no válida.").optional(),
+});
+
+/** Identificador recibido en la dirección de un endpoint. */
+export const idSchema = z.uuid("El registro no existe.");
+
+/** Convierte los parámetros de la dirección en objeto y descarta los vacíos. */
+export function parametros(url: URLSearchParams): Record<string, string> {
+  return Object.fromEntries([...url].filter(([, valor]) => valor !== ""));
+}
 
 /** Devuelve el primer mensaje de error de Zod (para mostrarlo al usuario). */
 export function primerError(error: z.ZodError): string {

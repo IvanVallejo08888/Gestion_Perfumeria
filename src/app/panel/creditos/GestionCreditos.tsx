@@ -9,6 +9,7 @@
 
 import { useState, type FormEvent } from "react";
 import { DetalleFactura } from "@/components/facturacion/DetalleFactura";
+import { SelectorMedioPago } from "@/components/facturacion/MedioPago";
 import { Boton } from "@/components/ui/Boton";
 import { Campo, CampoDinero } from "@/components/ui/Campo";
 import { Cargando, EncabezadoPagina, Insignia, Mensaje, Tarjeta, Vacio } from "@/components/ui/Basicos";
@@ -18,7 +19,8 @@ import { useConsulta } from "@/hooks/useConsulta";
 import { avisarCambioNotificaciones } from "@/hooks/useNotificaciones";
 import { aInputFechaHora, fechaHora, numeroFactura, pesos } from "@/lib/formato";
 import { api } from "@/lib/http";
-import type { FacturaDetalle } from "@/tipos";
+import { calcularPago, textoMedioPago } from "@/lib/pagos";
+import type { FacturaDetalle, MedioPago } from "@/tipos";
 
 interface Credito {
   id: string;
@@ -194,6 +196,9 @@ function ModalAbono({ facturaId, onCerrar, onListo }: { facturaId: string; onCer
   const factura = consulta.datos?.factura ?? null;
   const [valor, setValor] = useState(0);
   const [nota, setNota] = useState("");
+  const [medioPago, setMedioPago] = useState<MedioPago | null>(null);
+  const [transferencia, setTransferencia] = useState(0);
+  const [errorPago, setErrorPago] = useState("");
   const [errorGuardar, setError] = useState("");
   const error = errorGuardar || consulta.error;
   const [cargando, setCargando] = useState(false);
@@ -206,12 +211,22 @@ function ModalAbono({ facturaId, onCerrar, onListo }: { facturaId: string; onCer
     if (!factura) return;
     if (valor <= 0) return setError("Escribe el valor del abono.");
     if (valor > factura.saldo) return setError(`El abono no puede ser mayor que el saldo (${pesos(factura.saldo)}).`);
+    if (!medioPago) return setErrorPago("Elige el medio de pago.");
+    const { error: errorReparto } = calcularPago(medioPago, valor, transferencia);
+    if (errorReparto) return setErrorPago(errorReparto);
+    setErrorPago("");
     setCargando(true);
     setError("");
     try {
       const { factura: actualizada } = await api<{ factura: FacturaDetalle }>(`/api/creditos/${facturaId}/abonos`, {
         method: "POST",
-        json: { valor, nota: nota.trim() || undefined },
+        json: {
+          valor,
+          nota: nota.trim() || undefined,
+          medioPago,
+          // En Mixto se envían los dos valores: el servidor los compara con el valor del abono
+          ...(medioPago === "MIXTO" ? { valorTransferencia: transferencia, valorEfectivo: valor - transferencia } : {}),
+        },
       });
       onListo(actualizada);
     } catch (err) {
@@ -250,6 +265,18 @@ function ModalAbono({ facturaId, onCerrar, onListo }: { facturaId: string; onCer
               Pagar todo ({pesos(factura.saldo)})
             </Boton>
           </div>
+          <SelectorMedioPago
+            titulo="Medio de pago del abono"
+            total={valor}
+            medio={medioPago}
+            onMedio={(m) => {
+              setMedioPago(m);
+              setErrorPago("");
+            }}
+            transferencia={transferencia}
+            onTransferencia={setTransferencia}
+            error={errorPago}
+          />
           <Campo etiqueta="Nota (opcional)" value={nota} maxLength={200} onChange={(e) => setNota(e.target.value)} />
           {valor > 0 && valor <= factura.saldo && (
             <p className="text-lg" aria-live="polite">
@@ -357,7 +384,8 @@ function ModalCuotas({ facturaId, onCerrar, onCambio }: { facturaId: string; onC
                 {factura.abonos.map((a) => (
                   <li key={a.id} className="flex flex-wrap justify-between gap-2 rounded-xl bg-gray-50 px-4 py-3 text-lg">
                     <span>
-                      {fechaHora(a.creadoEn)}
+                      {fechaHora(a.creadoEn)} · {textoMedioPago(a.medioPago)}
+                      {a.medioPago === "MIXTO" ? ` (efectivo ${pesos(a.valorEfectivo)} + transferencia ${pesos(a.valorTransferencia)})` : ""}
                       {a.nota ? ` · ${a.nota}` : ""}
                     </span>
                     <strong>{pesos(a.valor)}</strong>
