@@ -5,6 +5,7 @@ import { useState } from "react";
 import { VistaEstadisticas } from "@/components/compartidos/VistaEstadisticas";
 import { Cargando, EncabezadoPagina, Mensaje, Tarjeta } from "@/components/ui/Basicos";
 import { Selector } from "@/components/ui/Campo";
+import { Icono } from "@/components/ui/Icono";
 import { useConsulta } from "@/hooks/useConsulta";
 import { MESES } from "@/lib/formato";
 import type { Estadisticas } from "@/tipos";
@@ -30,7 +31,7 @@ export default function ReportesVendedor() {
               </option>
             ))}
           </Selector>
-          <Selector etiqueta="Resaltar mes" value={mes} onChange={(e) => setMes(Number(e.target.value))}>
+          <Selector etiqueta="Mes (opcional)" value={mes} onChange={(e) => setMes(Number(e.target.value))}>
             <option value={0}>Todo el año</option>
             {MESES.map((m, i) => (
               <option key={m} value={i + 1}>
@@ -38,6 +39,28 @@ export default function ReportesVendedor() {
               </option>
             ))}
           </Selector>
+        </div>
+
+        {/* Descargas: enlaces directos (el navegador descarga el archivo) */}
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+          <a
+            href={`/api/reportes/excel?anio=${anio}`}
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-exito-700 px-5 text-lg font-bold text-white hover:bg-exito-800"
+          >
+            <Icono nombre="descargar" />
+            Descargar Excel del año {anio}
+          </a>
+          <a
+            href={mes ? `/api/reportes/excel?anio=${anio}&mes=${mes}` : undefined}
+            aria-disabled={!mes}
+            onClick={(e) => !mes && e.preventDefault()}
+            className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border-2 px-5 text-lg font-bold ${
+              mes ? "border-exito-700 bg-white text-exito-800 hover:bg-exito-50" : "cursor-not-allowed border-gray-300 text-gray-500"
+            }`}
+          >
+            <Icono nombre="descargar" />
+            {mes ? `Descargar Excel de ${MESES[mes - 1]}` : "Elige un mes para el Excel mensual"}
+          </a>
         </div>
       </Tarjeta>
 

@@ -106,6 +106,20 @@ export default function ReportesAdmin() {
                 {mes ? `Descargar Excel de ${MESES[mes - 1]}` : "Elige un mes para el Excel mensual"}
               </a>
             </div>
+
+            {/* Consolidado: todos los locales en un solo archivo (usa el año y el mes elegidos arriba) */}
+            <div className="mt-6 border-t-2 border-gray-200 pt-5">
+              <p className="mb-3 text-lg text-gray-700">
+                <strong>Todos los locales:</strong> compara las ventas de cada local y ve la cartera completa en un solo archivo.
+              </p>
+              <a
+                href={`/api/admin/reportes/consolidado?anio=${anio}${mes ? `&mes=${mes}` : ""}`}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border-2 border-exito-700 bg-white px-5 text-lg font-bold text-exito-800 hover:bg-exito-50"
+              >
+                <Icono nombre="descargar" />
+                Descargar consolidado de {mes ? `${MESES[mes - 1]} ${anio}` : `todo ${anio}`}
+              </a>
+            </div>
           </Tarjeta>
 
           {cargando || !datos ? <Cargando texto="Calculando estadísticas…" /> : <VistaEstadisticas datos={datos} mes={mes || undefined} />}
