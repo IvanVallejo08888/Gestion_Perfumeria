@@ -63,8 +63,8 @@ npm run start
 ## 4. Cómo funciona
 
 ### Roles
-- **Administrador (único):** inicia sesión con identificación `12345987600`. Crea locales, ve y gestiona usuarios (asignar local, editar, cambiar contraseña, pausar/reactivar, eliminar), ve las estadísticas de cada local y descarga reportes Excel del año o del mes.
-- **Vendedor:** se registra (nombre, identificación, correo, teléfono, contraseña validada) y queda **en espera** hasta que el administrador le asigna un local. Luego trabaja solo sobre su local.
+- **Administrador (único):** inicia sesión con identificación `12345987600`. Crea locales, ve y gestiona usuarios (asignar local, editar, cambiar contraseña, pausar/reactivar, eliminar), ve las estadísticas de cada local y descarga reportes Excel por local o el **consolidado de todos los locales**.
+- **Vendedor:** se registra (nombre, identificación, correo, teléfono, contraseña validada) y queda **en espera** hasta que el administrador le asigna un local. Luego trabaja solo sobre su local, y puede descargar el Excel de **su** local (nunca el de otro).
 
 ### Seguridad de sesión
 Cada petición se valida contra la base de datos: si el administrador **pausa, elimina o cambia la contraseña** de un usuario, su sesión se cierra al instante.
@@ -82,6 +82,25 @@ Búsqueda por identificación, abonos (se aplican a las cuotas en orden) y cambi
 
 ### Notificaciones
 Cobros vencidos, del día y de los próximos 3 días (según las fechas de las cuotas) + productos agotados o con stock bajo. El contador del menú se actualiza cada minuto y, si se activan, llegan avisos del navegador.
+
+### Reportes en Excel
+Se descargan desde **Reportes**, del año completo o de un mes.
+
+**Reporte por local** (administrador y vendedor):
+
+| Hoja | Contenido |
+|---|---|
+| Resumen | Ventas de contado, créditos, abonos y totales mes a mes |
+| Facturas | Todas las facturas del periodo, con totales |
+| Productos vendidos | Unidades y valor vendido por producto |
+| Abonos | Cada abono recibido en el periodo |
+| Ventas por vendedor | Lo que vendió cada vendedor y su % del total |
+| Cartera | Créditos con saldo **hoy**: valor vencido, días de atraso y próxima cuota (rojo = más de 30 días, amarillo = algo vencido) |
+| Inventario | Stock **hoy** y valor del inventario (rojo = agotado, amarillo = stock bajo) |
+
+**Consolidado** (solo administrador): hoja *Comparativo locales*, con las cifras de cada local lado a lado y su % de las ventas, y hoja *Cartera*, con los créditos pendientes de todos los locales.
+
+> Las hojas *Cartera* e *Inventario* muestran el estado **al momento de descargar**, sin importar el periodo elegido.
 
 ## 5. Estructura del proyecto
 
