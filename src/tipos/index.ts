@@ -7,6 +7,8 @@ export type Rol = "ADMIN" | "VENDEDOR";
 export type EstadoUsuario = "PENDIENTE" | "ACTIVO" | "PAUSADO";
 export type TipoFactura = "NORMAL" | "CREDITO";
 export type EstadoFactura = "PENDIENTE" | "COMPLETADA";
+export type MedioPago = "EFECTIVO" | "TRANSFERENCIA" | "MIXTO";
+export type MedioPagoGasto = "EFECTIVO" | "TRANSFERENCIA";
 
 export interface ClienteDatos {
   identificacion: string;
@@ -41,6 +43,9 @@ export interface CuotaDetalle {
 export interface AbonoDetalle {
   id: string;
   valor: number;
+  medioPago: MedioPago;
+  valorEfectivo: number;
+  valorTransferencia: number;
   nota: string | null;
   creadoEn: string;
 }
@@ -54,6 +59,10 @@ export interface FacturaResumen {
   clienteIdentificacion: string;
   total: number;
   saldo: number;
+  /** Vacío en los créditos: el dinero entra con cada abono. */
+  medioPago: MedioPago | null;
+  valorEfectivo: number;
+  valorTransferencia: number;
   creadoEn: string;
   completadaEn: string | null;
 }
@@ -71,6 +80,32 @@ export interface FacturaDetalle extends FacturaResumen {
   items: { id: string; nombreProducto: string; precioUnitario: number; cantidad: number; subtotal: number }[];
   cuotas: CuotaDetalle[];
   abonos: AbonoDetalle[];
+}
+
+/** Sector o categoría de gasto: un nombre que se puede desactivar. */
+export interface NombreActivo {
+  id: string;
+  nombre: string;
+  activo: boolean;
+}
+
+export interface GastoFila {
+  id: string;
+  categoriaNombre: string;
+  descripcion: string | null;
+  valor: number;
+  medioPago: MedioPagoGasto;
+  /** Día del gasto, "AAAA-MM-DD". */
+  fecha: string;
+  usuarioNombre: string;
+  puedeEliminar: boolean;
+}
+
+export interface ListaGastos {
+  gastos: GastoFila[];
+  total: number;
+  totalEfectivo: number;
+  totalTransferencia: number;
 }
 
 export interface Notificacion {
@@ -94,6 +129,12 @@ export interface MesEstadistica {
   recaudoAbonos: number;
   totalVentas: number;
   totalRecaudado: number;
+  /** Dinero recibido por medio de pago (contado + abonos). */
+  recibidoEfectivo: number;
+  recibidoTransferencia: number;
+  gastos: number;
+  /** Recibido − gastos. */
+  utilidad: number;
 }
 
 export interface Estadisticas {

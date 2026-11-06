@@ -4,8 +4,19 @@
 import "server-only";
 import { asc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { locales } from "@/db/schema";
+import { categoriasGasto, locales } from "@/db/schema";
 import { ApiError } from "@/lib/api";
+
+/** Categorías de gastos con las que empieza cada local nuevo. */
+const CATEGORIAS_INICIALES = [
+  "Arriendo",
+  "Servicios públicos",
+  "Nómina",
+  "Mercancía/proveedores",
+  "Transporte",
+  "Publicidad",
+  "Otros",
+];
 
 export interface LocalResumen {
   id: string;
@@ -34,11 +45,14 @@ export async function listarLocales(): Promise<LocalResumen[]> {
 
 export async function crearLocal(datos: { nombre: string; direccion: string; telefono: string; activo: boolean }) {
   await verificarNombre(datos.nombre);
-  const [local] = await db
-    .insert(locales)
-    .values({ nombre: datos.nombre, direccion: datos.direccion || null, telefono: datos.telefono || null, activo: datos.activo })
-    .returning();
-  return local;
+  return db.transaction(async (tx) => {
+    const [local] = await tx
+      .insert(locales)
+      .values({ nombre: datos.nombre, direccion: datos.direccion || null, telefono: datos.telefono || null, activo: datos.activo })
+      .returning();
+    await tx.insert(categoriasGasto).values(CATEGORIAS_INICIALES.map((nombre) => ({ localId: local.id, nombre })));
+    return local;
+  });
 }
 
 export async function editarLocal(

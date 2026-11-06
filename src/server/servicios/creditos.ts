@@ -12,6 +12,7 @@ import { db } from "@/db";
 import { abonos, cuotas, facturas } from "@/db/schema";
 import { ApiError, type VendedorSesion } from "@/lib/api";
 import { obtenerFactura } from "./facturas";
+import { resolverPago, type DatosPago } from "./pagos";
 
 export async function listarCreditos(localId: string, identificacion?: string) {
   const condiciones = [eq(facturas.localId, localId), eq(facturas.tipo, "CREDITO")];
@@ -53,7 +54,10 @@ export async function listarCreditos(localId: string, identificacion?: string) {
 
 export type CreditoResumen = Awaited<ReturnType<typeof listarCreditos>>[number];
 
-export async function registrarAbono(vendedor: VendedorSesion, facturaId: string, valor: number, nota?: string) {
+export async function registrarAbono(vendedor: VendedorSesion, facturaId: string, valor: number, pago: DatosPago, nota?: string) {
+  // El medio de pago se valida sobre el valor del abono, con la misma lógica de la factura
+  const reparto = resolverPago(pago, valor);
+
   await db.transaction(async (tx) => {
     // Bloquea la fila de la factura para evitar dos abonos simultáneos sobre el mismo saldo
     const [factura] = await tx
@@ -68,7 +72,7 @@ export async function registrarAbono(vendedor: VendedorSesion, facturaId: string
       throw new ApiError(400, `El abono no puede ser mayor que el saldo pendiente (${factura.saldo.toLocaleString("es-CO")}).`);
     }
 
-    await tx.insert(abonos).values({ facturaId, usuarioId: vendedor.id, valor, nota: nota || null });
+    await tx.insert(abonos).values({ facturaId, usuarioId: vendedor.id, valor, ...reparto, nota: nota || null });
 
     // Aplicar el abono a las cuotas pendientes, en orden
     const pendientes = await tx

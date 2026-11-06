@@ -1,5 +1,6 @@
 /**
  * Factura lista para compartir.
+ * - "Enviar por WhatsApp": abre WhatsApp con el número del cliente y el resumen de la factura.
  * - "Compartir imagen": genera una imagen PNG y abre el menú de compartir del celular
  *   (WhatsApp, correo…). En computador la descarga.
  * - "Compartir PDF" / "Descargar PDF": genera un PDF con la misma factura.
@@ -11,6 +12,8 @@
 
 import { useRef, useState } from "react";
 import { fecha, fechaHora, numeroFactura, pesos } from "@/lib/formato";
+import { textoMedioPago } from "@/lib/pagos";
+import { enlaceWhatsApp } from "@/lib/whatsapp";
 import type { FacturaDetalle } from "@/tipos";
 import { Boton } from "../ui/Boton";
 import { useAvisos } from "../ui/Avisos";
@@ -58,6 +61,15 @@ export function VistaFactura({ factura }: { factura: FacturaDetalle }) {
     avisos.info(`Se descargó el archivo «${nombre}».`);
   }
 
+  function enviarWhatsApp() {
+    const enlace = enlaceWhatsApp(factura);
+    if (!enlace) {
+      avisos.error(`El teléfono «${factura.clienteTelefono}» no es un celular válido. No se puede abrir WhatsApp.`);
+      return;
+    }
+    window.open(enlace, "_blank", "noopener,noreferrer");
+  }
+
   async function ejecutar(tipo: "imagen" | "pdf" | "pdf-descarga") {
     setOcupado(tipo);
     try {
@@ -78,10 +90,18 @@ export function VistaFactura({ factura }: { factura: FacturaDetalle }) {
   return (
     <div>
       {/* Botones de acción grandes */}
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-3 grid gap-3 sm:grid-cols-2">
+        <Boton variante="exito" icono="mensaje" onClick={enviarWhatsApp}>
+          Enviar por WhatsApp al cliente
+        </Boton>
         <Boton icono="compartir" cargando={ocupado === "imagen"} disabled={!!ocupado} onClick={() => ejecutar("imagen")}>
           Compartir imagen
         </Boton>
+      </div>
+      <p className="mb-3 text-base text-texto-suave">
+        WhatsApp no permite adjuntar la imagen automáticamente desde un enlace: el mensaje lleva el detalle en texto. Si quieres enviar la imagen, usa «Compartir imagen».
+      </p>
+      <div className="mb-5 grid gap-3 sm:grid-cols-3">
         <Boton icono="compartir" variante="secundario" cargando={ocupado === "pdf"} disabled={!!ocupado} onClick={() => ejecutar("pdf")}>
           Compartir PDF
         </Boton>
@@ -144,12 +164,19 @@ export function VistaFactura({ factura }: { factura: FacturaDetalle }) {
 
           <div className="mt-2 space-y-0.5 border-t border-dashed border-black pt-2">
             <Fila etiqueta="Subtotal" valor={pesos(factura.subtotal)} />
-            {factura.adicional > 0 && <Fila etiqueta="Pago adicional" valor={`+ ${pesos(factura.adicional)}`} />}
-            {factura.descuento > 0 && <Fila etiqueta="Descuento" valor={`- ${pesos(factura.descuento)}`} />}
+            {factura.adicional > 0 && <Fila etiqueta="Costo adicional" valor={`+ ${pesos(factura.adicional)}`} />}
+            {factura.descuento > 0 && <Fila etiqueta="Descuento" valor={`− ${pesos(factura.descuento)}`} />}
             <div className="flex justify-between pt-1 text-[20px] font-bold">
               <span>TOTAL</span>
               <span>{pesos(factura.total)}</span>
             </div>
+            {factura.medioPago && <Fila etiqueta="Medio de pago" valor={textoMedioPago(factura.medioPago)} />}
+            {factura.medioPago === "MIXTO" && (
+              <>
+                <Fila etiqueta="Efectivo" valor={pesos(factura.valorEfectivo)} />
+                <Fila etiqueta="Transferencia" valor={pesos(factura.valorTransferencia)} />
+              </>
+            )}
           </div>
 
           {esCredito && (
