@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { useIntervalo } from "@/hooks/useIntervalo";
 import { useAlCambiarNotificaciones } from "@/hooks/useNotificaciones";
 import { api } from "@/lib/http";
+import { BotonInstalar } from "../pwa/BotonInstalar";
 import { ControlTexto } from "./ControlTexto";
 import { Icono, type NombreIcono } from "../ui/Icono";
 
@@ -33,6 +34,7 @@ interface Props {
 }
 
 const INTERVALO_NOTIFICACIONES_MS = 60_000;
+const ETIQUETA_COBRO = "recordatorio-cobro";
 
 export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false, children }: Props) {
   const ruta = usePathname();
@@ -56,7 +58,7 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
         Notification.permission === "granted"
       ) {
         ultimoAvisoRef.current = datos.mensaje;
-        new Notification("Recordatorio de cobro", { body: datos.mensaje });
+        await mostrarNotificacion("Recordatorio de cobro", datos.mensaje);
       }
     } catch {
       /* sin conexión: se vuelve a intentar en el siguiente minuto */
@@ -73,6 +75,7 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
 
   async function salir() {
     await api("/api/auth/logout", { method: "POST" }).catch(() => {});
+    await cerrarNotificaciones().catch(() => {});
     window.location.href = "/login";
   }
 
@@ -119,6 +122,7 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
           <ControlTexto claro />
         </div>
       </div>
+      <BotonInstalar claro />
       {notificaciones && <PermisoAvisos />}
       <button
         type="button"
@@ -198,6 +202,28 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
       </main>
     </div>
   );
+}
+
+/**
+ * Muestra un aviso con el service worker si ya está activo. En Android, con la app instalada,
+ * `new Notification` falla: solo sirve como respaldo (por ejemplo, en "npm run dev").
+ * La etiqueta hace que cada aviso reemplace al anterior en vez de acumularse.
+ */
+async function mostrarNotificacion(titulo: string, cuerpo: string) {
+  const registro = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistration() : undefined;
+  if (registro?.active) {
+    await registro.showNotification(titulo, { body: cuerpo, icon: "/icons/icon-192.png", tag: ETIQUETA_COBRO });
+  } else {
+    new Notification(titulo, { body: cuerpo });
+  }
+}
+
+/** Al salir se quitan los avisos: en un dispositivo compartido, el siguiente vendedor no debe verlos. */
+async function cerrarNotificaciones() {
+  if (!("serviceWorker" in navigator)) return;
+  const registro = await navigator.serviceWorker.getRegistration();
+  const avisos = await registro?.getNotifications({ tag: ETIQUETA_COBRO });
+  avisos?.forEach((aviso) => aviso.close());
 }
 
 /** Botón para activar los avisos del navegador (recordatorios de cobro). */

@@ -8,7 +8,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { COOKIE_SESION, verificarToken } from "@/lib/auth/jwt";
 
-const PUBLICAS = ["/login", "/registro"];
+const PUBLICAS = ["/login", "/registro", "/offline"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -16,6 +16,8 @@ export async function middleware(req: NextRequest) {
   const inicioDelRol = sesion?.rol === "ADMIN" ? "/admin" : "/panel/facturacion";
 
   if (PUBLICAS.some((ruta) => pathname.startsWith(ruta))) {
+    // /offline nunca redirige: la descarga el service worker y no debe guardar el panel en su lugar
+    if (pathname === "/offline") return NextResponse.next();
     // "expirada" indica que el servidor rechazó la sesión: se deja ver el login para no crear un ciclo
     if (sesion && !req.nextUrl.searchParams.has("expirada")) {
       return NextResponse.redirect(new URL(inicioDelRol, req.url));
