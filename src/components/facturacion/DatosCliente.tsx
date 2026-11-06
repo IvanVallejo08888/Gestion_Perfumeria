@@ -1,13 +1,16 @@
 /**
  * Datos del cliente para la factura: identificación, nombre, número, dirección y sector.
  * Al escribir la identificación de un cliente que ya compró antes, sus datos se llenan solos.
+ * El sector se elige de la lista que definió el administrador para el local.
+ * El sector se elige de la lista que definió el administrador para el local.
  */
 "use client";
 
 import { useState } from "react";
 import { api } from "@/lib/http";
-import type { ClienteDatos } from "@/tipos";
-import { Campo } from "../ui/Campo";
+import type { ClienteDatos, NombreActivo } from "@/tipos";
+import { Mensaje } from "../ui/Basicos";
+import { Campo, Selector } from "../ui/Campo";
 
 export const CLIENTE_VACIO: ClienteDatos = { identificacion: "", nombre: "", telefono: "", direccion: "", sector: "" };
 
@@ -15,9 +18,11 @@ interface Props {
   valor: ClienteDatos;
   onCambio: (c: ClienteDatos) => void;
   errores: Partial<Record<keyof ClienteDatos, string>>;
+  /** Sectores activos del local (null mientras cargan). */
+  sectores: NombreActivo[] | null;
 }
 
-export function DatosCliente({ valor, onCambio, errores }: Props) {
+export function DatosCliente({ valor, onCambio, errores, sectores }: Props) {
   const [estadoBusqueda, setEstadoBusqueda] = useState<"" | "buscando" | "encontrado" | "nuevo">("");
 
   const cambiar = (campo: keyof ClienteDatos, v: string) => onCambio({ ...valor, [campo]: v });
@@ -30,7 +35,9 @@ export function DatosCliente({ valor, onCambio, errores }: Props) {
     try {
       const { cliente } = await api<{ cliente: ClienteDatos | null }>(`/api/clientes/${encodeURIComponent(ident)}`);
       if (cliente) {
-        onCambio({ ...cliente, identificacion: ident });
+        // Si su sector ya no está en la lista, el selector queda vacío para que el vendedor elija uno
+        const sectorVigente = sectores?.some((s) => s.nombre === cliente.sector);
+        onCambio({ ...cliente, identificacion: ident, sector: sectorVigente ? cliente.sector : "" });
         setEstadoBusqueda("encontrado");
       } else {
         setEstadoBusqueda("nuevo");
@@ -83,16 +90,38 @@ export function DatosCliente({ valor, onCambio, errores }: Props) {
         error={errores.telefono}
         obligatorio
       />
-      <Campo etiqueta="Dirección" autoComplete="off" value={valor.direccion} onChange={(e) => cambiar("direccion", e.target.value)} error={errores.direccion} obligatorio />
       <Campo
-        className="md:col-span-2"
-        etiqueta="Sector o barrio"
+        etiqueta="Dirección completa (con barrio)"
         autoComplete="off"
-        value={valor.sector}
-        onChange={(e) => cambiar("sector", e.target.value)}
-        error={errores.sector}
+        value={valor.direccion}
+        onChange={(e) => cambiar("direccion", e.target.value)}
+        error={errores.direccion}
+        ayuda="Ejemplo: Calle 18 #25-30, barrio Las Cuadras"
         obligatorio
       />
+      {sectores?.length === 0 ? (
+        <div className="md:col-span-2">
+          <Mensaje tono="alerta" titulo="Sector">
+            El administrador aún no ha agregado sectores para este local
+          </Mensaje>
+        </div>
+      ) : (
+        <Selector
+          className="md:col-span-2"
+          etiqueta="Sector"
+          value={sectores?.some((s) => s.nombre === valor.sector) ? valor.sector : ""}
+          onChange={(e) => cambiar("sector", e.target.value)}
+          error={errores.sector}
+          obligatorio
+        >
+          <option value="">{sectores ? "Elige un sector" : "Cargando sectores…"}</option>
+          {sectores?.map((s) => (
+            <option key={s.id} value={s.nombre}>
+              {s.nombre}
+            </option>
+          ))}
+        </Selector>
+      )}
     </fieldset>
   );
 }

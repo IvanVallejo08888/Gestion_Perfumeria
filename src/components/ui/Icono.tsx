@@ -35,6 +35,9 @@ const RUTAS = {
   ojoNo: "M3 3l18 18M10.6 10.6a3 3 0 0 0 4.2 4.2M9.4 5.2A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.1 3.9M6.1 6.1C3.6 7.9 2 12 2 12s4 7 10 7a9.7 9.7 0 0 0 5-1.4",
   calendario: "M4 5h16v16H4zM4 10h16M8 3v4M16 3v4",
   dinero: "M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6",
+  flechaAbajo: "M6 9l6 6 6-6",
+  mensaje: "M21 12a9 9 0 0 1-13.2 8L3 21l1-4.8A9 9 0 1 1 21 12Z",
+  sector: "M12 22s7-7.2 7-12a7 7 0 1 0-14 0c0 4.8 7 12 7 12Zm0-9.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z",
 } as const;
 
 export type NombreIcono = keyof typeof RUTAS;

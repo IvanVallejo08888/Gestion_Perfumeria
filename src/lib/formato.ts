@@ -60,14 +60,38 @@ export function numeroFactura(numero: number): string {
   return String(numero).padStart(6, "0");
 }
 
-/** Quita tildes y pasa a minúsculas: "Perfúme ROSA" → "perfume rosa" */
+/**
+ * Deja un texto listo para buscar (se usa igual en el navegador y en el servidor):
+ *  - quita tildes y convierte "ñ" en "n" ("Niño" → "nino");
+ *  - pasa a minúsculas;
+ *  - cambia signos y puntuación por espacios ("Agua-de.Rosa" → "agua de rosa");
+ *  - deja un solo espacio entre palabras.
+ */
 export function normalizarTexto(valor: string): string {
   return valor
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/\p{M}/gu, "") // al separar letra y tilde, aquí se quita la tilde (también la de la ñ)
     .toLowerCase()
-    .replace(/\s+/g, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
+}
+
+/** Escapa los comodines de LIKE para que el texto del usuario se busque tal cual. */
+export function escaparLike(texto: string): string {
+  return texto.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+/**
+ * Indica si un producto coincide con lo escrito: cada palabra debe estar en el nombre
+ * (en cualquier orden) o el texto completo debe estar en el código.
+ * Es la misma regla que aplica el servidor en productos.ts.
+ */
+export function coincideBusqueda(nombre: string, codigo: string | null | undefined, texto: string): boolean {
+  const palabras = normalizarTexto(texto).split(" ").filter(Boolean);
+  if (palabras.length === 0) return true;
+  const nombreNormalizado = normalizarTexto(nombre);
+  if (palabras.every((p) => nombreNormalizado.includes(p))) return true;
+  return !!codigo && normalizarTexto(codigo).includes(palabras.join(" "));
 }
 
 /** Devuelve año y mes (1-12) de una fecha según la hora de Colombia. */
@@ -97,6 +121,27 @@ export function rangoPeriodo(anio: number, mes?: number): { inicio: Date; fin: D
   return {
     inicio: new Date(`${anio}-01-01T00:00:00-05:00`),
     fin: new Date(`${anio + 1}-01-01T00:00:00-05:00`),
+  };
+}
+
+/** Día de hoy en Colombia, como "AAAA-MM-DD". */
+export function hoyColombia(valor: Date = new Date()): string {
+  return valor.toLocaleDateString("en-CA", { timeZone: ZONA_HORARIA });
+}
+
+/** Muestra un día guardado como "AAAA-MM-DD": "2026-11-05" → "05/11/2026". */
+export function fechaDia(valor: string): string {
+  const [anio, mes, dia] = valor.split("-");
+  return `${dia}/${mes}/${anio}`;
+}
+
+/** Rango de días [desde, hasta) de un mes o de un año, para columnas de tipo fecha (sin hora). */
+export function rangoDias(anio: number, mes?: number): { desde: string; hasta: string } {
+  const dos = (n: number) => String(n).padStart(2, "0");
+  if (!mes) return { desde: `${anio}-01-01`, hasta: `${anio + 1}-01-01` };
+  return {
+    desde: `${anio}-${dos(mes)}-01`,
+    hasta: mes === 12 ? `${anio + 1}-01-01` : `${anio}-${dos(mes + 1)}-01`,
   };
 }
 

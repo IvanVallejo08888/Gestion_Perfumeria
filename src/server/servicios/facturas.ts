@@ -5,15 +5,18 @@
  *   1. Guarda o actualiza el cliente.
  *   2. Descuenta el stock de cada producto (si no alcanza, se cancela toda la venta).
  *   3. Asigna el número consecutivo del local.
- *   4. Guarda la factura, sus productos y (si es crédito) sus cuotas.
+ *   4. Calcula el medio de pago (contado): efectivo + transferencia = total.
+ *   5. Guarda la factura, sus productos y (si es crédito) sus cuotas.
  * Si algo falla, no se guarda nada y el inventario queda intacto.
  */
 import "server-only";
 import { and, asc, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { abonos, clientes, cuotas, facturaItems, facturas, locales, productos } from "@/db/schema";
+import { abonos, clientes, cuotas, facturaItems, facturas, locales, productos, sectores } from "@/db/schema";
 import { ApiError, type VendedorSesion } from "@/lib/api";
-import type { ClienteDatos, FacturaDetalle, FacturaResumen } from "@/tipos";
+import { escaparLike, normalizarTexto } from "@/lib/formato";
+import type { ClienteDatos, FacturaDetalle, FacturaResumen, MedioPago } from "@/tipos";
+import { resolverPago } from "./pagos";
 
 export interface DatosNuevaFactura {
   tipo: "NORMAL" | "CREDITO";
@@ -23,6 +26,9 @@ export interface DatosNuevaFactura {
   descuento: number;
   notas?: string;
   cuotas?: { fechaVencimiento: string }[];
+  medioPago?: MedioPago;
+  valorTransferencia?: number;
+  valorEfectivo?: number;
 }
 
 export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFactura): Promise<string> {
@@ -33,6 +39,12 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
   for (const item of datos.items) cantidades.set(item.productoId, (cantidades.get(item.productoId) ?? 0) + item.cantidad);
 
   return db.transaction(async (tx) => {
+    /* El sector debe ser uno de los activos del local; en la factura se guarda su nombre */
+    const sector = await tx.query.sectores.findFirst({
+      where: and(eq(sectores.localId, localId), eq(sectores.nombre, datos.cliente.sector), eq(sectores.activo, true)),
+    });
+    if (!sector) throw new ApiError(400, "El sector elegido no existe o está desactivado en este local.");
+
     /* 1. Cliente: se crea o se actualizan sus datos */
     const [cliente] = await tx
       .insert(clientes)
@@ -86,6 +98,13 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
     if (total < 0) throw new ApiError(400, "El descuento no puede ser mayor que el valor de la factura.");
     if (datos.tipo === "CREDITO" && total === 0) throw new ApiError(400, "Un crédito debe tener un valor mayor que cero.");
 
+    /* Medio de pago (solo contado). El servidor calcula los valores con SU total. */
+    const esCredito = datos.tipo === "CREDITO";
+    if (!esCredito && !datos.medioPago) throw new ApiError(400, "Elige el medio de pago.");
+    const pago = esCredito
+      ? { medioPago: null, valorEfectivo: 0, valorTransferencia: 0 }
+      : resolverPago({ ...datos, medioPago: datos.medioPago! }, total);
+
     /* 4. Número consecutivo del local (operación atómica) */
     const [local] = await tx
       .update(locales)
@@ -93,7 +112,6 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
       .where(eq(locales.id, localId))
       .returning({ numero: locales.consecutivoFactura });
 
-    const esCredito = datos.tipo === "CREDITO";
     const ahora = new Date();
 
     const [factura] = await tx
@@ -108,6 +126,7 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
         clienteId: cliente.id,
         clienteIdentificacion: cliente.identificacion,
         clienteNombre: cliente.nombre,
+        clienteNombreBusqueda: normalizarTexto(cliente.nombre),
         clienteTelefono: cliente.telefono,
         clienteDireccion: cliente.direccion,
         clienteSector: cliente.sector,
@@ -116,6 +135,7 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
         descuento: datos.descuento,
         total,
         saldo: esCredito ? total : 0,
+        ...pago,
         notas: datos.notas || null,
         completadaEn: esCredito ? null : ahora,
       })
@@ -132,7 +152,7 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
       })),
     );
 
-    /* 5. Cuotas: el valor se reparte en partes iguales; la última absorbe la diferencia de redondeo */
+    /* 6. Cuotas: el valor se reparte en partes iguales; la última absorbe la diferencia de redondeo */
     if (esCredito && datos.cuotas?.length) {
       const fechas = datos.cuotas.map((c) => new Date(c.fechaVencimiento)).sort((a, b) => a.getTime() - b.getTime());
       const n = fechas.length;
@@ -165,7 +185,11 @@ export async function listarFacturas(
   if (filtros.tipo === "NORMAL" || filtros.tipo === "CREDITO") condiciones.push(eq(facturas.tipo, filtros.tipo));
   if (filtros.texto?.trim()) {
     const t = filtros.texto.trim();
-    const opciones: SQL[] = [ilike(facturas.clienteNombre, `%${t}%`), ilike(facturas.clienteIdentificacion, `%${t}%`)];
+    const parecido = `%${escaparLike(t)}%`;
+    const opciones: SQL[] = [ilike(facturas.clienteNombre, parecido), ilike(facturas.clienteIdentificacion, parecido)];
+    // Por nombre normalizado: "nino" encuentra "Niño"; cada palabra puede ir en cualquier orden
+    const palabras = normalizarTexto(t).split(" ").filter(Boolean);
+    if (palabras.length) opciones.push(and(...palabras.map((p) => ilike(facturas.clienteNombreBusqueda, `%${escaparLike(p)}%`)))!);
     if (/^\d+$/.test(t)) opciones.push(eq(facturas.numero, Number(t)));
     condiciones.push(or(...opciones)!);
   }
@@ -180,6 +204,9 @@ export async function listarFacturas(
       clienteIdentificacion: facturas.clienteIdentificacion,
       total: facturas.total,
       saldo: facturas.saldo,
+      medioPago: facturas.medioPago,
+      valorEfectivo: facturas.valorEfectivo,
+      valorTransferencia: facturas.valorTransferencia,
       creadoEn: facturas.creadoEn,
       completadaEn: facturas.completadaEn,
     })
@@ -235,7 +262,15 @@ export async function obtenerFactura(localId: string, id: string): Promise<Factu
       estado: c.estado,
       pagadaEn: c.pagadaEn?.toISOString() ?? null,
     })),
-    abonos: f.abonos.map((a) => ({ id: a.id, valor: a.valor, nota: a.nota, creadoEn: a.creadoEn.toISOString() })),
+    abonos: f.abonos.map((a) => ({
+      id: a.id,
+      valor: a.valor,
+      medioPago: a.medioPago,
+      valorEfectivo: a.valorEfectivo,
+      valorTransferencia: a.valorTransferencia,
+      nota: a.nota,
+      creadoEn: a.creadoEn.toISOString(),
+    })),
   };
 }
 
@@ -248,6 +283,9 @@ function serializarResumen(f: {
   clienteIdentificacion: string;
   total: number;
   saldo: number;
+  medioPago: MedioPago | null;
+  valorEfectivo: number;
+  valorTransferencia: number;
   creadoEn: Date;
   completadaEn: Date | null;
 }): FacturaResumen {
@@ -260,6 +298,9 @@ function serializarResumen(f: {
     clienteIdentificacion: f.clienteIdentificacion,
     total: f.total,
     saldo: f.saldo,
+    medioPago: f.medioPago,
+    valorEfectivo: f.valorEfectivo,
+    valorTransferencia: f.valorTransferencia,
     creadoEn: f.creadoEn.toISOString(),
     completadaEn: f.completadaEn?.toISOString() ?? null,
   };

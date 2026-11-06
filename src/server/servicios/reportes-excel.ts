@@ -2,7 +2,7 @@
  * Generación de reportes en Excel (.xlsx).
  *
  * Reporte POR LOCAL (anual o mensual):
- *  - Resumen, Facturas, Productos vendidos, Abonos y Ventas por vendedor → datos del periodo elegido.
+ *  - Resumen, Facturas, Productos vendidos, Abonos, Ventas por vendedor y Gastos → datos del periodo elegido.
  *  - Cartera e Inventario → foto del momento en que se genera (lo que se debe y lo que hay hoy).
  *
  * Reporte CONSOLIDADO (solo administrador): todos los locales comparados + cartera de todos los locales.
@@ -12,8 +12,10 @@ import ExcelJS from "exceljs";
 import { and, asc, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { abonos, cuotas, facturaItems, facturas, locales, productos } from "@/db/schema";
-import { fecha, fechaHora, MESES, numeroFactura, rangoPeriodo } from "@/lib/formato";
+import { fecha, fechaDia, fechaHora, MESES, numeroFactura, rangoPeriodo } from "@/lib/formato";
+import { textoMedioPago } from "@/lib/pagos";
 import { obtenerEstadisticas } from "./estadisticas";
+import { gastosDelPeriodo } from "./gastos";
 import { listarLocales, obtenerLocal } from "./locales";
 
 const FORMATO_PESOS = '"$"#,##0';
@@ -201,7 +203,7 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
   const periodo = textoPeriodo(anio, mes);
   const enPeriodo = and(eq(facturas.localId, localId), gte(facturas.creadoEn, inicio), lt(facturas.creadoEn, fin));
 
-  const [estadisticas, listaFacturas, productosVendidos, listaAbonos, porVendedor, cartera, inventario] = await Promise.all([
+  const [estadisticas, listaFacturas, productosVendidos, listaAbonos, listaGastos, porVendedor, cartera, inventario] = await Promise.all([
     obtenerEstadisticas(localId, anio),
     db.select().from(facturas).where(enPeriodo).orderBy(asc(facturas.creadoEn)),
     db
@@ -219,6 +221,9 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
       .select({
         creadoEn: abonos.creadoEn,
         valor: abonos.valor,
+        medioPago: abonos.medioPago,
+        valorEfectivo: abonos.valorEfectivo,
+        valorTransferencia: abonos.valorTransferencia,
         nota: abonos.nota,
         numero: facturas.numero,
         cliente: facturas.clienteNombre,
@@ -228,6 +233,7 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
       .innerJoin(facturas, eq(abonos.facturaId, facturas.id))
       .where(and(eq(facturas.localId, localId), gte(abonos.creadoEn, inicio), lt(abonos.creadoEn, fin)))
       .orderBy(asc(abonos.creadoEn)),
+    gastosDelPeriodo(localId, anio, mes),
     db
       .select({
         vendedor: facturas.vendedorNombre,
@@ -262,6 +268,10 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
     { header: "Abonos recibidos", key: "recaudoAbonos", width: 20, style: { numFmt: FORMATO_PESOS } },
     { header: "Total vendido", key: "totalVentas", width: 20, style: { numFmt: FORMATO_PESOS } },
     { header: "Total recaudado", key: "totalRecaudado", width: 20, style: { numFmt: FORMATO_PESOS } },
+    { header: "Recibido en efectivo", key: "recibidoEfectivo", width: 20, style: { numFmt: FORMATO_PESOS } },
+    { header: "Recibido en transferencia", key: "recibidoTransferencia", width: 20, style: { numFmt: FORMATO_PESOS } },
+    { header: "Gastos", key: "gastos", width: 20, style: { numFmt: FORMATO_PESOS } },
+    { header: "Utilidad (recibido − gastos)", key: "utilidad", width: 20, style: { numFmt: FORMATO_PESOS } },
   ];
   const mesesIncluidos = mes ? estadisticas.meses.filter((m) => m.mes === mes) : estadisticas.meses;
   resumen.addRows(mesesIncluidos);
@@ -295,6 +305,9 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
     { header: "Descuento", key: "descuento", width: 13, style: { numFmt: FORMATO_PESOS } },
     { header: "Total", key: "total", width: 15, style: { numFmt: FORMATO_PESOS } },
     { header: "Saldo pendiente", key: "saldo", width: 15, style: { numFmt: FORMATO_PESOS } },
+    { header: "Medio de pago", key: "medioPago", width: 16 },
+    { header: "Efectivo", key: "valorEfectivo", width: 15, style: { numFmt: FORMATO_PESOS } },
+    { header: "Transferencia", key: "valorTransferencia", width: 15, style: { numFmt: FORMATO_PESOS } },
   ];
   hojaFacturas.addRows(
     listaFacturas.map((f) => ({
@@ -312,6 +325,10 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
       descuento: f.descuento,
       total: f.total,
       saldo: f.saldo,
+      // En el crédito el medio de pago se registra en cada abono (ver la hoja "Abonos")
+      medioPago: f.medioPago ? textoMedioPago(f.medioPago) : "A crédito",
+      valorEfectivo: f.valorEfectivo,
+      valorTransferencia: f.valorTransferencia,
     })),
   );
   estilizarEncabezado(hojaFacturas);
@@ -344,10 +361,19 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
     { header: "Identificación", key: "identificacion", width: 16 },
     { header: "Cliente", key: "cliente", width: 28 },
     { header: "Valor", key: "valor", width: 16, style: { numFmt: FORMATO_PESOS } },
+    { header: "Medio de pago", key: "medioPago", width: 16 },
+    { header: "Efectivo", key: "valorEfectivo", width: 15, style: { numFmt: FORMATO_PESOS } },
+    { header: "Transferencia", key: "valorTransferencia", width: 15, style: { numFmt: FORMATO_PESOS } },
     { header: "Nota", key: "nota", width: 30 },
   ];
   hojaAbonos.addRows(
-    listaAbonos.map((a) => ({ ...a, fecha: fechaHora(a.creadoEn), numero: numeroFactura(a.numero), nota: a.nota ?? "" })),
+    listaAbonos.map((a) => ({
+      ...a,
+      fecha: fechaHora(a.creadoEn),
+      numero: numeroFactura(a.numero),
+      medioPago: textoMedioPago(a.medioPago),
+      nota: a.nota ?? "",
+    })),
   );
   estilizarEncabezado(hojaAbonos);
   if (listaAbonos.length) {
@@ -380,10 +406,35 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
     });
   }
 
-  /* ---------- Hoja 6: Cartera (hoy) ---------- */
+  /* ---------- Hoja 6: Gastos ---------- */
+  const hojaGastos = libro.addWorksheet("Gastos");
+  hojaGastos.columns = [
+    { header: "Fecha", key: "fecha", width: 14 },
+    { header: "Categoría", key: "categoria", width: 26 },
+    { header: "Descripción", key: "descripcion", width: 36 },
+    { header: "Medio de pago", key: "medioPago", width: 16 },
+    { header: "Valor", key: "valor", width: 16, style: { numFmt: FORMATO_PESOS } },
+    { header: "Registrado por", key: "usuario", width: 24 },
+  ];
+  hojaGastos.addRows(
+    listaGastos.map((g) => ({
+      fecha: fechaDia(g.fecha),
+      categoria: g.categoriaNombre,
+      descripcion: g.descripcion ?? "",
+      medioPago: textoMedioPago(g.medioPago),
+      valor: g.valor,
+      usuario: g.usuarioNombre,
+    })),
+  );
+  estilizarEncabezado(hojaGastos);
+  if (listaGastos.length) {
+    agregarTotal(hojaGastos, { fecha: `TOTAL (${listaGastos.length})`, valor: sumarCampo(listaGastos, (g) => g.valor) });
+  }
+
+  /* ---------- Hoja 7: Cartera (hoy) ---------- */
   hojaCartera(libro, cartera, false);
 
-  /* ---------- Hoja 7: Inventario (hoy) ---------- */
+  /* ---------- Hoja 8: Inventario (hoy) ---------- */
   const hojaInventario = libro.addWorksheet("Inventario");
   hojaInventario.columns = [
     { header: "Código", key: "codigo", width: 14 },

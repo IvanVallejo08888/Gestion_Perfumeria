@@ -77,7 +77,7 @@ export function EditorCuotas({ config, onCambio, total, error }: Props) {
   return (
     <fieldset aria-labelledby={tituloId}>
       <legend id={tituloId} className="mb-3 text-2xl font-bold">
-        4. Cuotas del crédito
+        3. Cuotas del crédito
       </legend>
 
       <div className="grid gap-5 md:grid-cols-3">

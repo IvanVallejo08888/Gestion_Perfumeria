@@ -6,7 +6,7 @@ import { and, asc, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { facturaItems, productos } from "@/db/schema";
 import { ApiError } from "@/lib/api";
-import { normalizarTexto } from "@/lib/formato";
+import { escaparLike, normalizarTexto } from "@/lib/formato";
 
 interface DatosProducto {
   nombre: string;
@@ -18,12 +18,9 @@ interface DatosProducto {
 
 export type ProductoLista = typeof productos.$inferSelect;
 
-/** Escapa los comodines de LIKE para que el texto del usuario se busque tal cual. */
-const escaparLike = (t: string) => t.replace(/[\\%_]/g, (c) => `\\${c}`);
-
 /**
  * Búsqueda inteligente:
- *  - No distingue mayúsculas ni tildes ("perfume rosa" encuentra "Perfúme Agua de ROSA").
+ *  - No distingue mayúsculas, tildes, ñ ni signos ("agua de rosa" encuentra "Agua-de.Rosa").
  *  - Cada palabra escrita debe aparecer en el nombre, en cualquier orden.
  *  - También busca por código exacto o parcial.
  *  - Muestra primero los productos que tienen stock.
@@ -36,13 +33,18 @@ function condicionBusqueda(texto: string): SQL | undefined {
   return or(porNombre, porCodigo);
 }
 
+/** Máximo de productos que se envían al navegador de una sola vez. */
+const LIMITE_LISTA = 500;
+
 export async function listarProductos(localId: string, texto?: string) {
-  return db
+  const filas = await db
     .select()
     .from(productos)
     .where(and(eq(productos.localId, localId), eq(productos.activo, true), texto ? condicionBusqueda(texto) : undefined))
     .orderBy(asc(productos.nombreBusqueda))
-    .limit(500);
+    .limit(LIMITE_LISTA + 1);
+  // "hayMas" le avisa a la factura que debe buscar en el servidor en vez de filtrar en el navegador
+  return { productos: filas.slice(0, LIMITE_LISTA), hayMas: filas.length > LIMITE_LISTA };
 }
 
 export async function buscarParaVenta(localId: string, texto: string) {

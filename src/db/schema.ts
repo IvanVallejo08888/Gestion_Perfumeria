@@ -9,9 +9,10 @@
  *    de los productos, para que el historial no cambie si luego se editan.
  * ============================================================
  */
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   boolean,
+  date,
   index,
   integer,
   pgEnum,
@@ -42,6 +43,12 @@ export const estadoFacturaEnum = pgEnum("estado_factura", ["PENDIENTE", "COMPLET
 
 export const estadoCuotaEnum = pgEnum("estado_cuota", ["PENDIENTE", "PAGADA"]);
 
+/** Cómo se recibió el dinero de una factura o de un abono. MIXTO = parte efectivo, parte transferencia. */
+export const medioPagoEnum = pgEnum("medio_pago", ["EFECTIVO", "TRANSFERENCIA", "MIXTO"]);
+
+/** Cómo se pagó un gasto (los gastos no se dividen entre dos medios). */
+export const medioPagoGastoEnum = pgEnum("medio_pago_gasto", ["EFECTIVO", "TRANSFERENCIA"]);
+
 /* Columnas de fecha reutilizables (con zona horaria) */
 const creadoEn = () => timestamp("creado_en", { withTimezone: true }).notNull().defaultNow();
 const actualizadoEn = () =>
@@ -63,6 +70,36 @@ export const locales = pgTable("locales", {
   creadoEn: creadoEn(),
   actualizadoEn: actualizadoEn(),
 });
+
+/** Sectores de la ciudad que el administrador define para cada local. */
+export const sectores = pgTable(
+  "sectores",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    localId: uuid("local_id")
+      .notNull()
+      .references(() => locales.id, { onDelete: "cascade" }),
+    nombre: text("nombre").notNull(),
+    /** Un sector ya usado en facturas no se borra: solo se desactiva. */
+    activo: boolean("activo").notNull().default(true),
+    creadoEn: creadoEn(),
+  },
+  (t) => [uniqueIndex("sectores_local_nombre_uq").on(t.localId, sql`lower(${t.nombre})`)],
+);
+
+/** Categorías de gastos de cada local (Arriendo, Nómina…). */
+export const categoriasGasto = pgTable(
+  "categorias_gasto",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    localId: uuid("local_id")
+      .notNull()
+      .references(() => locales.id, { onDelete: "cascade" }),
+    nombre: text("nombre").notNull(),
+    activo: boolean("activo").notNull().default(true),
+  },
+  (t) => [uniqueIndex("categorias_gasto_local_nombre_uq").on(t.localId, sql`lower(${t.nombre})`)],
+);
 
 export const usuarios = pgTable(
   "usuarios",
@@ -145,6 +182,8 @@ export const facturas = pgTable(
     // Copia de los datos del cliente en el momento de la venta
     clienteIdentificacion: text("cliente_identificacion").notNull(),
     clienteNombre: text("cliente_nombre").notNull(),
+    /** Nombre del cliente normalizado (sin tildes ni signos), para la búsqueda del historial. */
+    clienteNombreBusqueda: text("cliente_nombre_busqueda").notNull().default(""),
     clienteTelefono: text("cliente_telefono").notNull(),
     clienteDireccion: text("cliente_direccion").notNull(),
     clienteSector: text("cliente_sector").notNull(),
@@ -154,6 +193,13 @@ export const facturas = pgTable(
     total: integer("total").notNull(),
     /** Lo que falta por pagar (0 en ventas de contado). */
     saldo: integer("saldo").notNull().default(0),
+    /**
+     * Medio de pago de la venta de contado. En los créditos queda vacío (null),
+     * porque el dinero entra después con cada abono, y cada abono guarda su propio medio.
+     */
+    medioPago: medioPagoEnum("medio_pago"),
+    valorEfectivo: integer("valor_efectivo").notNull().default(0),
+    valorTransferencia: integer("valor_transferencia").notNull().default(0),
     notas: text("notas"),
     creadoEn: creadoEn(),
     completadaEn: timestamp("completada_en", { withTimezone: true }),
@@ -204,10 +250,35 @@ export const abonos = pgTable(
       .references(() => facturas.id, { onDelete: "cascade" }),
     usuarioId: uuid("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
     valor: integer("valor").notNull(),
+    medioPago: medioPagoEnum("medio_pago").notNull().default("EFECTIVO"),
+    valorEfectivo: integer("valor_efectivo").notNull().default(0),
+    valorTransferencia: integer("valor_transferencia").notNull().default(0),
     nota: text("nota"),
     creadoEn: creadoEn(),
   },
   (t) => [index("abonos_factura_idx").on(t.facturaId)],
+);
+
+export const gastos = pgTable(
+  "gastos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    localId: uuid("local_id")
+      .notNull()
+      .references(() => locales.id, { onDelete: "cascade" }),
+    usuarioId: uuid("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
+    // Copias (snapshot): el historial no cambia si luego se renombra la categoría o el usuario
+    usuarioNombre: text("usuario_nombre").notNull(),
+    categoriaId: uuid("categoria_id").references(() => categoriasGasto.id, { onDelete: "set null" }),
+    categoriaNombre: text("categoria_nombre").notNull(),
+    descripcion: text("descripcion"),
+    valor: integer("valor").notNull(),
+    medioPago: medioPagoGastoEnum("medio_pago").notNull(),
+    /** Día del gasto (sin hora), en formato AAAA-MM-DD. */
+    fecha: date("fecha", { mode: "string" }).notNull(),
+    creadoEn: creadoEn(),
+  },
+  (t) => [index("gastos_local_fecha_idx").on(t.localId, t.fecha)],
 );
 
 /* ------------------------------ Relaciones ------------------------------ */
@@ -218,6 +289,22 @@ export const localesRelations = relations(locales, ({ many }) => ({
   productos: many(productos),
   clientes: many(clientes),
   facturas: many(facturas),
+  sectores: many(sectores),
+  categoriasGasto: many(categoriasGasto),
+  gastos: many(gastos),
+}));
+
+export const sectoresRelations = relations(sectores, ({ one }) => ({
+  local: one(locales, { fields: [sectores.localId], references: [locales.id] }),
+}));
+
+export const categoriasGastoRelations = relations(categoriasGasto, ({ one }) => ({
+  local: one(locales, { fields: [categoriasGasto.localId], references: [locales.id] }),
+}));
+
+export const gastosRelations = relations(gastos, ({ one }) => ({
+  local: one(locales, { fields: [gastos.localId], references: [locales.id] }),
+  categoria: one(categoriasGasto, { fields: [gastos.categoriaId], references: [categoriasGasto.id] }),
 }));
 
 export const usuariosRelations = relations(usuarios, ({ one }) => ({
@@ -262,3 +349,6 @@ export type Factura = typeof facturas.$inferSelect;
 export type FacturaItem = typeof facturaItems.$inferSelect;
 export type Cuota = typeof cuotas.$inferSelect;
 export type Abono = typeof abonos.$inferSelect;
+export type Sector = typeof sectores.$inferSelect;
+export type CategoriaGasto = typeof categoriasGasto.$inferSelect;
+export type Gasto = typeof gastos.$inferSelect;

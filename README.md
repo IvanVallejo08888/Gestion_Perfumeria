@@ -1,6 +1,6 @@
 # Gestión de Perfumerías
 
-Sistema web para gestionar locales: **facturación (contado y crédito), créditos y abonos, inventario, notificaciones de cobro y reportes en Excel**.
+Sistema web para gestionar locales: **facturación (contado y crédito), medios de pago, créditos y abonos, gastos, inventario, notificaciones de cobro y reportes en Excel**.
 Funciona en **celular, tablet y computador**, con letra grande y colores de alto contraste pensados para personas adultas.
 
 **Tecnologías:** Next.js 15 (App Router) · React 19 · TypeScript · PostgreSQL · Drizzle ORM · Tailwind CSS 4 · ExcelJS · jsPDF
@@ -55,36 +55,48 @@ npm run start
 | `npm run dev` | Servidor de desarrollo |
 | `npm run build` / `npm start` | Compilar y ejecutar en producción |
 | `npm run typecheck` | Revisar errores de TypeScript |
+| `npm test` | Pruebas unitarias (búsqueda, medios de pago, mensaje de WhatsApp) |
 | `npm run iconos` | Regenerar los íconos de la PWA desde `src/app/icon.svg` |
 | `npm run db:migrate` | Aplicar migraciones pendientes |
 | `npm run db:generate` | Crear una migración nueva tras editar `src/db/schema.ts` |
 | `npm run db:seed` | Crear el administrador (si no existe) |
+| `npm run db:recalcular-busqueda` | Recalcular los textos de búsqueda de productos e historial (una vez, después de migrar) |
 | `npm run db:studio` | Ver la base de datos en el navegador |
 
 ## 4. Cómo funciona
 
 ### Roles
-- **Administrador (único):** inicia sesión con identificación `12345987600`. Crea locales, ve y gestiona usuarios (asignar local, editar, cambiar contraseña, pausar/reactivar, eliminar), ve las estadísticas de cada local y descarga reportes Excel por local o el **consolidado de todos los locales**.
+- **Administrador (único):** inicia sesión con identificación `12345987600`. Crea locales, administra sus **sectores de la ciudad** y sus **categorías de gastos**, ve y gestiona usuarios (asignar local, editar, cambiar contraseña, pausar/reactivar, eliminar), ve las estadísticas y los gastos de cada local y descarga reportes Excel (del año o del mes) por local o el **consolidado de todos los locales**.
 - **Vendedor:** se registra (nombre, identificación, correo, teléfono, contraseña validada) y queda **en espera** hasta que el administrador le asigna un local. Luego trabaja solo sobre su local, y puede descargar el Excel de **su** local (nunca el de otro).
 
 ### Seguridad de sesión
 Cada petición se valida contra la base de datos: si el administrador **pausa, elimina o cambia la contraseña** de un usuario, su sesión se cierra al instante.
 
 ### Facturación
-1. Datos del cliente (si ya compró antes, se autocompletan con la identificación).
-2. Buscador inteligente: no distingue mayúsculas ni tildes, y acepta palabras en cualquier orden. Muestra el stock; si no hay, **advierte y no deja vender**.
-3. Pago adicional y descuento (valores fijos).
-4. **Crédito:** número de cuotas, frecuencia y primera fecha → las fechas se llenan solas y se pueden editar (hora, día, mes y año).
+1. Datos del cliente (si ya compró antes, se autocompletan con la identificación). El **sector** se elige de la lista del local; si el local no tiene sectores, no se puede registrar la factura.
+2. Lista de productos siempre visible, con filtro desde la primera letra: ignora mayúsculas, tildes, ñ y signos, y acepta palabras en cualquier orden. Muestra el stock; si no hay, **advierte y no deja vender**.
+3. Secciones desplegables opcionales: **Aplicar descuento**, **Costo adicional** y **Notas**. Si tienen un valor, se ve aunque estén cerradas.
+4. **Factura normal:** medio de pago (Efectivo, Transferencia o Mixto). En Mixto se escribe la transferencia y el efectivo se calcula solo.
+5. **Crédito:** número de cuotas, frecuencia y primera fecha → las fechas se llenan solas y se pueden editar (hora, día, mes y año). El medio de pago se registra en cada abono.
 
-Al registrar, todo ocurre en una **transacción**: se descuenta el inventario, se asigna el consecutivo y se abre la factura lista para **compartir en imagen o PDF**, descargar o imprimir.
+Al registrar, todo ocurre en una **transacción**: se descuenta el inventario, se asigna el consecutivo y se abre la factura lista para **enviar por WhatsApp**, **compartir en imagen o PDF**, descargar o imprimir. El servidor recalcula el total y el reparto del pago: nunca confía en los valores del navegador.
+
+**Enviar por WhatsApp:** abre `wa.me` con el celular del cliente (agrega el 57) y el detalle de la factura en texto. WhatsApp no permite adjuntar la imagen desde un enlace; para enviarla se usa «Compartir imagen». El teléfono debe ser un celular colombiano de 10 dígitos.
+
+### Sectores
+En **Locales → Sectores de la ciudad** el administrador agrega sectores (uno a uno o pegando varios, uno por línea), los edita y los elimina. Si un sector ya se usó en facturas solo se desactiva. La factura guarda el nombre del sector, así el historial no cambia.
+
+### Gastos
+El vendedor los registra en **Gastos** (categoría, valor, medio de pago, fecha y descripción), los consulta por mes y categoría, y puede eliminar solo los suyos registrados ese día. El administrador maneja las categorías en **Locales → Editar** y ve los gastos en **Reportes**. Cada local nuevo empieza con 7 categorías.
+
+Las estadísticas y el Excel muestran lo recibido en efectivo y en transferencia, los gastos y la **utilidad (recibido − gastos)**. El Excel incluye la hoja «Gastos».
 
 ### Créditos
-Búsqueda por identificación, abonos (se aplican a las cuotas en orden) y cambio de fechas de cobro. Al llegar el saldo a 0 pasa de **Pendiente** a **Completado** y aparece en el historial de ventas completadas.
+Búsqueda por identificación, abonos con medio de pago (se aplican a las cuotas en orden) y cambio de fechas de cobro. Al llegar el saldo a 0 pasa de **Pendiente** a **Completado** y aparece en el historial de ventas completadas.
 
 ### Notificaciones
 Cobros vencidos, del día y de los próximos 3 días (según las fechas de las cuotas) + productos agotados o con stock bajo. El contador del menú se actualiza cada minuto y, si se activan, llegan avisos del navegador.
 
-<<<<<<< HEAD
 ### Reportes en Excel
 Se descargan desde **Reportes**, del año completo o de un mes.
 
@@ -92,11 +104,12 @@ Se descargan desde **Reportes**, del año completo o de un mes.
 
 | Hoja | Contenido |
 |---|---|
-| Resumen | Ventas de contado, créditos, abonos y totales mes a mes |
+| Resumen | Ventas de contado, créditos, abonos, recibido en efectivo/transferencia, gastos y utilidad mes a mes |
 | Facturas | Todas las facturas del periodo, con totales |
 | Productos vendidos | Unidades y valor vendido por producto |
 | Abonos | Cada abono recibido en el periodo |
 | Ventas por vendedor | Lo que vendió cada vendedor y su % del total |
+| Gastos | Cada gasto del periodo, con categoría y medio de pago |
 | Cartera | Créditos con saldo **hoy**: valor vencido, días de atraso y próxima cuota (rojo = más de 30 días, amarillo = algo vencido) |
 | Inventario | Stock **hoy** y valor del inventario (rojo = agotado, amarillo = stock bajo) |
 
@@ -104,8 +117,6 @@ Se descargan desde **Reportes**, del año completo o de un mes.
 
 > Las hojas *Cartera* e *Inventario* muestran el estado **al momento de descargar**, sin importar el periodo elegido.
 
-## 5. Estructura del proyecto
-=======
 ## 5. Instalar como aplicación (PWA)
 
 La app se puede instalar en celular, tablet y computador, y se abre en su propia ventana, sin barra del navegador.
@@ -137,7 +148,6 @@ Los archivos quedan en `public/icons/`.
 - Los recordatorios de cobro solo llegan con la app abierta. Web Push en segundo plano está pendiente (ver el TODO al final de `public/sw.js`).
 
 ## 6. Estructura del proyecto
->>>>>>> fb7fc8c57cf6fd78b2addb4f187ade149f604ec7
 
 ```
 drizzle/                 Migraciones SQL generadas
@@ -162,6 +172,15 @@ src/
 └── middleware.ts        Protección de rutas por rol
 ```
 
+### Actualizar una instalación existente
+
+```bash
+npm run db:migrate              # crea las tablas nuevas y completa los datos existentes
+npm run db:recalcular-busqueda  # recalcula los textos de búsqueda
+```
+
+Después, el administrador debe **agregar los sectores de cada local**: sin ellos no se pueden registrar facturas. Las ventas de contado existentes quedan como pagadas en efectivo, igual que los abonos existentes. Los créditos no tienen medio de pago propio.
+
 **Para agregar una función nueva:** tabla en `src/db/schema.ts` → `npm run db:generate` → lógica en `src/server/servicios/` → endpoint en `src/app/api/` → pantalla en `src/app/panel/` o `src/app/admin/`.
 
 ## 7. Accesibilidad
@@ -169,4 +188,5 @@ src/
 - Tipografía Atkinson Hyperlegible, diseñada para baja visión.
 - Contraste alto (WCAG AA), botones de mínimo 48 px, etiquetas siempre visibles.
 - Los estados nunca dependen solo del color: siempre van con texto.
+- Las secciones desplegables funcionan con teclado y respetan la preferencia de reducir el movimiento.
 - Navegación completa con teclado y compatible con lectores de pantalla.

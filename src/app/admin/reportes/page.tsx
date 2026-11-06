@@ -3,17 +3,19 @@
  *  - Elegir local, año y (opcional) mes.
  *  - Ver las estadísticas del local en pantalla.
  *  - Descargar Excel del AÑO o del MES elegido.
+ *  - Ver los gastos del local en el periodo elegido.
  */
 "use client";
 
 import { useState } from "react";
+import { TablaGastos, TotalesGastos } from "@/components/compartidos/TablaGastos";
 import { VistaEstadisticas } from "@/components/compartidos/VistaEstadisticas";
 import { Cargando, EncabezadoPagina, Mensaje, Tarjeta, Vacio } from "@/components/ui/Basicos";
 import { Selector } from "@/components/ui/Campo";
 import { Icono } from "@/components/ui/Icono";
 import { useConsulta } from "@/hooks/useConsulta";
 import { MESES } from "@/lib/formato";
-import type { Estadisticas } from "@/tipos";
+import type { Estadisticas, ListaGastos } from "@/tipos";
 
 const ANIO_ACTUAL = new Date().getFullYear();
 const ANIOS = Array.from({ length: 6 }, (_, i) => ANIO_ACTUAL - i);
@@ -32,7 +34,9 @@ export default function ReportesAdmin() {
 
   const consultaDatos = useConsulta<Estadisticas>(localId ? `/api/admin/estadisticas?localId=${localId}&anio=${anio}` : null);
   const { datos, cargando } = consultaDatos;
-  const error = consultaLocales.error || consultaDatos.error;
+  const consultaGastos = useConsulta<ListaGastos>(localId ? `/api/admin/gastos?localId=${localId}&anio=${anio}${mes ? `&mes=${mes}` : ""}` : null);
+  const gastos = consultaGastos.datos;
+  const error = consultaLocales.error || consultaDatos.error || consultaGastos.error;
 
   const urlExcel = (conMes: boolean) =>
     `/api/admin/reportes/excel?localId=${localId}&anio=${anio}${conMes && mes ? `&mes=${mes}` : ""}`;
@@ -119,6 +123,17 @@ export default function ReportesAdmin() {
           </Tarjeta>
 
           {cargando || !datos ? <Cargando texto="Calculando estadísticas…" /> : <VistaEstadisticas datos={datos} mes={mes || undefined} />}
+
+          {gastos && (
+            <section className="mt-8 space-y-4">
+              <h2 className="text-2xl font-bold">
+                Gastos · {mes ? `${MESES[mes - 1]} de ` : "año "}
+                {anio}
+              </h2>
+              <TotalesGastos datos={gastos} />
+              <TablaGastos gastos={gastos.gastos} />
+            </section>
+          )}
         </>
       )}
     </>
