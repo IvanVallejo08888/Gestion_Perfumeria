@@ -15,6 +15,7 @@ import { useAvisos } from "@/components/ui/Avisos";
 import { useConsultaPaginada } from "@/hooks/useConsultaPaginada";
 import { useValorDiferido } from "@/hooks/useValorDiferido";
 import { fechaHora, numeroFactura, pesos } from "@/lib/formato";
+import { textoMedioPago } from "@/lib/pagos";
 import type { FacturaResumen } from "@/tipos";
 
 const FILTROS = [
@@ -105,7 +106,13 @@ export default function PaginaHistorial() {
                       <Insignia tono={f.estado === "COMPLETADA" ? "exito" : "alerta"}>
                         {f.estado === "COMPLETADA" ? "Completada" : `Pendiente: ${pesos(f.saldo)}`}
                       </Insignia>
+                      {f.medioPago && <Insignia tono="neutro">{textoMedioPago(f.medioPago)}</Insignia>}
                     </div>
+                    {f.medioPago === "MIXTO" && (
+                      <p className="mt-1 text-base text-texto-suave">
+                        Efectivo {pesos(f.valorEfectivo)} + transferencia {pesos(f.valorTransferencia)}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center justify-between gap-4 sm:flex-col sm:items-end">
                     <p className="text-2xl font-bold text-marca-800">{pesos(f.total)}</p>

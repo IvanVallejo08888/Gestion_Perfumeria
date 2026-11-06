@@ -5,6 +5,6 @@ import { registrarAbono } from "@/server/servicios/creditos";
 
 export const POST = manejador<{ id: string }>("VENDEDOR", async ({ req, usuario, params }) => {
   const vendedor = comoVendedor(usuario);
-  const { valor, nota } = await leerCuerpo(req, abonoSchema);
-  return ok({ factura: await registrarAbono(vendedor, params.id, valor, nota) }, 201);
+  const { valor, nota, ...pago } = await leerCuerpo(req, abonoSchema);
+  return ok({ factura: await registrarAbono(vendedor, params.id, valor, pago, nota) }, 201);
 });

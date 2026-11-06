@@ -17,9 +17,18 @@ export function VistaEstadisticas({ datos, mes }: { datos: Estadisticas; mes?: n
   const maximo = Math.max(1, ...datos.meses.map((m) => m.totalVentas));
   const periodo = mesDatos ? `${mesDatos.nombre} ${datos.anio}` : `año ${datos.anio}`;
 
-  const resumen = [
+  const resumen: { titulo: string; valor: string; detalle: string; peligro?: boolean }[] = [
     { titulo: "Total vendido", valor: pesos(base.totalVentas), detalle: `Contado + crédito · ${periodo}` },
     { titulo: "Dinero recibido", valor: pesos(base.totalRecaudado), detalle: "Contado + abonos recibidos" },
+    { titulo: "Recibido en efectivo", valor: pesos(base.recibidoEfectivo), detalle: "Contado + abonos en efectivo" },
+    { titulo: "Recibido en transferencia", valor: pesos(base.recibidoTransferencia), detalle: "Contado + abonos por transferencia" },
+    { titulo: "Gastos", valor: pesos(base.gastos), detalle: `Gastos del local · ${periodo}` },
+    {
+      titulo: "Utilidad (recibido − gastos)",
+      valor: pesos(base.utilidad),
+      detalle: base.utilidad < 0 ? "Pérdida: los gastos superan lo recibido" : "Lo que queda después de los gastos",
+      peligro: base.utilidad < 0,
+    },
     { titulo: "Ventas de contado", valor: pesos(base.ventasContado), detalle: `${base.cantidadContado} facturas` },
     { titulo: "Créditos otorgados", valor: pesos(base.ventasCredito), detalle: `${base.cantidadCredito} créditos` },
     { titulo: "Abonos recibidos", valor: pesos(base.recaudoAbonos), detalle: "Pagos a créditos" },
@@ -36,7 +45,7 @@ export function VistaEstadisticas({ datos, mes }: { datos: Estadisticas; mes?: n
         {resumen.map((r) => (
           <li key={r.titulo} className="rounded-2xl border-2 border-gray-200 bg-white p-5 shadow-sm">
             <p className="text-lg font-bold text-texto-suave">{r.titulo}</p>
-            <p className="mt-1 text-3xl font-bold text-marca-800">{r.valor}</p>
+            <p className={`mt-1 text-3xl font-bold ${r.peligro ? "text-peligro-700" : "text-marca-800"}`}>{r.valor}</p>
             <p className="mt-1 text-base text-texto-suave">{r.detalle}</p>
           </li>
         ))}
@@ -66,7 +75,7 @@ export function VistaEstadisticas({ datos, mes }: { datos: Estadisticas; mes?: n
       <Tarjeta>
         <h2 className="mb-3 text-2xl font-bold">Detalle mensual</h2>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-base">
+          <table className="w-full min-w-[960px] text-left text-base">
             <caption className="sr-only">Detalle de ventas por mes del año {datos.anio}</caption>
             <thead>
               <tr className="border-b-2 border-gray-300">
@@ -75,7 +84,9 @@ export function VistaEstadisticas({ datos, mes }: { datos: Estadisticas; mes?: n
                 <th scope="col" className="py-2 pr-3 text-right">Créditos</th>
                 <th scope="col" className="py-2 pr-3 text-right">Abonos</th>
                 <th scope="col" className="py-2 pr-3 text-right">Total vendido</th>
-                <th scope="col" className="py-2 text-right">Recibido</th>
+                <th scope="col" className="py-2 pr-3 text-right">Recibido</th>
+                <th scope="col" className="py-2 pr-3 text-right">Gastos</th>
+                <th scope="col" className="py-2 text-right">Utilidad</th>
               </tr>
             </thead>
             <tbody>
@@ -86,7 +97,9 @@ export function VistaEstadisticas({ datos, mes }: { datos: Estadisticas; mes?: n
                   <td className="py-2 pr-3 text-right">{pesos(m.ventasCredito)}</td>
                   <td className="py-2 pr-3 text-right">{pesos(m.recaudoAbonos)}</td>
                   <td className="py-2 pr-3 text-right">{pesos(m.totalVentas)}</td>
-                  <td className="py-2 text-right">{pesos(m.totalRecaudado)}</td>
+                  <td className="py-2 pr-3 text-right">{pesos(m.totalRecaudado)}</td>
+                  <td className="py-2 pr-3 text-right">{pesos(m.gastos)}</td>
+                  <td className={`py-2 text-right ${m.utilidad < 0 ? "font-bold text-peligro-700" : ""}`}>{pesos(m.utilidad)}</td>
                 </tr>
               ))}
             </tbody>
@@ -97,7 +110,9 @@ export function VistaEstadisticas({ datos, mes }: { datos: Estadisticas; mes?: n
                 <td className="py-2 pr-3 text-right">{pesos(datos.totales.ventasCredito)}</td>
                 <td className="py-2 pr-3 text-right">{pesos(datos.totales.recaudoAbonos)}</td>
                 <td className="py-2 pr-3 text-right">{pesos(datos.totales.totalVentas)}</td>
-                <td className="py-2 text-right">{pesos(datos.totales.totalRecaudado)}</td>
+                <td className="py-2 pr-3 text-right">{pesos(datos.totales.totalRecaudado)}</td>
+                <td className="py-2 pr-3 text-right">{pesos(datos.totales.gastos)}</td>
+                <td className={`py-2 text-right ${datos.totales.utilidad < 0 ? "text-peligro-700" : ""}`}>{pesos(datos.totales.utilidad)}</td>
               </tr>
             </tfoot>
           </table>

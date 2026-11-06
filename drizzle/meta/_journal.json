@@ -8,6 +8,13 @@
       "when": 1793900782859,
       "tag": "0000_inicial",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793997535348,
+      "tag": "0001_sectores_gastos_pagos",
+      "breakpoints": true
     }
   ]
 }

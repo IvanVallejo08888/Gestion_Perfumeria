@@ -3,28 +3,32 @@
  *
  * Pasos que ve la persona:
  *   1. Datos del cliente.
- *   2. Productos (buscador inteligente + control de stock).
- *   3. Pago adicional y descuento (valores fijos en pesos).
- *   4. Cuotas (solo crédito).
+ *   2. Productos (lista siempre visible, con filtro y control de stock).
+ *   · Secciones desplegables: descuento, costo adicional y notas.
+ *   3. Medio de pago (factura normal) o cuotas (crédito).
  *   → "Registrar factura": se guarda, se descuenta el inventario y se abre la factura lista para compartir.
  */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useConsulta } from "@/hooks/useConsulta";
 import { avisarCambioNotificaciones } from "@/hooks/useNotificaciones";
 import { pesos } from "@/lib/formato";
 import { api } from "@/lib/http";
+import { calcularPago } from "@/lib/pagos";
 import { clienteSchema } from "@/lib/validaciones";
-import type { ClienteDatos, FacturaDetalle, ProductoVenta, TipoFactura } from "@/tipos";
+import type { ClienteDatos, FacturaDetalle, MedioPago, NombreActivo, ProductoVenta, TipoFactura } from "@/tipos";
 import { Mensaje, Tarjeta } from "../ui/Basicos";
 import { Boton } from "../ui/Boton";
 import { CampoDinero } from "../ui/Campo";
+import { Desplegable } from "../ui/Desplegable";
 import { Icono } from "../ui/Icono";
 import { Modal } from "../ui/Modal";
 import { useAvisos } from "../ui/Avisos";
 import { BuscadorProductos } from "./BuscadorProductos";
 import { CLIENTE_VACIO, DatosCliente } from "./DatosCliente";
 import { configInicial, EditorCuotas, type ConfigCuotas } from "./EditorCuotas";
+import { SelectorMedioPago } from "./MedioPago";
 import { VistaFactura } from "./VistaFactura";
 
 interface Linea {
@@ -42,12 +46,21 @@ export function FormularioFactura({ tipo }: { tipo: TipoFactura }) {
   const [adicional, setAdicional] = useState(0);
   const [descuento, setDescuento] = useState(0);
   const [notas, setNotas] = useState("");
+  const [medioPago, setMedioPago] = useState<MedioPago | null>(null);
+  const [transferencia, setTransferencia] = useState(0);
+  const [errorPago, setErrorPago] = useState("");
   // Las fechas se crean en el navegador (para usar la hora local del dispositivo)
   const [cuotas, setCuotas] = useState<ConfigCuotas | null>(null);
   const [errorGeneral, setErrorGeneral] = useState("");
   const [errorCuotas, setErrorCuotas] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [facturaCreada, setFacturaCreada] = useState<FacturaDetalle | null>(null);
+  // Aumenta con cada factura registrada para que la lista de productos recargue el stock
+  const [versionInventario, setVersionInventario] = useState(0);
+
+  const consultaSectores = useConsulta<{ sectores: NombreActivo[] }>("/api/sectores");
+  const sectores = consultaSectores.datos?.sectores ?? null;
+  const sinSectores = sectores?.length === 0;
 
   useEffect(() => {
     if (esCredito) setCuotas(configInicial());
@@ -94,6 +107,9 @@ export function FormularioFactura({ tipo }: { tipo: TipoFactura }) {
     setAdicional(0);
     setDescuento(0);
     setNotas("");
+    setMedioPago(null);
+    setTransferencia(0);
+    setErrorPago("");
     setErroresCliente({});
     setErrorGeneral("");
     setErrorCuotas("");
@@ -104,6 +120,7 @@ export function FormularioFactura({ tipo }: { tipo: TipoFactura }) {
   async function registrar() {
     setErrorGeneral("");
     setErrorCuotas("");
+    setErrorPago("");
 
     // 1. Cliente
     const validacion = clienteSchema.safeParse(cliente);
@@ -118,6 +135,13 @@ export function FormularioFactura({ tipo }: { tipo: TipoFactura }) {
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
+    // El sector debe ser uno de los activos del local (el servidor lo vuelve a verificar)
+    if (!sectores?.some((s) => s.nombre === validacion.data.sector)) {
+      setErroresCliente({ sector: "Elige un sector de la lista." });
+      setErrorGeneral(consultaSectores.error || "Revisa los datos del cliente: falta el sector.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     setErroresCliente({});
 
     // 2. Productos y totales
@@ -125,7 +149,20 @@ export function FormularioFactura({ tipo }: { tipo: TipoFactura }) {
     if (total < 0) return setErrorGeneral("El descuento no puede ser mayor que el valor de la factura.");
     if (esCredito && total <= 0) return setErrorGeneral("Un crédito debe tener un valor mayor que cero.");
 
-    // 3. Cuotas (deben estar completas y ser fechas futuras)
+    // 3. Medio de pago (solo factura normal)
+    if (!esCredito) {
+      if (!medioPago) {
+        setErrorPago("Elige el medio de pago.");
+        return setErrorGeneral("Falta elegir el medio de pago.");
+      }
+      const { error } = calcularPago(medioPago, total, transferencia);
+      if (error) {
+        setErrorPago(error);
+        return setErrorGeneral(error);
+      }
+    }
+
+    // 4. Cuotas (deben estar completas y ser fechas futuras)
     let fechasIso: string[] | undefined;
     if (esCredito) {
       const fechas = cuotas?.fechas ?? [];
@@ -152,11 +189,15 @@ export function FormularioFactura({ tipo }: { tipo: TipoFactura }) {
           descuento,
           notas: notas.trim() || undefined,
           cuotas: fechasIso?.map((fechaVencimiento) => ({ fechaVencimiento })),
+          ...(esCredito ? {} : { medioPago }),
+          // En Mixto se envían los dos valores: el servidor los compara con el total que él calcula
+          ...(!esCredito && medioPago === "MIXTO" ? { valorTransferencia: transferencia, valorEfectivo: total - transferencia } : {}),
         },
       });
       setFacturaCreada(factura);
       avisos.exito(esCredito ? "Crédito registrado correctamente." : "Factura registrada correctamente.");
       limpiar();
+      setVersionInventario((v) => v + 1);
       // Actualiza el contador de notificaciones (nuevos cobros o stock bajo)
       avisarCambioNotificaciones();
     } catch (err) {
@@ -171,18 +212,18 @@ export function FormularioFactura({ tipo }: { tipo: TipoFactura }) {
       {errorGeneral && <Mensaje tono="peligro" titulo="No se pudo registrar">{errorGeneral}</Mensaje>}
 
       <Tarjeta>
-        <DatosCliente valor={cliente} onCambio={setCliente} errores={erroresCliente} />
+        <DatosCliente valor={cliente} onCambio={setCliente} errores={erroresCliente} sectores={sectores} />
       </Tarjeta>
 
       <Tarjeta>
         <h2 className="mb-3 text-2xl font-bold">2. Productos</h2>
-        <BuscadorProductos onAgregar={agregar} enFactura={enFactura} />
+        <BuscadorProductos onAgregar={agregar} enFactura={enFactura} versionInventario={versionInventario} />
 
         <div className="mt-6">
           <h3 className="mb-2 text-xl font-bold">Productos en la factura ({lineas.length})</h3>
           {lineas.length === 0 ? (
             <p className="rounded-xl border-2 border-dashed border-gray-300 p-5 text-center text-lg text-texto-suave">
-              Todavía no has agregado productos. Usa el buscador de arriba.
+              Todavía no has agregado productos. Usa el botón + de la lista de arriba.
             </p>
           ) : (
             <ul className="space-y-3">
@@ -243,26 +284,46 @@ export function FormularioFactura({ tipo }: { tipo: TipoFactura }) {
         </div>
       </Tarjeta>
 
-      <Tarjeta>
-        <h2 className="mb-3 text-2xl font-bold">3. Pago adicional y descuento</h2>
-        <div className="grid gap-5 md:grid-cols-2">
-          <CampoDinero etiqueta="Pago adicional (ej. domicilio)" valor={adicional} onCambio={setAdicional} ayuda="Valor fijo que se SUMA al total." />
-          <CampoDinero etiqueta="Descuento" valor={descuento} onCambio={setDescuento} ayuda="Valor fijo que se RESTA del total." />
-        </div>
-        <div className="mt-5">
-          <label htmlFor="notas-factura" className="mb-1.5 block text-lg font-bold">
-            Notas (opcional)
-          </label>
-          <textarea
-            id="notas-factura"
-            rows={2}
-            maxLength={300}
-            value={notas}
-            onChange={(e) => setNotas(e.target.value)}
-            className="block w-full rounded-xl border-2 border-borde px-4 py-2.5 text-lg focus:border-marca-700 focus:outline-none focus:ring-4 focus:ring-marca-200"
+      {/* Secciones opcionales: empiezan cerradas, pero su valor se ve en el encabezado */}
+      <Desplegable titulo="Aplicar descuento" resumen={descuento > 0 ? `− ${pesos(descuento)}` : undefined}>
+        <CampoDinero etiqueta="Valor del descuento" valor={descuento} onCambio={setDescuento} ayuda="Valor fijo que se RESTA del total." />
+      </Desplegable>
+
+      <Desplegable titulo="Costo adicional" resumen={adicional > 0 ? `+ ${pesos(adicional)}` : undefined}>
+        <CampoDinero etiqueta="Valor del costo adicional (ej. domicilio)" valor={adicional} onCambio={setAdicional} ayuda="Valor fijo que se SUMA al total." />
+      </Desplegable>
+
+      <Desplegable titulo="Notas (opcional)" resumen={notas.trim() ? "Con nota" : undefined}>
+        <label htmlFor="notas-factura" className="mb-1.5 block text-lg font-bold">
+          Notas de la factura
+        </label>
+        <textarea
+          id="notas-factura"
+          rows={2}
+          maxLength={300}
+          value={notas}
+          onChange={(e) => setNotas(e.target.value)}
+          className="block w-full rounded-xl border-2 border-borde px-4 py-2.5 text-lg focus:border-marca-700 focus:outline-none focus:ring-4 focus:ring-marca-200"
+        />
+      </Desplegable>
+
+      {!esCredito && (
+        <Tarjeta>
+          <h2 className="mb-3 text-2xl font-bold">3. Medio de pago</h2>
+          <SelectorMedioPago
+            titulo="¿Cómo paga el cliente?"
+            total={Math.max(0, total)}
+            medio={medioPago}
+            onMedio={(m) => {
+              setMedioPago(m);
+              setErrorPago("");
+            }}
+            transferencia={transferencia}
+            onTransferencia={setTransferencia}
+            error={errorPago}
           />
-        </div>
-      </Tarjeta>
+        </Tarjeta>
+      )}
 
       {esCredito && cuotas && (
         <Tarjeta>
@@ -275,18 +336,23 @@ export function FormularioFactura({ tipo }: { tipo: TipoFactura }) {
         <h2 className="sr-only">Resumen de la factura</h2>
         <dl className="space-y-1 text-lg">
           <div className="flex justify-between"><dt>Subtotal</dt><dd>{pesos(subtotal)}</dd></div>
-          {adicional > 0 && <div className="flex justify-between"><dt>Pago adicional</dt><dd>+ {pesos(adicional)}</dd></div>}
-          {descuento > 0 && <div className="flex justify-between"><dt>Descuento</dt><dd>- {pesos(descuento)}</dd></div>}
+          {adicional > 0 && <div className="flex justify-between"><dt>Costo adicional</dt><dd>+ {pesos(adicional)}</dd></div>}
+          {descuento > 0 && <div className="flex justify-between"><dt>Descuento</dt><dd>− {pesos(descuento)}</dd></div>}
           <div className={`flex justify-between border-t-2 pt-2 text-3xl font-bold ${total < 0 ? "text-peligro-700" : "text-marca-800"}`}>
             <dt>Total</dt>
             <dd aria-live="polite">{pesos(total)}</dd>
           </div>
         </dl>
+        {sinSectores && (
+          <div className="mt-4">
+            <Mensaje tono="alerta">El administrador aún no ha agregado sectores para este local</Mensaje>
+          </div>
+        )}
         <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <Boton variante="secundario" icono="basura" onClick={limpiar} disabled={guardando}>
             Limpiar todo
           </Boton>
-          <Boton onClick={registrar} cargando={guardando} icono="check" className="sm:min-w-72">
+          <Boton onClick={registrar} cargando={guardando} disabled={sinSectores} icono="check" className="sm:min-w-72">
             {esCredito ? "Registrar crédito" : "Registrar factura"}
           </Boton>
         </div>
