@@ -36,14 +36,14 @@ function EstadoCorto({ stock, stockMinimo }: Pick<Producto, "stock" | "stockMini
   const estado = estadoStock(stock, stockMinimo);
   if (estado === "AGOTADO") return <Insignia tono="peligro">Agotado</Insignia>;
   if (estado === "BAJO") return <Insignia tono="alerta">Bajo</Insignia>;
-  return <span className="text-[15px] text-exito-800">Disponible</span>;
+  return <span className="text-sm text-exito-800">Disponible</span>;
 }
 
 const publicoDe = (p: Producto) => (p.genero && p.publico ? etiquetaPara(p.genero, p.publico) : null);
 
 /** Botón grande "Vender" (enlace). Si está agotado, se muestra deshabilitado y con el motivo. */
 function BotonVender({ producto, compacto = false }: { producto: Producto; compacto?: boolean }) {
-  const base = `inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border-2 font-bold ${compacto ? "px-2 text-[16px]" : "w-full px-5 text-lg"}`;
+  const base = `inline-flex items-center justify-center gap-2 rounded-xl border-2 font-bold ${compacto ? "min-h-11 px-2 text-[14px]" : "min-h-12 w-full px-5 text-lg"}`;
   if (producto.stock <= 0) {
     return (
       <span aria-disabled="true" className={`${base} cursor-not-allowed border-linea-fuerte bg-superficie-apagada text-texto-suave`}>
@@ -116,20 +116,24 @@ export function ListaProductos({ productos, onAgregarUnidades, onDetalle }: Prop
       </ul>
 
       {/* ---------- Escritorio: tabla ---------- */}
-      {/* Letra de 16px en la tabla para que quepan las 8 columnas; con letra A++ la tabla se desplaza por dentro */}
+      {/*
+       * Tabla: letra de 15px en peso normal; la negrita queda solo para encabezados y botones.
+       * Encabezados y celdas centrados (cada columna se alinea igual que su encabezado).
+       * Con letra A++ la tabla se desplaza por dentro.
+       */}
       <div className="hidden overflow-x-auto rounded-2xl border-2 border-linea bg-white shadow-sm xl:block">
-        <table className="w-full text-left text-[16px]">
+        <table className="w-full text-center text-[15px]">
           <caption className="sr-only">Perfumes del inventario</caption>
           <thead className="bg-superficie">
             <tr className="border-b-2 border-linea-fuerte">
-              <th scope="col" className="px-2 py-3">Marca</th>
-              <th scope="col" className="px-2 py-3">Nombre</th>
-              <th scope="col" className="px-2 py-3">Tipo</th>
-              <th scope="col" className="px-2 py-3">Género</th>
-              <th scope="col" className="px-2 py-3">Tamaño</th>
-              <th scope="col" className="px-2 py-3 text-right">Precio</th>
-              <th scope="col" className="px-2 py-3">Stock</th>
-              <th scope="col" className="px-2 py-3">Acciones</th>
+              <th scope="col" className="px-2 py-3 font-bold">Marca</th>
+              <th scope="col" className="px-2 py-3 font-bold">Nombre</th>
+              <th scope="col" className="px-2 py-3 font-bold">Tipo</th>
+              <th scope="col" className="px-2 py-3 font-bold">Género</th>
+              <th scope="col" className="px-2 py-3 font-bold">Tamaño</th>
+              <th scope="col" className="px-2 py-3 font-bold">Precio</th>
+              <th scope="col" className="px-2 py-3 font-bold">Stock</th>
+              <th scope="col" className="px-2 py-3 font-bold">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -139,9 +143,9 @@ export function ListaProductos({ productos, onAgregarUnidades, onDetalle }: Prop
               return (
                 <tr key={p.id} className="border-b border-linea align-top last:border-b-0">
                   <td className="px-2 py-3">{p.marcaNombre ?? <span className="text-texto-suave">—</span>}</td>
-                  <th scope="row" className="px-2 py-3 font-bold">
+                  <th scope="row" className="px-2 py-3 font-normal">
                     {p.nombre}
-                    {p.codigo && <span className="block text-[15px] font-normal text-texto-suave">{p.codigo}</span>}
+                    {p.codigo && <span className="block text-sm text-texto-suave">{p.codigo}</span>}
                     {!p.tipo && !p.tamano && !publico && (
                       <span className="mt-1 block">
                         <Insignia tono="alerta">{SIN_CATEGORIA}</Insignia>
@@ -154,24 +158,24 @@ export function ListaProductos({ productos, onAgregarUnidades, onDetalle }: Prop
                     {oz ? (
                       <>
                         {oz}
-                        <span className="block text-[15px] text-texto-suave">({ml}</span>
+                        <span className="block text-sm text-texto-suave">({ml}</span>
                       </>
                     ) : (
                       "—"
                     )}
                   </td>
-                  <td className="px-2 py-3 text-right font-bold whitespace-nowrap">{pesos(p.precio)}</td>
+                  <td className="px-2 py-3 whitespace-nowrap">{pesos(p.precio)}</td>
                   <td className="px-2 py-3">
-                    <span className="block text-xl font-bold">{p.stock}</span>
+                    <span className="block text-lg">{p.stock}</span>
                     <EstadoCorto stock={p.stock} stockMinimo={p.stockMinimo} />
                   </td>
                   <td className="px-2 py-3">
-                    <div className="flex w-32 flex-col gap-2">
-                      <Boton className="px-2! text-[16px]!" onClick={() => onAgregarUnidades(p)} aria-label={`Agregar unidades a ${p.nombre}`}>
+                    <div className="mx-auto flex w-28 flex-col gap-1.5">
+                      <Boton pequeno className="px-2! text-[14px]!" onClick={() => onAgregarUnidades(p)} aria-label={`Agregar unidades a ${p.nombre}`}>
                         + Unidades
                       </Boton>
                       <BotonVender producto={p} compacto />
-                      <Boton variante="secundario" className="px-2! text-[16px]!" onClick={() => onDetalle(p)} aria-label={`Ver detalle de ${p.nombre}`}>
+                      <Boton variante="secundario" pequeno className="px-2! text-[14px]!" onClick={() => onDetalle(p)} aria-label={`Ver detalle de ${p.nombre}`}>
                         Detalle
                       </Boton>
                     </div>

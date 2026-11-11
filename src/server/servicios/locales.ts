@@ -9,7 +9,6 @@ import { ApiError } from "@/lib/api";
 
 /** Categorías de gastos con las que empieza cada local nuevo. */
 const CATEGORIAS_INICIALES = [
-  "Arriendo",
   "Servicios públicos",
   "Nómina",
   "Mercancía/proveedores",

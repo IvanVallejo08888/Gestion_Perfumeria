@@ -304,6 +304,12 @@ export const filtroDashboardSchema = z.object({
   localId: z.uuid("Selecciona un local válido.").optional(),
 });
 
+/** Créditos: búsqueda libre del cliente por identificación, celular o nombre (también acepta ?identificacion=). */
+export const filtroCreditosSchema = z.object({
+  q: z.string().trim().max(100, "La búsqueda es demasiado larga.").optional(),
+  identificacion: z.string().trim().max(30).optional(),
+});
+
 /** Convierte los parámetros de la dirección en objeto y descarta los vacíos. */
 export function parametros(url: URLSearchParams): Record<string, string> {
   return Object.fromEntries([...url].filter(([, valor]) => valor !== ""));

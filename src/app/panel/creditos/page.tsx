@@ -2,8 +2,8 @@ import { GestionCreditos } from "./GestionCreditos";
 
 export const metadata = { title: "Créditos y abonos" };
 
-/** Acepta ?identificacion= para abrir directamente los créditos de un cliente (desde Notificaciones). */
-export default async function PaginaCreditos({ searchParams }: { searchParams: Promise<{ identificacion?: string }> }) {
-  const { identificacion } = await searchParams;
-  return <GestionCreditos identificacionInicial={identificacion?.replace(/\D/g, "") ?? ""} />;
+/** Acepta ?identificacion= (desde Notificaciones) o ?q= para abrir directamente la búsqueda de un cliente. */
+export default async function PaginaCreditos({ searchParams }: { searchParams: Promise<{ identificacion?: string; q?: string }> }) {
+  const { identificacion, q } = await searchParams;
+  return <GestionCreditos busquedaInicial={(q ?? identificacion ?? "").trim().slice(0, 100)} />;
 }

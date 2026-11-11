@@ -1,7 +1,8 @@
 /**
  * Marco principal de la aplicación (después de iniciar sesión).
- * - Computador / tablet horizontal: menú lateral fijo.
- * - Celular / tablet vertical: barra superior con botón "Menú" que abre el menú completo.
+ * - Computador / tablet horizontal: menú lateral que se oculta o muestra con el botón de la barra
+ *   superior; la preferencia se guarda en este navegador (localStorage).
+ * - Celular / tablet vertical: barra superior compacta con botón que desliza el menú desde la izquierda.
  * - Para vendedores: contador de notificaciones que se actualiza cada minuto y,
  *   si la persona lo permite, avisos del navegador cuando hay cobros para hoy o vencidos.
  */
@@ -35,16 +36,41 @@ interface Props {
 
 const INTERVALO_NOTIFICACIONES_MS = 60_000;
 const ETIQUETA_COBRO = "recordatorio-cobro";
+const CLAVE_LATERAL = "menu-lateral-abierto";
 
 export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false, children }: Props) {
   const ruta = usePathname();
   const [menuAbierto, setMenuAbierto] = useState(false);
+  const [lateralAbierta, setLateralAbierta] = useState(true);
+  // La transición se activa después de leer la preferencia, para que al recargar no se vea cerrarse
+  const [lateralListo, setLateralListo] = useState(false);
   const [conteo, setConteo] = useState({ total: 0, urgentes: 0 });
   const ultimoAvisoRef = useRef<string | null>(null);
 
   const botonMenuRef = useRef<HTMLButtonElement>(null);
   const botonCerrarRef = useRef<HTMLButtonElement>(null);
   const panelMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(CLAVE_LATERAL) === "0") setLateralAbierta(false);
+    } catch {
+      /* almacenamiento bloqueado: se queda abierto */
+    }
+    const id = requestAnimationFrame(() => setLateralListo(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  function alternarLateral() {
+    setLateralAbierta((abierta) => {
+      try {
+        localStorage.setItem(CLAVE_LATERAL, abierta ? "0" : "1");
+      } catch {
+        /* sin almacenamiento: solo dura mientras la página está abierta */
+      }
+      return !abierta;
+    });
+  }
 
   // Cerrar el menú del celular al cambiar de página
   useEffect(() => setMenuAbierto(false), [ruta]);
@@ -180,71 +206,101 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
     </div>
   );
 
+  const etiquetaLateral = lateralAbierta ? "Ocultar menú lateral" : "Mostrar menú lateral";
+
   return (
     <div className="min-h-dvh lg:flex">
-      {/* Menú lateral (pantallas grandes) */}
-      <aside className="zona-oscura sticky top-0 hidden h-dvh w-80 shrink-0 flex-col overflow-y-auto bg-marca-800 p-5 lg:flex">
-        {cabecera}
-        <div className="flex-1">{enlaces}</div>
-        {pie}
+      {/* Menú lateral (pantallas grandes). Se oculta encogiendo el ancho a 0; el contenido interno conserva su ancho. */}
+      <aside
+        id="menu-lateral"
+        inert={!lateralAbierta}
+        className={`zona-oscura sticky top-0 hidden h-dvh shrink-0 overflow-hidden bg-marca-800 lg:block ${
+          lateralListo ? "transition-[width] duration-250 ease-out" : ""
+        } ${lateralAbierta ? "w-80" : "w-0"}`}
+      >
+        <div className="flex h-full w-80 flex-col overflow-y-auto p-5">
+          {cabecera}
+          <div className="flex-1">{enlaces}</div>
+          {pie}
+        </div>
       </aside>
 
-      {/* Barra superior (celular y tablet) */}
-      <header className="zona-oscura sticky top-0 z-40 flex items-center justify-between gap-3 bg-marca-800 px-4 py-3 shadow-md lg:hidden">
-        <div className="min-w-0">
-          <p className="truncate text-lg font-bold text-white">{nombreUsuario}</p>
-          <p className="truncate text-sm text-white/85">{subtitulo}</p>
-        </div>
-        <button
-          ref={botonMenuRef}
-          type="button"
-          onClick={() => setMenuAbierto(true)}
-          aria-expanded={menuAbierto}
-          aria-controls="menu-movil"
-          className="relative flex min-h-12 items-center gap-2 rounded-xl border-2 border-white/70 px-4 text-lg font-bold text-white"
-        >
-          <Icono nombre="menu" />
-          Menú
-          {notificaciones && conteo.urgentes > 0 && (
-            <span className="absolute -right-2 -top-2 rounded-full border-2 border-white bg-peligro-700 px-2 text-base font-bold text-white">
-              {conteo.urgentes}
-              <span className="sr-only"> cobros urgentes</span>
-            </span>
-          )}
-        </button>
-      </header>
-
-      {/* Menú desplegable (celular) */}
-      {menuAbierto && (
-        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Menú">
-          {/* Fondo oscuro: se cierra al tocarlo, pero no recibe foco (ya existe el botón «Cerrar») */}
-          <div className="absolute inset-0 bg-black/60" onClick={() => setMenuAbierto(false)} aria-hidden="true" />
-          <div
-            ref={panelMenuRef}
-            id="menu-movil"
-            className="zona-oscura absolute inset-y-0 right-0 flex w-[88vw] max-w-sm flex-col overflow-y-auto bg-marca-800 p-5"
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Barra superior: en celular abre el menú deslizable; en escritorio oculta o muestra el menú lateral */}
+        <header className="zona-oscura sticky top-0 z-40 flex min-h-14 items-center gap-2 bg-marca-800 px-2 py-1 shadow-md sm:px-3 lg:px-4">
+          <button
+            ref={botonMenuRef}
+            type="button"
+            onClick={() => setMenuAbierto(true)}
+            aria-expanded={menuAbierto}
+            aria-controls="menu-movil"
+            aria-label="Abrir menú"
+            className="relative flex size-12 shrink-0 items-center justify-center rounded-xl text-white hover:bg-white/15 lg:hidden"
           >
-            <div className="mb-3 flex justify-end">
-              <button
-                ref={botonCerrarRef}
-                type="button"
-                onClick={() => setMenuAbierto(false)}
-                className="flex min-h-12 items-center gap-1 rounded-xl px-3 text-lg font-bold text-white hover:bg-white/15"
-              >
-                <Icono nombre="cerrar" />
-                Cerrar
-              </button>
-            </div>
-            {cabecera}
-            <div className="flex-1">{enlaces}</div>
-            <div className="mt-6">{pie}</div>
+            <Icono nombre="menu" className="size-7" />
+            {notificaciones && conteo.urgentes > 0 && (
+              <span className="absolute -right-1 -top-1 min-w-6 rounded-full border-2 border-white bg-peligro-700 px-1 text-center text-sm leading-5 font-bold text-white">
+                {conteo.urgentes}
+                <span className="sr-only"> cobros urgentes</span>
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={alternarLateral}
+            aria-expanded={lateralAbierta}
+            aria-controls="menu-lateral"
+            aria-label={etiquetaLateral}
+            title={etiquetaLateral}
+            className="hidden size-12 shrink-0 items-center justify-center rounded-xl text-white hover:bg-white/15 lg:flex"
+          >
+            <Icono nombre="menu" className="size-7" />
+          </button>
+          <div className="min-w-0 leading-tight">
+            <p className="truncate text-base font-bold text-white">{nombreUsuario}</p>
+            <p className="truncate text-sm text-white/85">{subtitulo}</p>
           </div>
-        </div>
-      )}
+        </header>
 
-      <main id="contenido" className="min-w-0 flex-1 px-3 py-6 sm:px-6 lg:px-10 lg:py-8">
-        <div className="mx-auto max-w-6xl">{children}</div>
-      </main>
+        <main id="contenido" className="min-w-0 flex-1 px-3 py-5 sm:px-6 lg:px-10 lg:py-8">
+          <div className="mx-auto max-w-6xl">{children}</div>
+        </main>
+      </div>
+
+      {/* Menú deslizable (celular y tablet): siempre montado para animar la entrada y la salida */}
+      <div className={`fixed inset-0 z-50 lg:hidden ${menuAbierto ? "" : "pointer-events-none"}`} inert={!menuAbierto}>
+        {/* Fondo oscuro: se cierra al tocarlo, pero no recibe foco (ya existe el botón «Cerrar») */}
+        <div
+          className={`absolute inset-0 bg-black/60 transition-opacity duration-250 ease-out ${menuAbierto ? "opacity-100" : "opacity-0"}`}
+          onClick={() => setMenuAbierto(false)}
+          aria-hidden="true"
+        />
+        <div
+          ref={panelMenuRef}
+          id="menu-movil"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menú"
+          className={`zona-oscura absolute inset-y-0 left-0 flex w-[88vw] max-w-sm flex-col overflow-y-auto bg-marca-800 p-5 shadow-2xl transition-transform duration-250 ease-out ${
+            menuAbierto ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <div className="mb-3 flex justify-end">
+            <button
+              ref={botonCerrarRef}
+              type="button"
+              onClick={() => setMenuAbierto(false)}
+              className="flex min-h-12 items-center gap-1 rounded-xl px-3 text-lg font-bold text-white hover:bg-white/15"
+            >
+              <Icono nombre="cerrar" />
+              Cerrar
+            </button>
+          </div>
+          {cabecera}
+          <div className="flex-1">{enlaces}</div>
+          <div className="mt-6">{pie}</div>
+        </div>
+      </div>
     </div>
   );
 }
