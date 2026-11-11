@@ -1,8 +1,13 @@
-/** Reportes y estadísticas del local del vendedor (por año, con detalle mensual). */
+/**
+ * Reportes del local del vendedor:
+ *  - Dashboard (indicadores y gráficas del año o mes elegido).
+ *  - Estadísticas del año con detalle mensual y descarga en Excel.
+ */
 "use client";
 
 import { useState } from "react";
 import { VistaEstadisticas } from "@/components/compartidos/VistaEstadisticas";
+import { VistaDashboard } from "@/components/dashboard/VistaDashboard";
 import { Cargando, EncabezadoPagina, Mensaje, Tarjeta } from "@/components/ui/Basicos";
 import { Selector } from "@/components/ui/Campo";
 import { Icono } from "@/components/ui/Icono";
@@ -64,6 +69,9 @@ export default function ReportesVendedor() {
         </div>
       </Tarjeta>
 
+      <VistaDashboard anio={anio} mes={mes || undefined} puedeAgregarUnidades />
+
+      <h2 className="mt-10 mb-4 text-2xl font-bold">Estadísticas del año {anio}</h2>
       {error ? <Mensaje tono="peligro">{error}</Mensaje> : !datos || cargando ? <Cargando /> : <VistaEstadisticas datos={datos} mes={mes || undefined} />}
     </>
   );

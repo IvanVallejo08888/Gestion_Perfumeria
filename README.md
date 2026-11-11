@@ -3,7 +3,7 @@
 Sistema web para gestionar locales: **facturación (contado y crédito), medios de pago, créditos y abonos, gastos, inventario, notificaciones de cobro y reportes en Excel**.
 Funciona en **celular, tablet y computador**, con letra grande y colores de alto contraste pensados para personas adultas.
 
-**Tecnologías:** Next.js 15 (App Router) · React 19 · TypeScript · PostgreSQL · Drizzle ORM · Tailwind CSS 4 · ExcelJS · jsPDF
+**Tecnologías:** Next.js 15 (App Router) · React 19 · TypeScript · PostgreSQL · Drizzle ORM · Tailwind CSS 4 · Recharts 3 · ExcelJS · jsPDF
 
 ---
 
@@ -109,6 +109,14 @@ Búsqueda por identificación, abonos con medio de pago (se aplican a las cuotas
 ### Notificaciones
 Cobros vencidos, del día y de los próximos 3 días (según las fechas de las cuotas) + productos agotados o con stock bajo. El contador del menú se actualiza cada minuto y, si se activan, llegan avisos del navegador.
 
+### Dashboard de reportes
+Arriba de las estadísticas, en **Reportes** (vendedor: su local · administrador: un local o «Todos los locales»), con el año y el mes elegidos:
+
+- **Indicadores:** total vendido, recaudado, unidades vendidas, valor del inventario hoy, cartera pendiente y perfumes agotados.
+- **Gráficas:** top 10 perfumes (por unidades o por valor), ventas por Hombre / Niño / Mujer / Niña, por tipo, por marca (top 8 + «Otras») y por tamaño, contado y crédito mes a mes con el recaudo, y el inventario de hoy (stock por género y perfumes por reponer, con «Agregar unidades» para el vendedor).
+
+Las ventas por categoría salen de la copia guardada en cada factura (no del producto actual); las ventas anteriores a la clasificación aparecen como «Sin categoría». Todo se calcula en la base de datos (`src/server/servicios/dashboard.ts`, `GET /api/dashboard`).
+
 ### Reportes en Excel
 Se descargan desde **Reportes**, del año completo o de un mes.
 
@@ -119,13 +127,14 @@ Se descargan desde **Reportes**, del año completo o de un mes.
 | Resumen | Ventas de contado, créditos, abonos, recibido en efectivo/transferencia, gastos y utilidad mes a mes |
 | Facturas | Todas las facturas del periodo, con totales |
 | Productos vendidos | Unidades y valor vendido por producto |
+| Ventas por categoría | Unidades y valor vendido por público, tipo, marca y tamaño (los mismos cortes del dashboard) |
 | Abonos | Cada abono recibido en el periodo |
 | Ventas por vendedor | Lo que vendió cada vendedor y su % del total |
 | Gastos | Cada gasto del periodo, con categoría y medio de pago |
 | Cartera | Créditos con saldo **hoy**: valor vencido, días de atraso y próxima cuota (rojo = más de 30 días, amarillo = algo vencido) |
 | Inventario | Stock **hoy** y valor del inventario (rojo = agotado, amarillo = stock bajo) |
 
-**Consolidado** (solo administrador): hoja *Comparativo locales*, con las cifras de cada local lado a lado y su % de las ventas, y hoja *Cartera*, con los créditos pendientes de todos los locales.
+**Consolidado** (solo administrador): hoja *Comparativo locales*, con las cifras de cada local lado a lado y su % de las ventas, hoja *Ventas por categoría* de todos los locales, y hoja *Cartera*, con los créditos pendientes de todos los locales.
 
 > Las hojas *Cartera* e *Inventario* muestran el estado **al momento de descargar**, sin importar el periodo elegido.
 

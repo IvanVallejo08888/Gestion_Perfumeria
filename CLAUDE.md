@@ -5,7 +5,7 @@ notificaciones y reportes Excel. Usuarios: un ADMIN y vendedores (cada uno ligad
 
 ## Stack
 Next.js 15 (App Router) · React 19 · TypeScript · PostgreSQL + Drizzle ORM · Zod 4 · Tailwind CSS 4 ·
-ExcelJS · jsPDF · sesión con JWT (jose) validada contra la BD en cada petición.
+Recharts 3 · ExcelJS · jsPDF · sesión con JWT (jose) validada contra la BD en cada petición.
 
 ## Comandos (package.json)
 - `npm run dev` — servidor de desarrollo (http://localhost:3000)

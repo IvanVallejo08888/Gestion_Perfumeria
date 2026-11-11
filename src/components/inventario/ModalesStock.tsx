@@ -16,7 +16,8 @@ import { api } from "@/lib/http";
 import type { Producto } from "@/tipos";
 
 interface Props {
-  producto: Producto;
+  /** Solo lo que el modal necesita: así también se abre desde el dashboard de reportes. */
+  producto: Pick<Producto, "id" | "nombre" | "stock">;
   onCerrar: () => void;
   onListo: (mensaje: string) => void;
 }

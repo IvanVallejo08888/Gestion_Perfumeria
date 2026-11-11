@@ -290,6 +290,13 @@ export const filtroGastosSchema = z.object({
 /** Identificador recibido en la dirección de un endpoint. */
 export const idSchema = z.uuid("El registro no existe.");
 
+/** Dashboard de reportes: año, mes opcional y (solo administrador) local; sin local = consolidado. */
+export const filtroDashboardSchema = z.object({
+  anio: z.coerce.number().int().min(2000).max(2100),
+  mes: z.coerce.number().int().min(1).max(12).optional(),
+  localId: z.uuid("Selecciona un local válido.").optional(),
+});
+
 /** Convierte los parámetros de la dirección en objeto y descarta los vacíos. */
 export function parametros(url: URLSearchParams): Record<string, string> {
   return Object.fromEntries([...url].filter(([, valor]) => valor !== ""));

@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/lib/formato.test.ts src/lib/pagos.test.ts src/lib/whatsapp.test.ts src/lib/clasificacion.test.ts src/lib/inventario.test.ts src/db/datos-perfumes.test.ts",
+    "test": "node --import tsx --test src/lib/formato.test.ts src/lib/pagos.test.ts src/lib/whatsapp.test.ts src/lib/clasificacion.test.ts src/lib/inventario.test.ts src/lib/dashboard.test.ts src/db/datos-perfumes.test.ts",
     "iconos": "node scripts/generar-iconos.mjs",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
@@ -30,6 +30,8 @@
     "pg": "^8.23.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "react-is": "^19.3.1",
+    "recharts": "^3.10.1",
     "server-only": "^0.0.1",
     "zod": "^4.6.7"
   },

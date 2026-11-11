@@ -2,10 +2,12 @@
  * Generación de reportes en Excel (.xlsx).
  *
  * Reporte POR LOCAL (anual o mensual):
- *  - Resumen, Facturas, Productos vendidos, Abonos, Ventas por vendedor y Gastos → datos del periodo elegido.
+ *  - Resumen, Facturas, Productos vendidos, Ventas por categoría, Abonos, Ventas por vendedor y Gastos → datos del periodo elegido.
  *  - Cartera e Inventario → foto del momento en que se genera (lo que se debe y lo que hay hoy).
  *
- * Reporte CONSOLIDADO (solo administrador): todos los locales comparados + cartera de todos los locales.
+ * Reporte CONSOLIDADO (solo administrador): todos los locales comparados + ventas por categoría + cartera de todos los locales.
+ *
+ * "Ventas por categoría" usa los mismos cortes del dashboard (ver dashboard.ts).
  */
 import "server-only";
 import ExcelJS from "exceljs";
@@ -14,6 +16,7 @@ import { db } from "@/db";
 import { abonos, cuotas, facturaItems, facturas, locales, productos } from "@/db/schema";
 import { fecha, fechaDia, fechaHora, MESES, numeroFactura, rangoPeriodo } from "@/lib/formato";
 import { textoMedioPago } from "@/lib/pagos";
+import { ventasPorCategoria, type VentasPorCategoria } from "./dashboard";
 import { obtenerEstadisticas } from "./estadisticas";
 import { gastosDelPeriodo } from "./gastos";
 import { listarLocales, obtenerLocal } from "./locales";
@@ -203,7 +206,7 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
   const periodo = textoPeriodo(anio, mes);
   const enPeriodo = and(eq(facturas.localId, localId), gte(facturas.creadoEn, inicio), lt(facturas.creadoEn, fin));
 
-  const [estadisticas, listaFacturas, productosVendidos, listaAbonos, listaGastos, porVendedor, cartera, inventario] = await Promise.all([
+  const [estadisticas, listaFacturas, productosVendidos, listaAbonos, listaGastos, porVendedor, cartera, inventario, categorias] = await Promise.all([
     obtenerEstadisticas(localId, anio),
     db.select().from(facturas).where(enPeriodo).orderBy(asc(facturas.creadoEn)),
     db
@@ -253,6 +256,7 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
       .from(productos)
       .where(and(eq(productos.localId, localId), eq(productos.activo, true)))
       .orderBy(asc(productos.nombre)),
+    ventasPorCategoria({ localId, anio, mes }),
   ]);
 
   const libro = nuevoLibro();
@@ -352,6 +356,9 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
   ];
   hojaProductos.addRows(productosVendidos);
   estilizarEncabezado(hojaProductos);
+
+  /* ---------- Ventas por categoría (mismos cortes del dashboard) ---------- */
+  hojaVentasPorCategoria(libro, categorias, periodo);
 
   /* ---------- Hoja 4: Abonos ---------- */
   const hojaAbonos = libro.addWorksheet("Abonos");
@@ -462,13 +469,48 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
   return aArchivo(libro, `Reporte_${nombreSeguro(local.nombre)}_${sufijoPeriodo(anio, mes)}.xlsx`);
 }
 
+/* ====================== Ventas por categoría (dashboard) ====================== */
+
+/** Los mismos cortes del dashboard: público, tipo, marca (todas) y tamaño. */
+function hojaVentasPorCategoria(libro: ExcelJS.Workbook, categorias: VentasPorCategoria, periodo: string) {
+  const hoja = libro.addWorksheet("Ventas por categoría");
+  hoja.columns = [
+    { header: "Corte", key: "corte", width: 16 },
+    { header: "Categoría", key: "categoria", width: 32 },
+    { header: "Unidades vendidas", key: "unidades", width: 18 },
+    { header: "Valor vendido", key: "valor", width: 20, style: { numFmt: FORMATO_PESOS } },
+    { header: "% del valor", key: "porcentaje", width: 12, style: { numFmt: "0.0%" } },
+  ];
+  const cortes = [
+    { corte: "Público", filas: categorias.porPublico },
+    { corte: "Tipo", filas: categorias.porTipo },
+    { corte: "Marca", filas: categorias.porMarca },
+    { corte: "Tamaño", filas: categorias.porTamano },
+  ];
+  // Todos los cortes reparten las mismas ventas: el total se toma de uno solo
+  const totalUnidades = sumarCampo(categorias.porPublico, (c) => c.unidades);
+  const totalValor = sumarCampo(categorias.porPublico, (c) => c.valor);
+  for (const { corte, filas } of cortes) {
+    for (const c of filas) {
+      hoja.addRow({ corte, categoria: c.etiqueta, unidades: c.unidades, valor: c.valor, porcentaje: totalValor ? c.valor / totalValor : 0 });
+    }
+  }
+  estilizarEncabezado(hoja);
+  agregarTotal(hoja, { corte: "TOTAL", categoria: "Cada corte suma este total", unidades: totalUnidades, valor: totalValor, porcentaje: totalValor ? 1 : 0 });
+  nota(
+    hoja,
+    `Periodo: ${periodo} · La categoría es la que tenía cada producto el día de la venta · «Sin categoría» = ventas anteriores a la clasificación · Valor = productos vendidos (sin descuentos ni costos adicionales)`,
+  );
+}
+
 /* =================== Reporte consolidado (todos los locales) =================== */
 
 export async function generarReporteConsolidado(anio: number, mes?: number) {
   const listaLocales = await listarLocales();
-  const [estadisticas, cartera] = await Promise.all([
+  const [estadisticas, cartera, categorias] = await Promise.all([
     Promise.all(listaLocales.map((l) => obtenerEstadisticas(l.id, anio))),
     obtenerCartera(),
+    ventasPorCategoria({ anio, mes }),
   ]);
 
   const libro = nuevoLibro();
@@ -522,7 +564,10 @@ export async function generarReporteConsolidado(anio: number, mes?: number) {
   });
   nota(hoja, `Periodo: ${textoPeriodo(anio, mes)} · Créditos y saldo por cobrar al día de hoy · Generado: ${fechaHora(new Date())}`);
 
-  /* ---------- Hoja 2: Cartera de todos los locales ---------- */
+  /* ---------- Hoja 2: Ventas por categoría de todos los locales ---------- */
+  hojaVentasPorCategoria(libro, categorias, textoPeriodo(anio, mes));
+
+  /* ---------- Hoja 3: Cartera de todos los locales ---------- */
   hojaCartera(libro, cartera, true);
 
   return aArchivo(libro, `Reporte_Consolidado_${sufijoPeriodo(anio, mes)}.xlsx`);
