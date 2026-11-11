@@ -55,7 +55,7 @@ export function ProveedorAvisos({ children }: { children: ReactNode }) {
       {children}
       <div
         aria-live="polite"
-        className="pointer-events-none fixed inset-x-3 bottom-3 z-[200] flex flex-col items-center gap-2 sm:inset-x-auto sm:right-4 sm:items-end"
+        className="pointer-events-none fixed inset-x-3 top-16 z-[200] flex flex-col items-center gap-2 sm:inset-x-auto sm:right-4 sm:items-end"
       >
         {avisos.map((a) => (
           <div

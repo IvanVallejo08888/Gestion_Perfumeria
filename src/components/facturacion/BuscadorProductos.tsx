@@ -94,6 +94,7 @@ export function BuscadorProductos({ onAgregar, enFactura, versionInventario }: P
         <input
           ref={inputRef}
           id={idCampo}
+          aria-describedby={`${idCampo}-ayuda`}
           type="search"
           autoComplete="off"
           value={texto}
@@ -108,13 +109,13 @@ export function BuscadorProductos({ onAgregar, enFactura, versionInventario }: P
               if (hayBusqueda && resultados[0]) elegir(resultados[0], true);
             }
           }}
-          placeholder="Buscar producto (ignora tildes y signos)…"
+          placeholder="Nombre o código, ej. Dior"
           className="block min-h-14 w-full rounded-xl border-2 border-marca-700 bg-white py-3 pl-12 pr-4 text-lg focus:outline-none focus:ring-4 focus:ring-marca-200"
         />
       </div>
 
-      {/* En celular el texto de ayuda del campo no cabe completo: aquí se ve entero */}
-      <p className="mt-1 text-base text-texto-suave sm:hidden">Ignora tildes y signos.</p>
+      {/* Ayuda siempre visible (no depende del placeholder, que desaparece al escribir) */}
+      <p id={`${idCampo}-ayuda`} className="mt-1 text-base text-texto-suave">Ignora tildes y signos.</p>
 
       {advertencia && (
         <div className="mt-3">

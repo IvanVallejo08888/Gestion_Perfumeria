@@ -72,10 +72,17 @@
 /* Títulos con la letra de la marca: mayúsculas romanas con aire, como en la tienda */
 @layer base {
   h1,
-  h2 {
+  h2,
+  .titulo-seccion {
     font-family: var(--font-titulo);
     font-weight: 700;
     letter-spacing: 0.02em;
+  }
+
+  /* Placeholder legible: el gris por defecto (50 % de opacidad) quedaba en 3.3:1, por debajo de 4.5:1 */
+  ::placeholder {
+    color: var(--color-texto-tenue);
+    opacity: 1;
   }
 }
 

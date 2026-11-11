@@ -238,10 +238,15 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
             className="relative flex size-12 shrink-0 items-center justify-center rounded-xl text-white hover:bg-white/15 lg:hidden"
           >
             <Icono nombre="menu" className="size-7" />
-            {notificaciones && conteo.urgentes > 0 && (
-              <span className="absolute -right-1 -top-1 min-w-6 rounded-full border-2 border-white bg-peligro-700 px-1 text-center text-sm leading-5 font-bold text-white">
-                {conteo.urgentes}
-                <span className="sr-only"> cobros urgentes</span>
+            {/* Mismo número y color que el contador de «Notificaciones» dentro del menú */}
+            {notificaciones && conteo.total > 0 && (
+              <span
+                className={`absolute -right-1 -top-1 min-w-6 rounded-full border-2 border-white px-1 text-center text-sm leading-5 font-bold ${
+                  conteo.urgentes > 0 ? "bg-peligro-700 text-white" : "bg-alerta-50 text-alerta-800"
+                }`}
+              >
+                {conteo.total}
+                <span className="sr-only"> notificaciones{conteo.urgentes > 0 ? `, ${conteo.urgentes} urgentes` : ""}</span>
               </span>
             )}
           </button>

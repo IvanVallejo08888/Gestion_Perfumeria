@@ -38,12 +38,15 @@ export const passwordSchema = z
 
 /* ------------------------------ Campos comunes ------------------------------ */
 
-const texto = (campo: string, max = 120) =>
-  z
-    .string({ error: `${campo} es obligatorio.` })
+/** `genero` concuerda el mensaje con el campo: "El nombre … obligatorio" / "La dirección … obligatoria". */
+const texto = (campo: string, max = 120, genero: "m" | "f" = "m") => {
+  const o = genero === "f" ? "a" : "o";
+  return z
+    .string({ error: `${campo} es obligatori${o}.` })
     .trim()
-    .min(1, `${campo} es obligatorio.`)
-    .max(max, `${campo} es demasiado largo.`);
+    .min(1, `${campo} es obligatori${o}.`)
+    .max(max, `${campo} es demasiado larg${o}.`);
+};
 
 export const identificacionSchema = z
   .string({ error: "La identificación es obligatoria." })
@@ -179,7 +182,7 @@ export const clienteSchema = z.object({
   identificacion: identificacionSchema,
   nombre: texto("El nombre del cliente"),
   telefono: telefonoSchema,
-  direccion: texto("La dirección", 160),
+  direccion: texto("La dirección", 160, "f"),
   sector: texto("El sector", 80),
 });
 
