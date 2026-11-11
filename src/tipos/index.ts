@@ -4,7 +4,10 @@
  */
 import type { Clasificacion, Genero, Publico, Tamano, TipoProducto } from "@/lib/clasificacion";
 
+import type { EstadoStock, FiltrosInventario, TipoMovimiento } from "@/lib/inventario";
+
 export type { Clasificacion, Genero, Publico, Tamano, TipoProducto };
+export type { EstadoStock, FiltrosInventario, TipoMovimiento };
 
 export type Rol = "ADMIN" | "VENDEDOR";
 export type EstadoUsuario = "PENDIENTE" | "ACTIVO" | "PAUSADO";
@@ -38,6 +41,19 @@ export interface Producto extends ProductoVenta {
   genero: Genero | null;
   publico: Publico | null;
   tamano: Tamano | null;
+}
+
+/** Un cambio de stock (detalle del perfume). "cantidad" lleva signo: +5 entra, -2 sale. */
+export interface MovimientoInventario {
+  id: string;
+  tipo: TipoMovimiento;
+  cantidad: number;
+  stockResultante: number;
+  usuarioNombre: string;
+  /** Número de la factura cuando el movimiento es una VENTA. */
+  facturaNumero: number | null;
+  nota: string | null;
+  creadoEn: string;
 }
 
 export interface CuotaDetalle {

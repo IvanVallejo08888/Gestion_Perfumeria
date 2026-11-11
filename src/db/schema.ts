@@ -23,6 +23,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { GENEROS, PUBLICOS, TAMANOS, TIPOS_PRODUCTO } from "../lib/clasificacion";
+import { TIPOS_MOVIMIENTO } from "../lib/inventario";
 
 /* ---------------------------- Enumeraciones ---------------------------- */
 
@@ -57,6 +58,9 @@ export const generoEnum = pgEnum("genero", GENEROS);
 export const publicoEnum = pgEnum("publico", PUBLICOS);
 /** Tamaño en onzas como enum: solo se aceptan los tamaños de la lista, sin riesgo de decimales. */
 export const tamanoProductoEnum = pgEnum("tamano_producto", TAMANOS);
+
+/** INGRESO = llegó mercancía · VENTA = salió en una factura · AJUSTE = corrección manual (con motivo). */
+export const tipoMovimientoEnum = pgEnum("tipo_movimiento", TIPOS_MOVIMIENTO);
 
 /* Columnas de fecha reutilizables (con zona horaria) */
 const creadoEn = () => timestamp("creado_en", { withTimezone: true }).notNull().defaultNow();
@@ -322,6 +326,36 @@ export const gastos = pgTable(
   (t) => [index("gastos_local_fecha_idx").on(t.localId, t.fecha)],
 );
 
+/**
+ * Trazabilidad del inventario: cada cambio de stock deja un movimiento.
+ * "cantidad" lleva signo (+5 entra, -2 sale) y "stockResultante" es lo que quedó.
+ * El nombre del usuario se copia (snapshot) para que el historial no cambie.
+ */
+export const movimientosInventario = pgTable(
+  "movimientos_inventario",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    localId: uuid("local_id")
+      .notNull()
+      .references(() => locales.id, { onDelete: "cascade" }),
+    productoId: uuid("producto_id")
+      .notNull()
+      .references(() => productos.id, { onDelete: "cascade" }),
+    tipo: tipoMovimientoEnum("tipo").notNull(),
+    cantidad: integer("cantidad").notNull(),
+    stockResultante: integer("stock_resultante").notNull(),
+    usuarioId: uuid("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
+    usuarioNombre: text("usuario_nombre").notNull(),
+    facturaId: uuid("factura_id").references(() => facturas.id, { onDelete: "set null" }),
+    nota: text("nota"),
+    creadoEn: creadoEn(),
+  },
+  (t) => [
+    index("movimientos_producto_fecha_idx").on(t.productoId, t.creadoEn),
+    index("movimientos_local_fecha_idx").on(t.localId, t.creadoEn),
+  ],
+);
+
 /* ------------------------------ Relaciones ------------------------------ */
 /* Permiten consultas anidadas con db.query.<tabla>.findMany({ with: {...} }) */
 
@@ -358,9 +392,15 @@ export const usuariosRelations = relations(usuarios, ({ one }) => ({
   local: one(locales, { fields: [usuarios.localId], references: [locales.id] }),
 }));
 
-export const productosRelations = relations(productos, ({ one }) => ({
+export const productosRelations = relations(productos, ({ one, many }) => ({
   local: one(locales, { fields: [productos.localId], references: [locales.id] }),
   marca: one(marcas, { fields: [productos.marcaId], references: [marcas.id] }),
+  movimientos: many(movimientosInventario),
+}));
+
+export const movimientosInventarioRelations = relations(movimientosInventario, ({ one }) => ({
+  producto: one(productos, { fields: [movimientosInventario.productoId], references: [productos.id] }),
+  factura: one(facturas, { fields: [movimientosInventario.facturaId], references: [facturas.id] }),
 }));
 
 export const clientesRelations = relations(clientes, ({ one, many }) => ({
@@ -401,3 +441,4 @@ export type Sector = typeof sectores.$inferSelect;
 export type Marca = typeof marcas.$inferSelect;
 export type CategoriaGasto = typeof categoriasGasto.$inferSelect;
 export type Gasto = typeof gastos.$inferSelect;
+export type MovimientoInventarioFila = typeof movimientosInventario.$inferSelect;

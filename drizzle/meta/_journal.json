@@ -22,6 +22,13 @@
       "when": 1794353871851,
       "tag": "0002_clasificacion_productos",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794366037747,
+      "tag": "0003_movimientos_inventario",
+      "breakpoints": true
     }
   ]
 }

@@ -69,3 +69,8 @@ export function describirClasificacion(c: Clasificacion): string {
   if (c.tamano) partes.push(ETIQUETA_TAMANO[c.tamano]);
   return partes.length ? partes.join(" · ") : SIN_CATEGORIA;
 }
+
+/** Lista de opciones { valor, texto } para botones y selectores. */
+export function opcionesDe<T extends string>(lista: readonly T[], etiquetas: Record<T, string>): { valor: T; texto: string }[] {
+  return lista.map((valor) => ({ valor, texto: etiquetas[valor] }));
+}

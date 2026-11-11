@@ -4,6 +4,7 @@
  */
 import { z } from "zod";
 import { GENEROS, PUBLICOS, TAMANOS, TIPOS_PRODUCTO } from "./clasificacion";
+import { ESTADOS_STOCK } from "./inventario";
 
 /* --------------------------- Reglas de contraseña --------------------------- */
 
@@ -133,11 +134,36 @@ export const productoSchema = z.object({
   tamano: z.enum(TAMANOS, { error: "Elige el tamaño." }),
 });
 
+const notaMovimiento = z.string().trim().max(200, "La nota es demasiado larga (máximo 200 caracteres).");
+
+/** Ajuste manual (corrección, daño, conteo): suma o resta y SIEMPRE lleva el motivo. */
 export const ajusteStockSchema = z.object({
   cantidad: z.coerce
     .number()
     .int("La cantidad debe ser un número entero.")
     .refine((v) => v !== 0, "La cantidad no puede ser cero."),
+  nota: notaMovimiento.min(3, "Escribe el motivo del ajuste."),
+});
+
+/** Llegó mercancía: solo suma unidades. La nota es opcional. */
+export const ingresoStockSchema = z.object({
+  cantidad: z.coerce
+    .number({ error: "Escribe la cantidad de unidades." })
+    .int("La cantidad debe ser un número entero.")
+    .min(1, "Escribe una cantidad mayor que cero.")
+    .max(100_000, "La cantidad es demasiado alta."),
+  nota: notaMovimiento.optional().default(""),
+});
+
+/** Filtros del inventario (query params). Se valida en el servidor; el navegador ignora valores raros. */
+export const filtroProductosSchema = z.object({
+  q: z.string().trim().max(80).optional(),
+  genero: z.enum(GENEROS).optional(),
+  publico: z.enum(PUBLICOS).optional(),
+  marcaId: z.uuid("Marca no válida.").optional(),
+  tipo: z.enum(TIPOS_PRODUCTO).optional(),
+  tamano: z.enum(TAMANOS).optional(),
+  stock: z.enum(ESTADOS_STOCK).optional(),
 });
 
 /* ---------------------------------- Clientes -------------------------------- */
@@ -221,6 +247,11 @@ const nombreMarca = texto("El nombre de la marca", 80);
 
 export const agregarMarcasSchema = z.object({
   nombres: z.array(nombreMarca).min(1, "Escribe al menos una marca.").max(300, "Máximo 300 marcas a la vez."),
+});
+
+/** El vendedor agrega UNA marca desde el formulario de producto. */
+export const nuevaMarcaSchema = z.object({
+  nombre: nombreMarca,
 });
 
 export const editarMarcaSchema = z.object({

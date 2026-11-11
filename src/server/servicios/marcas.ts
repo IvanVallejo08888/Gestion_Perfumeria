@@ -1,6 +1,7 @@
 /**
  * Marcas (casas de perfume) de cada local.
- * El administrador las define; el vendedor elige entre las activas al crear o editar un producto.
+ * El administrador las gestiona; el vendedor elige entre las activas al crear o editar un producto
+ * y puede agregar una nueva desde ese mismo formulario.
  * La factura guarda el NOMBRE de la marca (copia), así el historial no cambia si luego se edita.
  */
 import "server-only";
@@ -28,6 +29,31 @@ export async function agregarMarcas(localId: string, nombres: string[]) {
     for (const id of reactivar) await tx.update(marcas).set({ activo: true }).where(eq(marcas.id, id));
     return { agregados: nuevos.length, reactivados: reactivar.length, repetidos };
   });
+}
+
+/**
+ * El vendedor agrega UNA marca desde el formulario de producto y queda elegida.
+ * Si ya existe activa (sin importar mayúsculas) se devuelve esa, sin duplicar.
+ * Si el administrador la desactivó, el vendedor no la puede revivir.
+ */
+export async function crearMarcaDelLocal(localId: string, nombreEscrito: string): Promise<{ id: string; nombre: string; existia: boolean }> {
+  const nombre = limpiar(nombreEscrito);
+  const buscar = () =>
+    db.query.marcas.findFirst({ where: and(eq(marcas.localId, localId), sql`lower(${marcas.nombre}) = lower(${nombre})`) });
+
+  const existente = await buscar();
+  if (existente) {
+    if (!existente.activo) {
+      throw new ApiError(409, `La marca «${existente.nombre}» está desactivada. Pide al administrador que la active en Locales → Editar.`);
+    }
+    return { id: existente.id, nombre: existente.nombre, existia: true };
+  }
+  // Si otra persona la creó al mismo tiempo, el índice único evita el duplicado y se usa la suya
+  const [nueva] = await db.insert(marcas).values({ localId, nombre }).onConflictDoNothing().returning();
+  if (nueva) return { id: nueva.id, nombre: nueva.nombre, existia: false };
+  const ganadora = await buscar();
+  if (!ganadora) throw new ApiError(500, "No se pudo guardar la marca. Intenta de nuevo.");
+  return { id: ganadora.id, nombre: ganadora.nombre, existia: true };
 }
 
 async function obtenerMarca(id: string) {
