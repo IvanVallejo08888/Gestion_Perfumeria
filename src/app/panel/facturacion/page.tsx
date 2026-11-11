@@ -3,15 +3,17 @@
  *  - Factura normal (contado)
  *  - Crédito (a cuotas)
  * Con ?producto=<id> (botón «Vender» del inventario) ese perfume llega ya cargado en la factura.
+ * Si hay una factura sin terminar (borrador), se abre en su misma pestaña.
  */
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Cargando, EncabezadoPagina } from "@/components/ui/Basicos";
 import { moverConFlechas } from "@/components/ui/GrupoOpciones";
 import { Icono } from "@/components/ui/Icono";
 import { FormularioFactura } from "@/components/facturacion/FormularioFactura";
+import { cargarBorradorGuardado } from "@/lib/borrador-factura";
 import type { TipoFactura } from "@/tipos";
 
 const PESTANAS: { tipo: TipoFactura; titulo: string; detalle: string }[] = [
@@ -30,6 +32,13 @@ export default function PaginaFacturacion() {
 
 function Facturacion() {
   const [tipo, setTipo] = useState<TipoFactura>("NORMAL");
+  // El formulario se muestra después de leer el borrador (sessionStorage solo existe en el navegador)
+  const [listo, setListo] = useState(false);
+  useEffect(() => {
+    const borrador = cargarBorradorGuardado();
+    if (borrador) setTipo(borrador.tipo);
+    setListo(true);
+  }, []);
   const router = useRouter();
   const ruta = usePathname();
   const productoInicialId = useSearchParams().get("producto");
@@ -68,14 +77,18 @@ function Facturacion() {
       </div>
 
       <div role="tabpanel" id="panel-factura" aria-labelledby={`pestana-${tipo}`}>
-        {/* "key" reinicia el formulario al cambiar de pestaña */}
-        <FormularioFactura
-          key={tipo}
-          tipo={tipo}
-          productoInicialId={productoInicialId}
-          // Ya vendido: se quita de la URL para que no se vuelva a cargar
-          onRegistrada={() => productoInicialId && router.replace(ruta, { scroll: false })}
-        />
+        {/* "key" vuelve a montar el formulario al cambiar de pestaña; el borrador conserva cliente y productos */}
+        {listo ? (
+          <FormularioFactura
+            key={tipo}
+            tipo={tipo}
+            productoInicialId={productoInicialId}
+            // Ya vendido: se quita de la URL para que no se vuelva a cargar
+            onRegistrada={() => productoInicialId && router.replace(ruta, { scroll: false })}
+          />
+        ) : (
+          <Cargando />
+        )}
       </div>
     </>
   );

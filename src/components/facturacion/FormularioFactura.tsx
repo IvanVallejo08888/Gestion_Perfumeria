@@ -16,7 +16,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useConsulta } from "@/hooks/useConsulta";
 import { avisarCambioNotificaciones } from "@/hooks/useNotificaciones";
 import { pesos } from "@/lib/formato";
-import { api } from "@/lib/http";
+import { cargarBorradorGuardado, cuotasVigentes, guardarBorradorFactura, reconciliarLineas } from "@/lib/borrador-factura";
+import { api, ErrorApi } from "@/lib/http";
 import { calcularPago } from "@/lib/pagos";
 import { clienteSchema } from "@/lib/validaciones";
 import type { ClienteDatos, FacturaDetalle, MedioPago, NombreActivo, ProductoVenta, TipoFactura } from "@/tipos";
@@ -83,6 +84,78 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
     if (esCredito) setCuotas(configInicial());
   }, [esCredito]);
 
+  /* ------------- Borrador: la factura sin terminar no se pierde al recargar ------------- */
+  // Mientras se restaura no se guarda nada (si no, el formulario vacío borraría el borrador)
+  const [restaurado, setRestaurado] = useState(false);
+  const [recuperado, setRecuperado] = useState<{ productos: number; cambios: string[] } | null>(null);
+
+  useEffect(() => {
+    const borrador = cargarBorradorGuardado();
+    if (!borrador) {
+      setRestaurado(true);
+      return;
+    }
+    let cancelado = false;
+    // Igual tipo = se recargó la página. Distinto = se cambió de pestaña: se conservan cliente y productos.
+    const mismoTipo = borrador.tipo === tipo;
+    const cambios: string[] = [];
+
+    // 1. Lo guardado aparece al instante (así nada de lo que se escriba después se pisa)
+    setCliente(borrador.cliente);
+    // Si llegó un perfume desde «Vender» del inventario, se conserva
+    setLineas((actual) => [...borrador.lineas, ...actual.filter((a) => !borrador.lineas.some((l) => l.producto.id === a.producto.id))]);
+    setDescuento(borrador.descuento);
+    setAdicional(borrador.adicional);
+    setNotas(borrador.notas);
+    if (mismoTipo && !esCredito) {
+      setMedioPago(borrador.medioPago);
+      setTransferencia(borrador.transferencia);
+    }
+    if (mismoTipo && esCredito) {
+      const vigentes = cuotasVigentes(borrador.cuotas);
+      if (vigentes) setCuotas(vigentes);
+      else if (borrador.cuotas) cambios.push("Algunas fechas de las cuotas ya pasaron: se calcularon de nuevo.");
+    }
+    if (mismoTipo || cambios.length > 0) setRecuperado({ productos: borrador.lineas.length, cambios });
+    setRestaurado(true);
+
+    // 2. Precio y stock salen del servidor; sin conexión se conserva lo guardado (el servidor revisa al registrar)
+    if (borrador.lineas.length === 0) return;
+    (async () => {
+      const respuestas = await Promise.allSettled(
+        borrador.lineas.map((l) => api<{ producto: ProductoVenta }>(`/api/productos/${l.producto.id}`)),
+      );
+      const frescos = new Map<string, ProductoVenta | null>();
+      respuestas.forEach((r, i) => {
+        const id = borrador.lineas[i].producto.id;
+        if (r.status === "fulfilled") frescos.set(id, r.value.producto);
+        else if (r.reason instanceof ErrorApi && r.reason.estado === 404) frescos.set(id, null);
+      });
+      if (cancelado) return;
+      const resultado = reconciliarLineas(borrador.lineas, frescos);
+      // Se aplica sobre lo que haya en pantalla (la persona pudo cambiar cantidades mientras tanto)
+      setLineas((actual) => reconciliarLineas(actual, frescos).lineas);
+      if (resultado.cambios.length > 0) {
+        setRecuperado((r) => ({
+          productos: resultado.lineas.length,
+          cambios: [...(r?.cambios ?? cambios), ...resultado.cambios],
+        }));
+      } else {
+        setRecuperado((r) => (r ? { ...r, productos: resultado.lineas.length } : r));
+      }
+    })();
+    return () => {
+      cancelado = true;
+    };
+    // Solo al abrir el formulario (cambiar de pestaña lo vuelve a montar)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!restaurado) return;
+    guardarBorradorFactura({ tipo, cliente, lineas, descuento, adicional, notas, medioPago, transferencia, cuotas });
+  }, [restaurado, tipo, cliente, lineas, descuento, adicional, notas, medioPago, transferencia, cuotas]);
+
   /* --------------- Perfume que llega desde «Vender» del inventario --------------- */
   const cargadoRef = useRef<string | null>(null);
   useEffect(() => {
@@ -147,6 +220,7 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
     setErroresCliente({});
     setErroresGenerales([]);
     setErrorCuotas("");
+    setRecuperado(null);
     if (esCredito) setCuotas(configInicial());
   }
 
@@ -246,6 +320,29 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
 
   return (
     <div className="space-y-6">
+      {recuperado && (
+        <Mensaje tono="info" titulo="Recuperamos tu factura sin terminar">
+          <p>
+            {recuperado.productos === 1 ? "Tiene 1 producto." : `Tiene ${recuperado.productos} productos.`} Revisa los datos antes de registrar.
+          </p>
+          {recuperado.cambios.length > 0 && (
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {recuperado.cambios.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+          )}
+          <div className="mt-3 flex flex-wrap gap-3">
+            <Boton variante="secundario" icono="basura" onClick={limpiar}>
+              Descartar borrador
+            </Boton>
+            <Boton variante="fantasma" onClick={() => setRecuperado(null)}>
+              Entendido
+            </Boton>
+          </div>
+        </Mensaje>
+      )}
+
       {erroresGenerales.length > 0 && (
         <div ref={avisoErrorRef} tabIndex={-1} className="scroll-mt-20 rounded-xl focus:outline-none">
           <Mensaje tono="peligro" titulo="No se pudo registrar">

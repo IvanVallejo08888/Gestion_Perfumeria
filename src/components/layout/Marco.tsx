@@ -13,6 +13,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useIntervalo } from "@/hooks/useIntervalo";
 import { useAlCambiarNotificaciones } from "@/hooks/useNotificaciones";
+import { borrarBorradorFactura } from "@/lib/borrador-factura";
 import { api } from "@/lib/http";
 import { BotonInstalar } from "../pwa/BotonInstalar";
 import { ControlTexto } from "./ControlTexto";
@@ -137,6 +138,8 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
   useAlCambiarNotificaciones(consultar, notificaciones);
 
   async function salir() {
+    // La factura sin terminar lleva datos del cliente: no se deja en el equipo
+    borrarBorradorFactura();
     await api("/api/auth/logout", { method: "POST" }).catch(() => {});
     await cerrarNotificaciones().catch(() => {});
     window.location.href = "/login";

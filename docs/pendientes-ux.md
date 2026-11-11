@@ -9,13 +9,21 @@ en orden de impacto contra esfuerzo. Para cada uno: plan por archivo y OK antes 
 
 | # | Cambio | Severidad (0–4) | Esfuerzo |
 |---|--------|-----------------|----------|
-| 1 | Guardar el borrador de la factura | 4 | Medio |
+| 1 | ~~Guardar el borrador de la factura~~ (hecho) | 4 | Medio |
 | 2 | Total y "Registrar" siempre visibles | 3 | Medio |
 | 3 | Quitar el scroll interno de la lista de productos | 3 | Medio |
 | 4 | Insignia "Cobrar hoy" / "Vencido" en Créditos | 2 | Bajo |
 | 5 | Tarjeta de producto apilada en celular | 2 | Bajo |
 
-## 1. Guardar el borrador de la factura
+## 1. Guardar el borrador de la factura (hecho)
+- **Hecho:** `src/lib/borrador-factura.ts` (+ test). Se guarda en `sessionStorage`, vence a
+  las 12 horas y se borra al registrar, con "Limpiar todo", con "Descartar borrador" y al
+  cerrar sesión. También conserva el cliente y los productos al cambiar entre Factura normal
+  y Crédito, y al recargar abre la misma pestaña.
+- **Riesgo que queda:** si la sesión se cierra sola (cuenta pausada), el borrador sigue en esa
+  pestaña hasta que vence o se cierra la pestaña.
+
+Lo que se había planteado:
 - **Problema:** si se recarga la página, la factura a medio llenar se pierde sin aviso
   (agregué Afnan 9PM, recargué y quedó "Productos en la factura (0)").
 - **Dónde:** `src/components/facturacion/FormularioFactura.tsx`.
