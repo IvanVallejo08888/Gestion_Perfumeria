@@ -73,7 +73,7 @@ export function ListaProductos({ productos, onAgregarUnidades, onDetalle }: Prop
           const publico = publicoDe(p);
           const sinCategoria = !p.tipo && !p.tamano && !publico;
           return (
-            <li key={p.id} className="flex flex-col rounded-2xl border-2 border-linea bg-white p-4 shadow-sm">
+            <li key={p.id} className="flex flex-col rounded-2xl border-2 border-linea bg-tarjeta p-4 shadow-sm">
               <p className="text-base font-bold tracking-wide text-texto-suave uppercase">{p.marcaNombre ?? "Sin marca"}</p>
               <h2 className="text-xl font-bold break-words">{p.nombre}</h2>
               {p.codigo && <p className="text-base text-texto-suave">Código: {p.codigo}</p>}
@@ -91,7 +91,7 @@ export function ListaProductos({ productos, onAgregarUnidades, onDetalle }: Prop
               <div className="mt-3 flex flex-1 flex-wrap items-end justify-between gap-x-4 gap-y-2">
                 <div>
                   <p className="text-base text-texto-suave">Precio</p>
-                  <p className="text-3xl font-bold text-marca-800">{pesos(p.precio)}</p>
+                  <p className="text-3xl font-bold text-acento">{pesos(p.precio)}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-base text-texto-suave">Stock</p>
@@ -121,7 +121,7 @@ export function ListaProductos({ productos, onAgregarUnidades, onDetalle }: Prop
        * Encabezados y celdas centrados (cada columna se alinea igual que su encabezado).
        * Con letra A++ la tabla se desplaza por dentro.
        */}
-      <div className="hidden overflow-x-auto rounded-2xl border-2 border-linea bg-white shadow-sm xl:block">
+      <div className="hidden overflow-x-auto rounded-2xl border-2 border-linea bg-tarjeta shadow-sm xl:block">
         <table className="w-full text-center text-[15px]">
           <caption className="sr-only">Perfumes del inventario</caption>
           <thead className="bg-superficie">

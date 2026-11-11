@@ -389,7 +389,7 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
                       type="button"
                       onClick={() => cambiarCantidad(l.producto.id, l.cantidad - 1)}
                       disabled={l.cantidad <= 1}
-                      className="flex size-12 items-center justify-center rounded-xl border-2 border-borde bg-white disabled:opacity-40"
+                      className="flex size-12 items-center justify-center rounded-xl border-2 border-borde bg-tarjeta disabled:opacity-40"
                       aria-label="Quitar una unidad"
                     >
                       <Icono nombre="menos" />
@@ -408,7 +408,7 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
                       type="button"
                       onClick={() => cambiarCantidad(l.producto.id, l.cantidad + 1)}
                       disabled={l.cantidad >= l.producto.stock}
-                      className="flex size-12 items-center justify-center rounded-xl border-2 border-borde bg-white disabled:opacity-40"
+                      className="flex size-12 items-center justify-center rounded-xl border-2 border-borde bg-tarjeta disabled:opacity-40"
                       aria-label="Agregar una unidad"
                     >
                       <Icono nombre="mas" />
@@ -419,7 +419,7 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
                     <button
                       type="button"
                       onClick={() => quitar(l.producto.id)}
-                      className="flex min-h-12 items-center gap-1 rounded-xl px-3 text-base font-bold text-peligro-700 hover:bg-peligro-50"
+                      className="flex min-h-12 items-center gap-1 rounded-xl px-3 text-base font-bold text-peligro-800 hover:bg-peligro-50"
                     >
                       <Icono nombre="basura" className="size-5" />
                       Quitar
@@ -486,7 +486,7 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
           <div className="flex justify-between"><dt>Subtotal</dt><dd>{pesos(subtotal)}</dd></div>
           {adicional > 0 && <div className="flex justify-between"><dt>Costo adicional</dt><dd>+ {pesos(adicional)}</dd></div>}
           {descuento > 0 && <div className="flex justify-between"><dt>Descuento</dt><dd>− {pesos(descuento)}</dd></div>}
-          <div className={`flex justify-between border-t-2 pt-2 text-3xl font-bold ${total < 0 ? "text-peligro-700" : "text-marca-800"}`}>
+          <div className={`flex justify-between border-t-2 pt-2 text-3xl font-bold ${total < 0 ? "text-peligro-800" : "text-acento"}`}>
             <dt>Total</dt>
             <dd aria-live="polite">{pesos(total)}</dd>
           </div>

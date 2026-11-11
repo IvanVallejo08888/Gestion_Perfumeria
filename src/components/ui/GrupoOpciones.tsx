@@ -35,7 +35,7 @@ export function GrupoOpciones<T extends string>({ etiqueta, opciones, valor, onC
             onClick={() => onCambio(o.valor)}
             aria-pressed={activa}
             className={`min-h-12 rounded-xl border-2 px-4 text-lg font-bold transition-colors ${
-              activa ? "border-marca-700 bg-marca-700 text-white" : "border-borde bg-white text-texto hover:bg-marca-50"
+              activa ? "border-marca-700 bg-marca-700 text-white" : "border-borde bg-tarjeta text-texto hover:bg-marca-50"
             }`}
           >
             {o.texto}

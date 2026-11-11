@@ -79,7 +79,7 @@ export default function PaginaHistorial() {
           <ul className="space-y-3">
             {facturas.map((f) => (
               <li key={f.id}>
-                <article className="flex flex-col gap-3 rounded-2xl border border-linea bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                <article className="flex flex-col gap-3 rounded-2xl border border-linea bg-tarjeta p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     {/* El nombre de la factura es el nombre del cliente */}
                     <h2 className="text-xl font-bold">{f.clienteNombre}</h2>
@@ -105,7 +105,7 @@ export default function PaginaHistorial() {
                     )}
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:flex-col sm:flex-nowrap sm:items-end">
-                    <p className="text-2xl font-bold text-marca-800">{pesos(f.total)}</p>
+                    <p className="text-2xl font-bold text-acento">{pesos(f.total)}</p>
                     <Boton variante="secundario" icono="factura" onClick={() => setDetalleId(f.id)}>
                       Ver detalles
                     </Boton>

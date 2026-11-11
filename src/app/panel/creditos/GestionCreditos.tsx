@@ -130,11 +130,11 @@ export function GestionCreditos({ busquedaInicial }: { busquedaInicial: string }
 
                   <dl className="mt-4 grid grid-cols-2 gap-3 text-lg">
                     <div><dt className="text-base font-bold text-texto-suave">Valor del crédito</dt><dd className="font-bold">{pesos(c.total)}</dd></div>
-                    <div><dt className="text-base font-bold text-texto-suave">Saldo pendiente</dt><dd className="text-xl font-bold text-peligro-700">{pesos(c.saldo)}</dd></div>
+                    <div><dt className="text-base font-bold text-texto-suave">Saldo pendiente</dt><dd className="text-xl font-bold text-peligro-800">{pesos(c.saldo)}</dd></div>
                     <div><dt className="text-base font-bold text-texto-suave">Cuotas pagadas</dt><dd>{c.cuotasPagadas} de {c.totalCuotas}</dd></div>
                     <div>
                       <dt className="text-base font-bold text-texto-suave">{c.estado === "COMPLETADA" ? "Pagado el" : "Próximo cobro"}</dt>
-                      <dd className={vencida(c.proximaCuota) && c.estado === "PENDIENTE" ? "font-bold text-peligro-700" : ""}>
+                      <dd className={vencida(c.proximaCuota) && c.estado === "PENDIENTE" ? "font-bold text-peligro-800" : ""}>
                         {c.estado === "COMPLETADA"
                           ? c.completadaEn && fechaHora(c.completadaEn)
                           : c.proximaCuota
@@ -248,7 +248,7 @@ function ModalAbono({ facturaId, onCerrar, onListo }: { facturaId: string; onCer
           <div className="rounded-xl bg-superficie p-4 text-lg">
             <p className="font-bold">{factura.clienteNombre}</p>
             <p>
-              Saldo pendiente: <strong className="text-peligro-700">{pesos(factura.saldo)}</strong>
+              Saldo pendiente: <strong className="text-peligro-800">{pesos(factura.saldo)}</strong>
             </p>
             {proxima && (
               <p>

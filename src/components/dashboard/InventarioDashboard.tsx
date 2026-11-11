@@ -18,7 +18,7 @@ interface Props {
   onAgregarUnidades?: (producto: ProductoCritico) => void;
 }
 
-const ENLACE = "inline-flex min-h-12 items-center justify-center rounded-xl border-2 border-marca-700 px-4 text-lg font-bold text-marca-800 hover:bg-marca-50";
+const ENLACE = "inline-flex min-h-12 items-center justify-center rounded-xl border-2 border-marca-700 px-4 text-lg font-bold text-acento hover:bg-marca-50";
 
 export function InventarioDashboard({ inventario, onAgregarUnidades }: Props) {
   const { porPublico, criticos, totalCriticos } = inventario;

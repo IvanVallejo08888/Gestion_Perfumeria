@@ -69,7 +69,7 @@ export function ProveedorAvisos({ children }: { children: ReactNode }) {
             <button
               type="button"
               onClick={() => cerrar(a.id)}
-              className="-my-1.5 -mr-2 flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-black/10"
+              className="-my-1.5 -mr-2 flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-marca-50"
               aria-label="Cerrar aviso"
             >
               <Icono nombre="cerrar" className="size-6" />

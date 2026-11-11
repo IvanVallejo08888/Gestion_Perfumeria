@@ -33,6 +33,10 @@
   --color-marca-900: #3a0064; /* derivado: botón presionado, más oscuro que el hover */
   --color-champan: #cb9bde; /* detalles decorativos y textos sobre el menú morado (5.7:1) */
   --color-perla: #e6ccef; /* elemento activo del menú (texto #4b0081: 8.8:1) */
+  /* Tokens por función (en oscuro cambian distinto a "marca-*", que se usa como relleno) */
+  --color-menu: #4b0081; /* menú lateral, header, login: igual en claro y oscuro */
+  --color-acento: #4b0081; /* textos de marca sobre tarjetas y fondos */
+  --color-tarjeta: #ffffff; /* tarjetas, campos, ventanas y botones secundarios */
 
   /*
    * Esquinas suaves al estilo Apple: el radio crece con el tamaño del elemento
@@ -68,6 +72,53 @@
   --color-superficie: #fcf9fd; /* bloques internos de una tarjeta (tinte derivado) */
   --color-superficie-apagada: #f1e6f6; /* avisos neutros y elementos deshabilitados (tinte derivado) */
   --color-fondo: #efdff5; /* fondo de página: lila intermedio entre #e6ccef y blanco */
+}
+
+/*
+ * Variante "dark:" de Tailwind ligada al atributo data-tema (no a la preferencia del sistema):
+ * el script temprano de layout.tsx resuelve "Según el dispositivo" y pone data-tema="oscuro" o "claro".
+ */
+@custom-variant dark (&:where([data-tema="oscuro"], [data-tema="oscuro"] *));
+
+/*
+ * Tema oscuro: mismos nombres, otros valores. Contrastes medidos sobre la tarjeta #22132e.
+ * Rellenos *-700 (texto blanco ≥ 4.7:1 y como borde ≥ 3:1) · textos *-800 claros (≥ 9:1) · fondos *-50 tintados.
+ */
+[data-tema="oscuro"] {
+  color-scheme: dark;
+
+  --color-marca-50: #35214a; /* hover y opción marcada (texto acento 9.0:1) */
+  --color-marca-100: #3d2756;
+  --color-marca-200: #6d00a1; /* anillo de foco en campos */
+  --color-marca-600: #cb9bde; /* contorno de enfoque (7.7:1) */
+  --color-marca-700: #9a45c6; /* botón principal (texto blanco 5.2:1; borde 3.4:1) */
+  --color-marca-800: #7900ac; /* hover del botón (texto blanco 8.7:1) */
+  --color-marca-900: #6d00a1; /* botón presionado */
+  --color-acento: #e2c2f0; /* 11.0:1 */
+  --color-tarjeta: #22132e;
+
+  --color-exito-50: #0f2a22;
+  --color-exito-700: #0b8160;
+  --color-exito-800: #7fe0b5;
+  --color-alerta-50: #33230d;
+  --color-alerta-700: #ad5a0c;
+  --color-alerta-800: #ffcc80;
+  --color-peligro-50: #3a1418;
+  --color-peligro-700: #d23c3c;
+  --color-peligro-800: #ffaaa5;
+  --color-info-50: #14213d;
+  --color-info-700: #3b6fe0;
+  --color-info-800: #a9c4ff;
+
+  --color-texto: #f5ecfa; /* 15.2:1 */
+  --color-texto-suave: #e0cceb; /* 11.7:1 */
+  --color-texto-tenue: #c9a8da; /* 8.4:1 */
+  --color-borde: #a27cbb; /* 5.1:1 */
+  --color-linea: #3d2a4d;
+  --color-linea-fuerte: #5a3f6e;
+  --color-superficie: #2a1838;
+  --color-superficie-apagada: #311d42;
+  --color-fondo: #160b20;
 }
 
 /* Títulos con la letra de la marca: mayúsculas romanas con aire, como en la tienda */

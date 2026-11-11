@@ -12,6 +12,7 @@ import { z } from "zod";
 z.config(z.locales.es());
 import { GENEROS, PUBLICOS, TAMANOS, TIPOS_PRODUCTO } from "./clasificacion";
 import { ESTADOS_STOCK } from "./inventario";
+import { MODULOS } from "./guia-usuario";
 
 /* --------------------------- Reglas de contraseña --------------------------- */
 
@@ -322,3 +323,28 @@ export function parametros(url: URLSearchParams): Record<string, string> {
 export function primerError(error: z.ZodError): string {
   return error.issues[0]?.message ?? "Los datos enviados no son válidos.";
 }
+
+/* ------------------------ Quejas e inquietudes (soporte) ------------------------ */
+
+export const TIPOS_QUEJA = [
+  { valor: "ERROR", texto: "Error" },
+  { valor: "SUGERENCIA", texto: "Sugerencia" },
+  { valor: "DUDA", texto: "Duda" },
+] as const;
+
+/** Pantallas que se pueden elegir en «¿En qué pantalla pasó?»: los módulos + Ajustes + Otra. */
+export const PANTALLAS_QUEJA = [...MODULOS, { id: "ajustes", nombre: "Ajustes" }, { id: "otra", nombre: "Otra / no estoy seguro" }] as const;
+
+export const quejaSchema = z.object({
+  tipo: z.enum(["ERROR", "SUGERENCIA", "DUDA"], { error: "Elige si es un error, una sugerencia o una duda." }),
+  pantalla: z
+    .string({ error: "Elige la pantalla donde pasó." })
+    .refine((v) => PANTALLAS_QUEJA.some((p) => p.id === v), "Elige la pantalla donde pasó."),
+  descripcion: z
+    .string({ error: "Cuéntanos qué pasó." })
+    .trim()
+    .min(10, "Cuéntanos un poco más: escribe mínimo 10 caracteres.")
+    .max(1000, "El texto es demasiado largo (máximo 1000 caracteres)."),
+});
+
+export type Queja = z.infer<typeof quejaSchema>;

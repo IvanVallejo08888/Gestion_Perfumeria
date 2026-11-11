@@ -113,7 +113,7 @@ export function EditorCuotas({ config, onCambio, total, error }: Props) {
       </p>
 
       {error && (
-        <p role="alert" className="mt-3 text-lg font-bold text-peligro-700">
+        <p role="alert" className="mt-3 text-lg font-bold text-peligro-800">
           {error}
         </p>
       )}

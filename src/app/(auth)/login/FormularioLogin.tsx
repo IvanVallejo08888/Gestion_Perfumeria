@@ -41,7 +41,7 @@ export function FormularioLogin({ sesionExpirada }: { sesionExpirada: boolean })
   }
 
   return (
-    <div className="w-full max-w-md rounded-3xl border border-linea bg-white p-6 shadow-xl shadow-marca-700/5 sm:p-8">
+    <div className="w-full max-w-md rounded-3xl border border-linea bg-tarjeta p-6 shadow-xl shadow-marca-700/5 sm:p-8">
       <h1 className="text-3xl font-bold">Iniciar sesión</h1>
       <p className="mt-1 text-lg text-texto-suave">Ingresa con tu número de identificación.</p>
 
@@ -82,7 +82,7 @@ export function FormularioLogin({ sesionExpirada }: { sesionExpirada: boolean })
         <p className="text-lg text-texto-suave">¿Todavía no tienes cuenta?</p>
         <Link
           href="/registro"
-          className="mt-2 inline-flex min-h-12 items-center justify-center rounded-xl border-2 border-marca-700 px-5 text-lg font-bold text-marca-800 hover:bg-marca-50"
+          className="mt-2 inline-flex min-h-12 items-center justify-center rounded-xl border-2 border-marca-700 px-5 text-lg font-bold text-acento hover:bg-marca-50"
         >
           Crear una cuenta
         </Link>

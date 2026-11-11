@@ -43,9 +43,9 @@ export function VistaEstadisticas({ datos, mes }: { datos: Estadisticas; mes?: n
     <div className="space-y-6">
       <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {resumen.map((r) => (
-          <li key={r.titulo} className="rounded-2xl border border-linea bg-white p-5 shadow-sm">
+          <li key={r.titulo} className="rounded-2xl border border-linea bg-tarjeta p-5 shadow-sm">
             <p className="text-lg font-bold text-texto-suave">{r.titulo}</p>
-            <p className={`mt-1 text-3xl font-bold ${r.peligro ? "text-peligro-700" : "text-marca-800"}`}>{r.valor}</p>
+            <p className={`mt-1 text-3xl font-bold ${r.peligro ? "text-peligro-800" : "text-acento"}`}>{r.valor}</p>
             <p className="mt-1 text-base text-texto-suave">{r.detalle}</p>
           </li>
         ))}
@@ -99,7 +99,7 @@ export function VistaEstadisticas({ datos, mes }: { datos: Estadisticas; mes?: n
                   <td className="py-2 pr-3 text-right">{pesos(m.totalVentas)}</td>
                   <td className="py-2 pr-3 text-right">{pesos(m.totalRecaudado)}</td>
                   <td className="py-2 pr-3 text-right">{pesos(m.gastos)}</td>
-                  <td className={`py-2 text-right ${m.utilidad < 0 ? "font-bold text-peligro-700" : ""}`}>{pesos(m.utilidad)}</td>
+                  <td className={`py-2 text-right ${m.utilidad < 0 ? "font-bold text-peligro-800" : ""}`}>{pesos(m.utilidad)}</td>
                 </tr>
               ))}
             </tbody>
@@ -112,7 +112,7 @@ export function VistaEstadisticas({ datos, mes }: { datos: Estadisticas; mes?: n
                 <td className="py-2 pr-3 text-right">{pesos(datos.totales.totalVentas)}</td>
                 <td className="py-2 pr-3 text-right">{pesos(datos.totales.totalRecaudado)}</td>
                 <td className="py-2 pr-3 text-right">{pesos(datos.totales.gastos)}</td>
-                <td className={`py-2 text-right ${datos.totales.utilidad < 0 ? "text-peligro-700" : ""}`}>{pesos(datos.totales.utilidad)}</td>
+                <td className={`py-2 text-right ${datos.totales.utilidad < 0 ? "text-peligro-800" : ""}`}>{pesos(datos.totales.utilidad)}</td>
               </tr>
             </tfoot>
           </table>
@@ -128,7 +128,7 @@ export function VistaEstadisticas({ datos, mes }: { datos: Estadisticas; mes?: n
             {datos.topProductos.map((p, i) => (
               <li key={p.nombre} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-superficie px-4 py-3 text-lg">
                 <span>
-                  <span className="mr-2 font-bold text-marca-700">{i + 1}.</span>
+                  <span className="mr-2 font-bold text-acento">{i + 1}.</span>
                   {p.nombre}
                 </span>
                 <span className="font-bold">

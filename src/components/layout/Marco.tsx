@@ -13,7 +13,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useIntervalo } from "@/hooks/useIntervalo";
 import { useAlCambiarNotificaciones } from "@/hooks/useNotificaciones";
-import { borrarBorradorFactura } from "@/lib/borrador-factura";
+import { cerrarSesion, ETIQUETA_COBRO } from "@/lib/cerrar-sesion";
 import { api } from "@/lib/http";
 import { BotonInstalar } from "../pwa/BotonInstalar";
 import { ControlTexto } from "./ControlTexto";
@@ -36,7 +36,6 @@ interface Props {
 }
 
 const INTERVALO_NOTIFICACIONES_MS = 60_000;
-const ETIQUETA_COBRO = "recordatorio-cobro";
 const CLAVE_LATERAL = "menu-lateral-abierto";
 
 export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false, children }: Props) {
@@ -137,14 +136,6 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
   // Cuando otra pantalla avisa que algo cambió (venta, abono, stock…)
   useAlCambiarNotificaciones(consultar, notificaciones);
 
-  async function salir() {
-    // La factura sin terminar lleva datos del cliente: no se deja en el equipo
-    borrarBorradorFactura();
-    await api("/api/auth/logout", { method: "POST" }).catch(() => {});
-    await cerrarNotificaciones().catch(() => {});
-    window.location.href = "/login";
-  }
-
   const enlaces = (
     <nav aria-label="Menú principal">
       <ul className="space-y-1.5">
@@ -157,7 +148,7 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
                 href={item.href}
                 aria-current={activo ? "page" : undefined}
                 className={`flex min-h-14 items-center gap-3 rounded-xl px-4 text-lg font-bold transition-colors ${
-                  activo ? "bg-perla text-marca-800 shadow" : "text-white hover:bg-white/10"
+                  activo ? "bg-perla text-menu shadow" : "text-white hover:bg-white/10"
                 }`}
               >
                 <Icono nombre={item.icono} className="size-7" />
@@ -192,7 +183,7 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
       {notificaciones && <PermisoAvisos />}
       <button
         type="button"
-        onClick={salir}
+        onClick={cerrarSesion}
         className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border-2 border-white/70 text-lg font-bold text-white hover:bg-white/15"
       >
         <Icono nombre="salir" />
@@ -233,7 +224,7 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
        * solo el botón; el contenido interno conserva su ancho y queda fuera del foco (inert).
        */}
       <aside
-        className={`zona-oscura sticky top-0 hidden h-dvh shrink-0 overflow-hidden bg-marca-800 lg:block ${
+        className={`zona-oscura sticky top-0 hidden h-dvh shrink-0 overflow-hidden bg-menu lg:block ${
           lateralListo ? "transition-[width] duration-250 ease-out" : ""
         } ${lateralAbierta ? "w-80" : "w-20"}`}
       >
@@ -265,7 +256,7 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Barra superior: en celular abre el menú deslizable; en escritorio solo muestra usuario y local */}
-        <header className="zona-oscura sticky top-0 z-40 flex min-h-14 items-center gap-2 bg-marca-800 px-2 py-1 shadow-md sm:px-3 lg:px-4">
+        <header className="zona-oscura sticky top-0 z-40 flex min-h-14 items-center gap-2 bg-menu px-2 py-1 shadow-md sm:px-3 lg:px-4">
           <button
             ref={botonMenuRef}
             type="button"
@@ -303,7 +294,7 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
           role="dialog"
           aria-modal="true"
           aria-label="Menú"
-          className={`zona-oscura absolute inset-y-0 left-0 flex w-[88vw] max-w-sm flex-col overflow-y-auto bg-marca-800 p-5 shadow-2xl transition-transform duration-250 ease-out ${
+          className={`zona-oscura absolute inset-y-0 left-0 flex w-[88vw] max-w-sm flex-col overflow-y-auto bg-menu p-5 shadow-2xl transition-transform duration-250 ease-out ${
             menuAbierto ? "translate-x-0" : "-translate-x-full"
           }`}
         >
@@ -339,14 +330,6 @@ async function mostrarNotificacion(titulo: string, cuerpo: string) {
   } else {
     new Notification(titulo, { body: cuerpo });
   }
-}
-
-/** Al salir se quitan los avisos: en un dispositivo compartido, el siguiente vendedor no debe verlos. */
-async function cerrarNotificaciones() {
-  if (!("serviceWorker" in navigator)) return;
-  const registro = await navigator.serviceWorker.getRegistration();
-  const avisos = await registro?.getNotifications({ tag: ETIQUETA_COBRO });
-  avisos?.forEach((aviso) => aviso.close());
 }
 
 /** Botón para activar los avisos del navegador (recordatorios de cobro). */

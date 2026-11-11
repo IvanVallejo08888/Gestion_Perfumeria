@@ -11,7 +11,7 @@ const MENU: ItemMenu[] = [
   { href: "/panel/notificaciones", texto: "Notificaciones", icono: "campana", conContador: true },
   { href: "/panel/inventario", texto: "Inventario", icono: "inventario" },
   { href: "/panel/reportes", texto: "Reportes y estadísticas", icono: "reporte" },
-  { href: "/panel/cuenta", texto: "Mi cuenta", icono: "cuenta" },
+  { href: "/panel/cuenta", texto: "Ajustes", icono: "ajustes" },
 ];
 
 export const dynamic = "force-dynamic";

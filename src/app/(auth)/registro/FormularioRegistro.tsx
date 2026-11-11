@@ -62,8 +62,8 @@ export function FormularioRegistro() {
   /* Pantalla de éxito: la cuenta queda en espera de asignación de local */
   if (creada) {
     return (
-      <div className="w-full max-w-lg rounded-3xl bg-white p-6 text-center shadow-2xl sm:p-10" role="status">
-        <div className="mx-auto flex size-20 items-center justify-center rounded-full bg-exito-50 text-exito-700">
+      <div className="w-full max-w-lg rounded-3xl bg-tarjeta p-6 text-center shadow-2xl sm:p-10" role="status">
+        <div className="mx-auto flex size-20 items-center justify-center rounded-full bg-exito-50 text-exito-800">
           <Icono nombre="check" className="size-12" />
         </div>
         <h1 className="mt-4 text-3xl font-bold">¡Tu cuenta fue creada!</h1>
@@ -84,10 +84,10 @@ export function FormularioRegistro() {
   }
 
   return (
-    <div className="w-full max-w-2xl rounded-3xl border border-linea bg-white p-6 shadow-xl shadow-marca-700/5 sm:p-8">
+    <div className="w-full max-w-2xl rounded-3xl border border-linea bg-tarjeta p-6 shadow-xl shadow-marca-700/5 sm:p-8">
       <h1 className="text-3xl font-bold">Crear una cuenta</h1>
       <p className="mt-1 text-lg text-texto-suave">
-        Completa tus datos. Los campos con <span className="font-bold text-peligro-700">*</span> son obligatorios.
+        Completa tus datos. Los campos con <span className="font-bold text-peligro-800">*</span> son obligatorios.
       </p>
 
       {errorGeneral && (

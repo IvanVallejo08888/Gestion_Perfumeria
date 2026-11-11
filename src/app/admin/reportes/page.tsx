@@ -108,7 +108,7 @@ export default function ReportesAdmin() {
                 aria-disabled={!mes}
                 onClick={(e) => !mes && e.preventDefault()}
                 className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border-2 px-5 text-lg font-bold ${
-                  mes ? "border-exito-700 bg-white text-exito-800 hover:bg-exito-50" : "cursor-not-allowed border-linea-fuerte text-texto-tenue"
+                  mes ? "border-exito-700 bg-tarjeta text-exito-800 hover:bg-exito-50" : "cursor-not-allowed border-linea-fuerte text-texto-tenue"
                 }`}
               >
                 <Icono nombre="descargar" />
@@ -123,7 +123,7 @@ export default function ReportesAdmin() {
               </p>
               <a
                 href={`/api/admin/reportes/consolidado?anio=${anio}${mes ? `&mes=${mes}` : ""}`}
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border-2 border-exito-700 bg-white px-5 text-lg font-bold text-exito-800 hover:bg-exito-50"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border-2 border-exito-700 bg-tarjeta px-5 text-lg font-bold text-exito-800 hover:bg-exito-50"
               >
                 <Icono nombre="descargar" />
                 Descargar consolidado de {mes ? `${MESES[mes - 1]} ${anio}` : `todo ${anio}`}

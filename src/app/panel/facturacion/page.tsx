@@ -63,7 +63,7 @@ function Facturacion() {
               onKeyDown={(e) => moverConFlechas(e, i, PESTANAS.length, (j) => setTipo(PESTANAS[j].tipo))}
               onClick={() => setTipo(p.tipo)}
               className={`flex items-center gap-4 rounded-2xl border-[3px] p-4 text-left transition ${
-                activa ? "border-marca-700 bg-marca-700 text-white shadow-lg" : "border-borde bg-white hover:border-marca-700"
+                activa ? "border-marca-700 bg-marca-700 text-white shadow-lg" : "border-borde bg-tarjeta hover:border-marca-700"
               }`}
             >
               <Icono nombre={p.tipo === "NORMAL" ? "factura" : "credito"} className="size-10" />

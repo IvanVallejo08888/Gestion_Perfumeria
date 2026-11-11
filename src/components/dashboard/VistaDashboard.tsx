@@ -129,7 +129,7 @@ export function VistaDashboard({ anio, mes, localId, puedeAgregarUnidades = fals
                     aria-pressed={medida === valor}
                     onClick={() => setMedida(valor)}
                     className={`inline-flex min-h-12 flex-1 items-center justify-center gap-1 rounded-xl border-2 px-3 text-lg font-bold sm:flex-none sm:px-4 ${
-                      medida === valor ? "border-marca-700 bg-marca-700 text-white" : "border-borde bg-white hover:border-marca-700 hover:bg-marca-50"
+                      medida === valor ? "border-marca-700 bg-marca-700 text-white" : "border-borde bg-tarjeta hover:border-marca-700 hover:bg-marca-50"
                     }`}
                   >
                     {medida === valor && <Icono nombre="check" className="size-5 shrink-0" />}

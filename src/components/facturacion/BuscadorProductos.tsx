@@ -110,7 +110,7 @@ export function BuscadorProductos({ onAgregar, enFactura, versionInventario }: P
             }
           }}
           placeholder="Nombre o código, ej. Dior"
-          className="block min-h-14 w-full rounded-xl border-2 border-marca-700 bg-white py-3 pl-12 pr-4 text-lg focus:outline-none focus:ring-4 focus:ring-marca-200"
+          className="block min-h-14 w-full rounded-xl border-2 border-marca-700 bg-tarjeta py-3 pl-12 pr-4 text-lg focus:outline-none focus:ring-4 focus:ring-marca-200"
         />
       </div>
 
@@ -151,7 +151,7 @@ export function BuscadorProductos({ onAgregar, enFactura, versionInventario }: P
                   // Tocar una fila sin stock también avisa por qué no se puede vender.
                   // Las filas con stock solo agregan con el botón "+", para no agregar por error al deslizar.
                   onClick={sinStock ? () => elegir(p) : undefined}
-                  className={`flex items-center justify-between gap-2 rounded-xl border-2 bg-white px-2 py-2 sm:px-3 ${
+                  className={`flex items-center justify-between gap-2 rounded-xl border-2 bg-tarjeta px-2 py-2 sm:px-3 ${
                     sinStock ? "cursor-not-allowed border-linea bg-superficie-apagada" : "border-linea"
                   }`}
                 >

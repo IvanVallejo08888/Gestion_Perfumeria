@@ -30,20 +30,46 @@ import {
 } from "recharts";
 import { pesosCorto } from "@/lib/dashboard";
 import { anioMesColombia, pesos } from "@/lib/formato";
+import { useTemaActual } from "@/hooks/usePreferencias";
 import type { MesDashboard } from "@/tipos";
 
-/** Colores de las gráficas: morado (marca-700) del tema + dos tonos que se distinguen con daltonismo. */
-export const COLOR = {
-  principal: "#7900ac",
-  /** "Otras" y "Sin categoría": no son una categoría real, van en gris. */
-  tenue: "#9a8aa6",
-  contado: "#7900ac",
-  credito: "#0891b2",
-  recaudo: "#c2410c",
-  tinta: "#4b0081",
-  tintaSuave: "#620096",
-  rejilla: "#e6ccef",
+/**
+ * Colores de las gráficas: morado del tema + dos tonos que se distinguen con daltonismo.
+ * Recharts los pone como atributos SVG (donde var(--…) no es fiable), por eso hay un juego por tema.
+ * En oscuro, todos los textos y series están medidos sobre la tarjeta #22132e (≥ 7:1).
+ */
+const COLORES = {
+  claro: {
+    principal: "#7900ac",
+    /** "Otras" y "Sin categoría": no son una categoría real, van en gris. */
+    tenue: "#9a8aa6",
+    contado: "#7900ac",
+    credito: "#0891b2",
+    recaudo: "#c2410c",
+    tinta: "#4b0081",
+    tintaSuave: "#620096",
+    rejilla: "#e6ccef",
+    eje: "#cb9bde",
+    /** Separación entre barras apiladas y borde de los puntos: el color de la tarjeta. */
+    separador: "#ffffff",
+  },
+  oscuro: {
+    principal: "#c98ee6",
+    tenue: "#8a7a96",
+    contado: "#c98ee6",
+    credito: "#22c3e6",
+    recaudo: "#fb8c4c",
+    tinta: "#f5ecfa",
+    tintaSuave: "#e0cceb",
+    rejilla: "#3d2a4d",
+    eje: "#5a3f6e",
+    separador: "#22132e",
+  },
 } as const;
+
+function useColores() {
+  return COLORES[useTemaActual()];
+}
 
 /* ------------------------------ Tarjeta con título ------------------------------ */
 
@@ -66,7 +92,7 @@ export function TarjetaGrafica({
   children: ReactNode;
 }) {
   return (
-    <section className={`relative flex min-w-0 flex-col rounded-2xl border-2 border-linea bg-white p-4 shadow-sm sm:p-5 ${className}`}>
+    <section className={`relative flex min-w-0 flex-col rounded-2xl border-2 border-linea bg-tarjeta p-4 shadow-sm sm:p-5 ${className}`}>
       <h3 className="text-xl font-bold">{titulo}</h3>
       {descripcion && <p className="text-base text-texto-suave">{descripcion}</p>}
       {acciones && <div className="mt-3">{acciones}</div>}
@@ -85,7 +111,7 @@ export function TarjetaGrafica({
 
 function CajaDetalle({ titulo, lineas }: { titulo: string; lineas: [string, string][] }) {
   return (
-    <div className="max-w-64 rounded-xl border-2 border-linea-fuerte bg-white px-3 py-2 text-[16px] shadow-lg">
+    <div className="max-w-64 rounded-xl border-2 border-linea-fuerte bg-tarjeta px-3 py-2 text-[16px] shadow-lg">
       <p className="font-bold break-words">{titulo}</p>
       {lineas.map(([etiqueta, valor]) => (
         <p key={etiqueta} className="flex justify-between gap-4">
@@ -140,6 +166,7 @@ function EtiquetaFila({ y, value, filas, dosLineas }: LabelProps & { filas: Fila
 }
 
 export function BarrasHorizontales({ filas, titulo, columna }: { filas: FilaBarra[]; titulo: string; columna: string }) {
+  const COLOR = useColores();
   // Ancho real de la gráfica: decide si el dato de apoyo cabe junto al nombre o baja a otra línea
   const caja = useRef<HTMLDivElement>(null);
   const [ancho, setAncho] = useState(0);
@@ -223,6 +250,7 @@ export function BarrasHorizontales({ filas, titulo, columna }: { filas: FilaBarr
 /* ------------------------ Contado vs crédito mes a mes + recaudo ------------------------ */
 
 function Leyenda() {
+  const COLOR = useColores();
   const claseItem = "inline-flex items-center gap-2 text-[16px] text-texto";
   return (
     <ul className="mb-3 flex flex-wrap gap-x-5 gap-y-1">
@@ -245,6 +273,7 @@ function Leyenda() {
 }
 
 export function GraficaMensual({ meses, anio }: { meses: MesDashboard[]; anio: number }) {
+  const COLOR = useColores();
   // Los meses que aún no llegan no tienen recaudo: la línea se corta ahí en vez de caer a cero
   const { anio: anioHoy, mes: mesHoy } = anioMesColombia(new Date());
   const esFuturo = (mes: number) => anio > anioHoy || (anio === anioHoy && mes > mesHoy);
@@ -258,7 +287,7 @@ export function GraficaMensual({ meses, anio }: { meses: MesDashboard[]; anio: n
         <ResponsiveContainer width="100%" height={320}>
           <ComposedChart data={datos} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} accessibilityLayer={false}>
             <CartesianGrid vertical={false} stroke={COLOR.rejilla} />
-            <XAxis dataKey="corto" tickLine={false} axisLine={{ stroke: "#cb9bde" }} tick={ejes} />
+            <XAxis dataKey="corto" tickLine={false} axisLine={{ stroke: COLOR.eje }} tick={ejes} />
             <YAxis tickFormatter={pesosCorto} width={74} tickLine={false} axisLine={false} tick={ejes} />
             <Tooltip
               cursor={{ fill: "rgba(17, 24, 39, 0.05)" }}
@@ -279,15 +308,15 @@ export function GraficaMensual({ meses, anio }: { meses: MesDashboard[]; anio: n
               }}
             />
             {/* El borde blanco separa los dos tramos apilados */}
-            <Bar dataKey="contado" stackId="ventas" fill={COLOR.contado} maxBarSize={24} stroke="#ffffff" strokeWidth={2} isAnimationActive={false} />
-            <Bar dataKey="credito" stackId="ventas" fill={COLOR.credito} maxBarSize={24} radius={[4, 4, 0, 0]} stroke="#ffffff" strokeWidth={2} isAnimationActive={false} />
+            <Bar dataKey="contado" stackId="ventas" fill={COLOR.contado} maxBarSize={24} stroke={COLOR.separador} strokeWidth={2} isAnimationActive={false} />
+            <Bar dataKey="credito" stackId="ventas" fill={COLOR.credito} maxBarSize={24} radius={[4, 4, 0, 0]} stroke={COLOR.separador} strokeWidth={2} isAnimationActive={false} />
             <Line
               dataKey="recaudo"
               type="linear"
               stroke={COLOR.recaudo}
               strokeWidth={2}
-              dot={{ r: 4, fill: COLOR.recaudo, stroke: "#ffffff", strokeWidth: 2 }}
-              activeDot={{ r: 6, fill: COLOR.recaudo, stroke: "#ffffff", strokeWidth: 2 }}
+              dot={{ r: 4, fill: COLOR.recaudo, stroke: COLOR.separador, strokeWidth: 2 }}
+              activeDot={{ r: 6, fill: COLOR.recaudo, stroke: COLOR.separador, strokeWidth: 2 }}
               isAnimationActive={false}
             />
           </ComposedChart>
@@ -295,7 +324,7 @@ export function GraficaMensual({ meses, anio }: { meses: MesDashboard[]; anio: n
       </div>
 
       <details className="mt-3">
-        <summary className="inline-flex min-h-12 cursor-pointer items-center rounded-xl border-2 border-marca-700 px-4 py-2 text-lg font-bold text-marca-800 hover:bg-marca-50">
+        <summary className="inline-flex min-h-12 cursor-pointer items-center rounded-xl border-2 border-marca-700 px-4 py-2 text-lg font-bold text-acento hover:bg-marca-50">
           Ver los valores en una tabla
         </summary>
         <div className="mt-3 overflow-x-auto">

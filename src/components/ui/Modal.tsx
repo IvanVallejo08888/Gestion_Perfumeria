@@ -44,7 +44,7 @@ export function Modal({ abierto, onCerrar, titulo, children, tamano = "md" }: Pr
         // Clic en el fondo oscuro cierra la ventana
         if (e.target === ref.current) onCerrar();
       }}
-      className={`m-auto max-h-[94dvh] w-[96vw] ${ANCHOS[tamano]} rounded-2xl bg-white p-0 text-texto shadow-2xl backdrop:bg-black/60`}
+      className={`m-auto max-h-[94dvh] w-[96vw] ${ANCHOS[tamano]} rounded-2xl bg-tarjeta p-0 text-texto shadow-2xl backdrop:bg-black/60`}
     >
       {abierto && (
         <div className="flex max-h-[94dvh] flex-col">

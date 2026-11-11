@@ -126,7 +126,7 @@ export function VistaFactura({ factura }: { factura: FacturaDetalle }) {
             <p className="text-[22px] font-bold">{factura.local.nombre}</p>
             {factura.local.direccion && <p>{factura.local.direccion}</p>}
             {factura.local.telefono && <p>Tel. {factura.local.telefono}</p>}
-            <p className={`mt-3 inline-block rounded px-3 py-1 text-[16px] font-bold text-white ${esCredito ? "bg-alerta-800" : "bg-marca-800"}`}>
+            <p className={`mt-3 inline-block rounded px-3 py-1 text-[16px] font-bold text-white ${esCredito ? "bg-[#92400e]" : "bg-[#4b0081]"}`}>
               {esCredito ? "FACTURA DE CRÉDITO" : "FACTURA DE VENTA"} N° {numeroFactura(factura.numero)}
             </p>
             <p className="mt-1">{fechaHora(factura.creadoEn)}</p>

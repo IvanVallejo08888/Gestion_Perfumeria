@@ -8,7 +8,7 @@ import { ControlTexto } from "@/components/layout/ControlTexto";
 export default function LayoutAuth({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col bg-fondo">
-      <header className="zona-oscura border-b-2 border-champan bg-marca-800 shadow-md">
+      <header className="zona-oscura border-b-2 border-champan bg-menu shadow-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-8">
           <p className="font-titulo text-xl font-bold uppercase tracking-[0.12em] text-champan sm:text-2xl">Gestión de Perfumerías</p>
           <ControlTexto claro />

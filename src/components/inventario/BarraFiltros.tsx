@@ -53,7 +53,7 @@ function Opcion({ activa, onClick, children, grande = false }: { activa: boolean
       aria-pressed={activa}
       onClick={onClick}
       className={`inline-flex min-h-12 items-center justify-center gap-1 rounded-xl border-2 px-2 font-bold sm:px-4 ${grande ? "text-lg sm:text-xl" : "text-lg"} ${
-        activa ? "border-marca-700 bg-marca-700 text-white" : "border-borde bg-white text-texto hover:border-marca-700 hover:bg-marca-50"
+        activa ? "border-marca-700 bg-marca-700 text-white" : "border-borde bg-tarjeta text-texto hover:border-marca-700 hover:bg-marca-50"
       }`}
     >
       {activa && <Icono nombre="check" className="size-5 shrink-0" />}

@@ -5,12 +5,12 @@
  */
 "use client";
 
-import { useId, useState, type InputHTMLAttributes, type SelectHTMLAttributes } from "react";
+import { useId, useState, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { pesos } from "@/lib/formato";
 import { Icono } from "./Icono";
 
 const claseCampo =
-  "block w-full min-h-12 rounded-xl border-2 bg-white px-4 py-2.5 text-lg text-texto placeholder:text-texto-tenue " +
+  "block w-full min-h-12 rounded-xl border-2 bg-tarjeta px-4 py-2.5 text-lg text-texto placeholder:text-texto-tenue " +
   "focus:border-marca-700 focus:outline-none focus:ring-4 focus:ring-marca-200 disabled:bg-superficie-apagada";
 
 interface Base {
@@ -26,7 +26,7 @@ function Etiqueta({ htmlFor, texto, obligatorio }: { htmlFor: string; texto: str
     <label htmlFor={htmlFor} className="mb-1.5 block text-lg font-bold text-texto">
       {texto}
       {obligatorio && (
-        <span className="text-peligro-700" aria-hidden="true">
+        <span className="text-peligro-800" aria-hidden="true">
           {" "}
           *
         </span>
@@ -45,7 +45,7 @@ function Mensajes({ id, error, ayuda }: { id: string; error?: string; ayuda?: st
         </p>
       )}
       {error && (
-        <p id={`${id}-error`} role="alert" className="mt-1.5 flex items-start gap-1.5 text-base font-bold text-peligro-700">
+        <p id={`${id}-error`} role="alert" className="mt-1.5 flex items-start gap-1.5 text-base font-bold text-peligro-800">
           <Icono nombre="alerta" className="mt-0.5 size-5" />
           {error}
         </p>
@@ -71,6 +71,28 @@ export function Campo({ etiqueta, error, ayuda, obligatorio, id, className = "",
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy(campoId, error, ayuda)}
         className={`${claseCampo} ${error ? "border-peligro-700" : "border-borde"}`}
+        {...resto}
+      />
+      <Mensajes id={campoId} error={error} ayuda={ayuda} />
+    </div>
+  );
+}
+
+/* ---------------------------- Texto largo (área) --------------------------- */
+
+export function AreaTexto({ etiqueta, error, ayuda, obligatorio, id, className = "", rows = 5, ...resto }: Base & TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const autoId = useId();
+  const campoId = id ?? autoId;
+  return (
+    <div className={className}>
+      <Etiqueta htmlFor={campoId} texto={etiqueta} obligatorio={obligatorio} />
+      <textarea
+        id={campoId}
+        rows={rows}
+        required={obligatorio}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy(campoId, error, ayuda)}
+        className={`${claseCampo} ${error ? "border-peligro-700" : "border-borde"} resize-y`}
         {...resto}
       />
       <Mensajes id={campoId} error={error} ayuda={ayuda} />
@@ -133,7 +155,7 @@ export function CampoPassword(props: Base & Omit<InputHTMLAttributes<HTMLInputEl
         <button
           type="button"
           onClick={() => setVisible((v) => !v)}
-          className="absolute inset-y-1 right-1 flex items-center gap-1 rounded-lg px-3 text-base font-bold text-marca-800 hover:bg-marca-50"
+          className="absolute inset-y-1 right-1 flex items-center gap-1 rounded-lg px-3 text-base font-bold text-acento hover:bg-marca-50"
           aria-pressed={visible}
           aria-controls={campoId}
         >

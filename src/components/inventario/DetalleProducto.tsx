@@ -47,7 +47,7 @@ export function DetalleProducto({ producto: p, onCerrar, onAgregarUnidades, onEd
           <Dato etiqueta="Tamaño">{p.tamano ? ETIQUETA_TAMANO[p.tamano] : SIN_CATEGORIA}</Dato>
           {p.codigo && <Dato etiqueta="Código">{p.codigo}</Dato>}
           <Dato etiqueta="Precio">
-            <span className="text-2xl font-bold text-marca-800">{pesos(p.precio)}</span>
+            <span className="text-2xl font-bold text-acento">{pesos(p.precio)}</span>
           </Dato>
           <Dato etiqueta="Stock">
             <span className="mr-2 text-2xl font-bold">{p.stock}</span>

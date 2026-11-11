@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { Icono, type NombreIcono } from "./Icono";
 
 export function Tarjeta({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <section className={`rounded-2xl border border-linea bg-white p-4 shadow-sm shadow-marca-700/5 sm:p-6 ${className}`}>{children}</section>;
+  return <section className={`rounded-2xl border border-linea bg-tarjeta p-4 shadow-sm shadow-marca-700/5 sm:p-6 ${className}`}>{children}</section>;
 }
 
 type Tono = "exito" | "alerta" | "peligro" | "info" | "neutro" | "marca";
@@ -17,7 +17,7 @@ const TONOS: Record<Tono, string> = {
   peligro: "bg-peligro-50 text-peligro-800 border-peligro-700",
   info: "bg-info-50 text-info-800 border-info-700",
   neutro: "bg-superficie-apagada text-texto border-borde",
-  marca: "bg-marca-50 text-marca-800 border-marca-700",
+  marca: "bg-marca-50 text-acento border-marca-700",
 };
 
 /** Etiqueta de estado. Siempre lleva TEXTO (el color solo refuerza el mensaje). */
@@ -74,7 +74,7 @@ export function Cargando({ texto = "Cargando información…" }: { texto?: strin
 
 export function Vacio({ icono = "info", titulo, children }: { icono?: NombreIcono; titulo: string; children?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-linea-fuerte bg-white px-4 py-12 text-center">
+    <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-linea-fuerte bg-tarjeta px-4 py-12 text-center">
       <Icono nombre={icono} className="size-12 text-texto-tenue" />
       <p className="text-xl font-bold">{titulo}</p>
       {children && <div className="text-lg text-texto-suave">{children}</div>}
