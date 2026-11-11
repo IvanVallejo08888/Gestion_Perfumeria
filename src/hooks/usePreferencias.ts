@@ -4,7 +4,7 @@
  *  - Tema: atributo data-tema ("claro" | "oscuro") en <html> y clave "tema" ("claro" | "oscuro" | "sistema").
  * El script temprano de app/layout.tsx aplica ambas ANTES de pintar (sin saltos ni parpadeo) y sigue
  * los cambios del sistema cuando el tema es "sistema". Estos hooks solo leen y cambian esa misma fuente,
- * por eso los botones A/A+/A++ del menú y la barra de Ajustes quedan siempre sincronizados.
+ * por eso los botones A/A+/A++ del inicio de sesión y la barra de Ajustes quedan siempre sincronizados.
  */
 "use client";
 

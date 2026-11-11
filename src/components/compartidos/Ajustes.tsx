@@ -87,7 +87,7 @@ function Apariencia() {
         <label htmlFor={idBarra} className="block text-lg font-bold text-texto">
           Tamaño de letra: <span className="text-acento">{etiquetaNivel}</span>
         </label>
-        <p className="text-base text-texto-suave">Mueve la barra o usa las flechas del teclado. También puedes usar A / A+ / A++ del menú.</p>
+        <p className="text-base text-texto-suave">Mueve la barra o usa las flechas del teclado. El cambio se aplica a toda la aplicación.</p>
         <input
           id={idBarra}
           type="range"

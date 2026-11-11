@@ -16,7 +16,6 @@ import { useAlCambiarNotificaciones } from "@/hooks/useNotificaciones";
 import { cerrarSesion, ETIQUETA_COBRO } from "@/lib/cerrar-sesion";
 import { api } from "@/lib/http";
 import { BotonInstalar } from "../pwa/BotonInstalar";
-import { ControlTexto } from "./ControlTexto";
 import { Icono, type NombreIcono } from "../ui/Icono";
 
 export interface ItemMenu {
@@ -172,13 +171,8 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
   );
 
   const pie = (
+    // El tamaño de letra se cambia en Ajustes (y en el inicio de sesión, antes de entrar)
     <div className="space-y-4 border-t border-champan/50 pt-4">
-      <div>
-        <p className="text-base text-white/80">Tamaño de letra</p>
-        <div className="mt-1">
-          <ControlTexto claro />
-        </div>
-      </div>
       <BotonInstalar claro />
       {notificaciones && <PermisoAvisos />}
       <button
