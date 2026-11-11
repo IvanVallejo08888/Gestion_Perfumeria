@@ -60,8 +60,20 @@ npm run start
 | `npm run db:migrate` | Aplicar migraciones pendientes |
 | `npm run db:generate` | Crear una migración nueva tras editar `src/db/schema.ts` |
 | `npm run db:seed` | Crear el administrador (si no existe) |
+| `npm run db:seed-perfumes -- "Local Centro"` | Cargar perfumes de ejemplo en ese local (ver abajo) |
 | `npm run db:recalcular-busqueda` | Recalcular los textos de búsqueda de productos e historial (una vez, después de migrar) |
 | `npm run db:studio` | Ver la base de datos en el navegador |
+
+### Perfumes de ejemplo (para pruebas)
+
+`npm run db:seed-perfumes -- "Nombre del local"` carga en un local que ya exista:
+
+- 8 marcas (Dior, Chanel, Carolina Herrera, Paco Rabanne, Lattafa, Armaf, Rasasi y Afnan).
+- 30 perfumes con códigos `DEMO-01` a `DEMO-30`, que cubren Hombre, Mujer, Niño y Niña, los 5 tipos y los 5 tamaños.
+- Precios según el tipo: Original > 1.1 > Versión / Imitación > Esencia.
+- 3 perfumes agotados y 4 en stock bajo, para ver las alertas y las notificaciones.
+
+Se puede ejecutar varias veces sin duplicar: las marcas que ya existen y los códigos `DEMO-xx` que ya están en el local se dejan como están (no se pisan cambios hechos a mano). Si el nombre del local no existe, muestra la lista de locales. No toca al administrador.
 
 ## 4. Cómo funciona
 
