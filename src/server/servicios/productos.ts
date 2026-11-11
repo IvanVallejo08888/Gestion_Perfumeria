@@ -4,9 +4,12 @@
 import "server-only";
 import { and, asc, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { facturaItems, productos } from "@/db/schema";
+import { facturaItems, marcas, productos } from "@/db/schema";
 import { ApiError } from "@/lib/api";
+import type { Genero, Publico, Tamano, TipoProducto } from "@/lib/clasificacion";
 import { escaparLike, normalizarTexto } from "@/lib/formato";
+import type { Producto } from "@/tipos";
+import { validarMarcaDelLocal } from "./marcas";
 
 interface DatosProducto {
   nombre: string;
@@ -14,9 +17,29 @@ interface DatosProducto {
   precio: number;
   stock: number;
   stockMinimo: number;
+  marcaId: string;
+  tipo: TipoProducto;
+  genero: Genero;
+  publico: Publico;
+  tamano: Tamano;
 }
 
-export type ProductoLista = typeof productos.$inferSelect;
+/** Columnas que se guardan igual al crear y al editar. */
+function columnas(datos: DatosProducto) {
+  return {
+    nombre: datos.nombre,
+    nombreBusqueda: normalizarTexto(datos.nombre),
+    codigo: datos.codigo || null,
+    precio: datos.precio,
+    stock: datos.stock,
+    stockMinimo: datos.stockMinimo,
+    marcaId: datos.marcaId,
+    tipo: datos.tipo,
+    genero: datos.genero,
+    publico: datos.publico,
+    tamano: datos.tamano,
+  };
+}
 
 /**
  * Búsqueda inteligente:
@@ -36,10 +59,24 @@ function condicionBusqueda(texto: string): SQL | undefined {
 /** Máximo de productos que se envían al navegador de una sola vez. */
 const LIMITE_LISTA = 500;
 
-export async function listarProductos(localId: string, texto?: string) {
+export async function listarProductos(localId: string, texto?: string): Promise<{ productos: Producto[]; hayMas: boolean }> {
   const filas = await db
-    .select()
+    .select({
+      id: productos.id,
+      nombre: productos.nombre,
+      codigo: productos.codigo,
+      precio: productos.precio,
+      stock: productos.stock,
+      stockMinimo: productos.stockMinimo,
+      marcaId: productos.marcaId,
+      marcaNombre: marcas.nombre,
+      tipo: productos.tipo,
+      genero: productos.genero,
+      publico: productos.publico,
+      tamano: productos.tamano,
+    })
     .from(productos)
+    .leftJoin(marcas, eq(marcas.id, productos.marcaId))
     .where(and(eq(productos.localId, localId), eq(productos.activo, true), texto ? condicionBusqueda(texto) : undefined))
     .orderBy(asc(productos.nombreBusqueda))
     .limit(LIMITE_LISTA + 1);
@@ -65,34 +102,18 @@ export async function buscarParaVenta(localId: string, texto: string) {
 }
 
 export async function crearProducto(localId: string, datos: DatosProducto) {
+  await validarMarcaDelLocal(localId, datos.marcaId);
   const [producto] = await db
     .insert(productos)
-    .values({
-      localId,
-      nombre: datos.nombre,
-      nombreBusqueda: normalizarTexto(datos.nombre),
-      codigo: datos.codigo || null,
-      precio: datos.precio,
-      stock: datos.stock,
-      stockMinimo: datos.stockMinimo,
-    })
+    .values({ localId, ...columnas(datos) })
     .returning();
   return producto;
 }
 
 export async function editarProducto(localId: string, id: string, datos: DatosProducto) {
-  await obtenerProducto(localId, id);
-  await db
-    .update(productos)
-    .set({
-      nombre: datos.nombre,
-      nombreBusqueda: normalizarTexto(datos.nombre),
-      codigo: datos.codigo || null,
-      precio: datos.precio,
-      stock: datos.stock,
-      stockMinimo: datos.stockMinimo,
-    })
-    .where(eq(productos.id, id));
+  const actual = await obtenerProducto(localId, id);
+  await validarMarcaDelLocal(localId, datos.marcaId, actual.marcaId);
+  await db.update(productos).set(columnas(datos)).where(eq(productos.id, id));
 }
 
 /** Suma (entrada de mercancía) o resta (salida/ajuste) unidades al stock. */

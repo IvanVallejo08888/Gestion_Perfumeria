@@ -60,7 +60,12 @@ export function Modal({ abierto, onCerrar, titulo, children, tamano = "md" }: Pr
               Cerrar
             </button>
           </header>
-          <div className="overflow-y-auto px-5 py-5">{children}</div>
+          {/*
+            "relative": los textos ocultos para lectores de pantalla (sr-only, absolutos) quedan dentro
+            de esta zona con scroll. Sin esto se ubican respecto al <dialog>, que se vuelve desplazable:
+            al elegir una opción la ventana salta y el siguiente clic cae en el fondo y la cierra.
+          */}
+          <div className="relative overflow-y-auto px-5 py-5">{children}</div>
         </div>
       )}
     </dialog>

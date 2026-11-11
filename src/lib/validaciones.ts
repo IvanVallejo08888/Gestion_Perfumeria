@@ -3,6 +3,7 @@
  * Todos los mensajes están en español y redactados de forma clara para el usuario.
  */
 import { z } from "zod";
+import { GENEROS, PUBLICOS, TAMANOS, TIPOS_PRODUCTO } from "./clasificacion";
 
 /* --------------------------- Reglas de contraseña --------------------------- */
 
@@ -125,6 +126,11 @@ export const productoSchema = z.object({
   precio: dineroSchema("El precio").refine((v) => v > 0, "El precio debe ser mayor que cero."),
   stock: z.coerce.number().int("El stock debe ser un número entero.").min(0, "El stock no puede ser negativo."),
   stockMinimo: z.coerce.number().int().min(0).default(3),
+  marcaId: z.uuid("Elige la marca."),
+  tipo: z.enum(TIPOS_PRODUCTO, { error: "Elige el tipo (Original, 1.1, Imitación, Versión o Esencia)." }),
+  genero: z.enum(GENEROS, { error: "Elige si es para hombre o para mujer." }),
+  publico: z.enum(PUBLICOS, { error: "Elige si es para adulto o infantil." }),
+  tamano: z.enum(TAMANOS, { error: "Elige el tamaño." }),
 });
 
 export const ajusteStockSchema = z.object({
@@ -206,6 +212,19 @@ export const agregarSectoresSchema = z.object({
 
 export const editarSectorSchema = z.object({
   nombre: nombreSector.optional(),
+  activo: z.boolean().optional(),
+});
+
+/* ---------------------------------- Marcas --------------------------------- */
+
+const nombreMarca = texto("El nombre de la marca", 80);
+
+export const agregarMarcasSchema = z.object({
+  nombres: z.array(nombreMarca).min(1, "Escribe al menos una marca.").max(300, "Máximo 300 marcas a la vez."),
+});
+
+export const editarMarcaSchema = z.object({
+  nombre: nombreMarca.optional(),
   activo: z.boolean().optional(),
 });
 

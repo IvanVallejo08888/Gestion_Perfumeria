@@ -11,6 +11,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { describirClasificacion } from "@/lib/clasificacion";
 import { fecha, fechaHora, numeroFactura, pesos } from "@/lib/formato";
 import { textoMedioPago } from "@/lib/pagos";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
@@ -152,6 +153,8 @@ export function VistaFactura({ factura }: { factura: FacturaDetalle }) {
                 <tr key={i.id} className="align-top">
                   <td className="py-1 pr-2">
                     {i.nombreProducto}
+                    <br />
+                    <span className="text-[13px]">{describirClasificacion(i)}</span>
                     <br />
                     <span className="text-[13px]">{pesos(i.precioUnitario)} c/u</span>
                   </td>

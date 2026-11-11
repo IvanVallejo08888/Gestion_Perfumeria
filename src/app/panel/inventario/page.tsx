@@ -1,25 +1,64 @@
 /**
  * Inventario de productos del local.
- * - Crear, editar y eliminar productos.
+ * - Crear, editar y eliminar productos, con su clasificación (marca, tipo, género, público y tamaño).
  * - "Entrada / salida" para sumar o restar unidades rápidamente.
  * - El stock se descuenta SOLO al vender (desde Facturación).
  */
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { BotonesMedioPago } from "@/components/facturacion/MedioPago";
 import { Boton } from "@/components/ui/Boton";
-import { Campo, CampoDinero } from "@/components/ui/Campo";
+import { Campo, CampoDinero, Selector } from "@/components/ui/Campo";
 import { Cargando, EncabezadoPagina, Insignia, Mensaje, Tarjeta, Vacio } from "@/components/ui/Basicos";
 import { Confirmar, Modal } from "@/components/ui/Modal";
 import { useAvisos } from "@/components/ui/Avisos";
 import { useConsulta } from "@/hooks/useConsulta";
 import { avisarCambioNotificaciones } from "@/hooks/useNotificaciones";
 import { useValorDiferido } from "@/hooks/useValorDiferido";
+import {
+  describirClasificacion,
+  ETIQUETA_GENERO,
+  ETIQUETA_PUBLICO,
+  ETIQUETA_TAMANO,
+  ETIQUETA_TIPO,
+  GENEROS,
+  PUBLICOS,
+  SIN_CATEGORIA,
+  TAMANOS,
+  TIPOS_PRODUCTO,
+} from "@/lib/clasificacion";
 import { pesos } from "@/lib/formato";
 import { api } from "@/lib/http";
-import type { Producto } from "@/tipos";
+import type { Genero, NombreActivo, Producto, Publico, Tamano, TipoProducto } from "@/tipos";
 
-const FORM_VACIO = { nombre: "", codigo: "", precio: 0, stock: 0, stockMinimo: 3 };
+interface FormProducto {
+  nombre: string;
+  codigo: string;
+  precio: number;
+  stock: number;
+  stockMinimo: number;
+  marcaId: string;
+  tipo: TipoProducto | null;
+  genero: Genero | null;
+  publico: Publico | null;
+  tamano: Tamano | null;
+}
+
+const FORM_VACIO: FormProducto = {
+  nombre: "",
+  codigo: "",
+  precio: 0,
+  stock: 0,
+  stockMinimo: 3,
+  marcaId: "",
+  tipo: null,
+  genero: null,
+  publico: null,
+  tamano: null,
+};
+
+const opciones = <T extends string>(lista: readonly T[], etiquetas: Record<T, string>) => lista.map((valor) => ({ valor, texto: etiquetas[valor] }));
 
 export default function PaginaInventario() {
   const avisos = useAvisos();
@@ -90,6 +129,13 @@ export default function PaginaInventario() {
                   <div className="flex-1">
                     <h2 className="text-xl font-bold">{p.nombre}</h2>
                     {p.codigo && <p className="text-base text-texto-suave">Código: {p.codigo}</p>}
+                    {describirClasificacion(p) === SIN_CATEGORIA ? (
+                      <p className="mt-1">
+                        <Insignia tono="alerta">{SIN_CATEGORIA}</Insignia>
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-lg break-words">{describirClasificacion(p)}</p>
+                    )}
                     <p className="mt-2 text-2xl font-bold text-marca-800">{pesos(p.precio)}</p>
                     <div className="mt-2">
                       <Insignia tono={estado.tono}>{estado.texto}</Insignia>
@@ -158,18 +204,42 @@ export default function PaginaInventario() {
 /* ---------------------------- Crear / editar ---------------------------- */
 
 function ModalProducto({ producto, onCerrar, onListo }: { producto: Producto | null; onCerrar: () => void; onListo: (m: string) => void }) {
-  const [form, setForm] = useState(
+  const [form, setForm] = useState<FormProducto>(
     producto
-      ? { nombre: producto.nombre, codigo: producto.codigo ?? "", precio: producto.precio, stock: producto.stock, stockMinimo: producto.stockMinimo }
+      ? {
+          nombre: producto.nombre,
+          codigo: producto.codigo ?? "",
+          precio: producto.precio,
+          stock: producto.stock,
+          stockMinimo: producto.stockMinimo,
+          marcaId: producto.marcaId ?? "",
+          tipo: producto.tipo,
+          genero: producto.genero,
+          publico: producto.publico,
+          tamano: producto.tamano,
+        }
       : FORM_VACIO,
   );
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
 
+  const consultaMarcas = useConsulta<{ marcas: NombreActivo[] }>("/api/marcas");
+  const marcas = consultaMarcas.datos?.marcas ?? null;
+  // Si el producto tiene una marca que el administrador desactivó, se muestra igual para poder conservarla
+  const marcaDesactivada =
+    producto?.marcaId && marcas && !marcas.some((m) => m.id === producto.marcaId)
+      ? { id: producto.marcaId, nombre: `${producto.marcaNombre ?? "Marca"} (desactivada)` }
+      : null;
+
   async function guardar(e: FormEvent) {
     e.preventDefault();
     if (!form.nombre.trim()) return setError("Escribe el nombre del producto.");
     if (form.precio <= 0) return setError("Escribe el precio de venta.");
+    if (!form.marcaId) return setError("Elige la marca.");
+    if (!form.tipo) return setError("Elige el tipo (Original, 1.1, Imitación, Versión o Esencia).");
+    if (!form.genero) return setError("Elige si es para hombre o para mujer.");
+    if (!form.publico) return setError("Elige si es para adulto o infantil.");
+    if (!form.tamano) return setError("Elige el tamaño.");
     setCargando(true);
     setError("");
     try {
@@ -189,6 +259,47 @@ function ModalProducto({ producto, onCerrar, onListo }: { producto: Producto | n
         <Campo etiqueta="Nombre del producto" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} obligatorio autoFocus />
         <Campo etiqueta="Código (opcional)" value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} ayuda="Por ejemplo, el código de barras." />
         <CampoDinero etiqueta="Precio de venta" valor={form.precio} onCambio={(v) => setForm({ ...form, precio: v })} obligatorio />
+
+        {marcas && marcas.length === 0 && !marcaDesactivada ? (
+          <Mensaje tono="alerta" titulo="Tu local aún no tiene marcas">
+            Pide al administrador que agregue las marcas en Locales → Editar.
+          </Mensaje>
+        ) : (
+          <Selector
+            etiqueta="Marca"
+            value={form.marcaId}
+            onChange={(e) => setForm({ ...form, marcaId: e.target.value })}
+            disabled={!marcas}
+            obligatorio
+          >
+            <option value="">{marcas ? "Elige la marca" : "Cargando marcas…"}</option>
+            {marcaDesactivada && <option value={marcaDesactivada.id}>{marcaDesactivada.nombre}</option>}
+            {marcas?.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.nombre}
+              </option>
+            ))}
+          </Selector>
+        )}
+        {consultaMarcas.error && <Mensaje tono="peligro">{consultaMarcas.error}</Mensaje>}
+
+        <BotonesMedioPago titulo="Tipo" opciones={opciones(TIPOS_PRODUCTO, ETIQUETA_TIPO)} valor={form.tipo} onCambio={(tipo) => setForm({ ...form, tipo })} />
+        <BotonesMedioPago titulo="Género" opciones={opciones(GENEROS, ETIQUETA_GENERO)} valor={form.genero} onCambio={(genero) => setForm({ ...form, genero })} />
+        <BotonesMedioPago titulo="Público" opciones={opciones(PUBLICOS, ETIQUETA_PUBLICO)} valor={form.publico} onCambio={(publico) => setForm({ ...form, publico })} />
+        <Selector
+          etiqueta="Tamaño"
+          value={form.tamano ?? ""}
+          onChange={(e) => setForm({ ...form, tamano: (e.target.value || null) as Tamano | null })}
+          obligatorio
+        >
+          <option value="">Elige el tamaño</option>
+          {TAMANOS.map((t) => (
+            <option key={t} value={t}>
+              {ETIQUETA_TAMANO[t]}
+            </option>
+          ))}
+        </Selector>
+
         <div className="grid gap-5 sm:grid-cols-2">
           <Campo
             etiqueta="Unidades en stock"

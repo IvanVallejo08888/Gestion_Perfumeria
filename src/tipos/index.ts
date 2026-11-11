@@ -2,6 +2,9 @@
  * Tipos de datos que viajan entre la API y las pantallas.
  * (Las fechas llegan al navegador como texto ISO.)
  */
+import type { Clasificacion, Genero, Publico, Tamano, TipoProducto } from "@/lib/clasificacion";
+
+export type { Clasificacion, Genero, Publico, Tamano, TipoProducto };
 
 export type Rol = "ADMIN" | "VENDEDOR";
 export type EstadoUsuario = "PENDIENTE" | "ACTIVO" | "PAUSADO";
@@ -26,8 +29,15 @@ export interface ProductoVenta {
   stock: number;
 }
 
+/** Producto del inventario. La clasificación es null en productos creados antes de clasificarlos. */
 export interface Producto extends ProductoVenta {
   stockMinimo: number;
+  marcaId: string | null;
+  marcaNombre: string | null;
+  tipo: TipoProducto | null;
+  genero: Genero | null;
+  publico: Publico | null;
+  tamano: Tamano | null;
 }
 
 export interface CuotaDetalle {
@@ -77,12 +87,12 @@ export interface FacturaDetalle extends FacturaResumen {
   descuento: number;
   notas: string | null;
   local: { nombre: string; direccion: string | null; telefono: string | null };
-  items: { id: string; nombreProducto: string; precioUnitario: number; cantidad: number; subtotal: number }[];
+  items: ({ id: string; nombreProducto: string; precioUnitario: number; cantidad: number; subtotal: number } & Clasificacion)[];
   cuotas: CuotaDetalle[];
   abonos: AbonoDetalle[];
 }
 
-/** Sector o categoría de gasto: un nombre que se puede desactivar. */
+/** Sector, marca o categoría de gasto: un nombre que se puede desactivar. */
 export interface NombreActivo {
   id: string;
   nombre: string;
