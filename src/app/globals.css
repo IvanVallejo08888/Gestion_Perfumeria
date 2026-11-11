@@ -16,22 +16,23 @@
   --font-titulo: "Cinzel", "Times New Roman", Georgia, serif;
 
   /*
-   * Paleta de la marca (perfumería de lujo):
-   *   Pearl #E8E2DA · Champagne #C6AE93 · Cocoa #5D3B2D · Black Cherry #530309 · Dark Chocolate #1F0C05
+   * Paleta de la marca (morada):
+   *   Oscuros #4b0081 #56008c #620096 #6d00a1 #7900ac · Medios #9032bb #af69cd #cb9bde · Claros #e6ccef #ffffff
+   * Para probar otra paleta basta con cambiar los valores de este bloque y el de neutros.
    * Los nombres "marca-*" se conservan para no tocar cada pantalla:
-   *   700 = Dark Chocolate → botones principales y selección (18.9:1 sobre blanco)
-   *   800 = Black Cherry  → menú lateral, textos de marca, hover (15.2:1)
-   *   600 = Cocoa         → contorno de enfoque (9.9:1)
+   *   700 → botones principales y selección (texto blanco 8.7:1)
+   *   800 → menú lateral, header, textos de marca y hover (texto blanco 13.0:1)
+   *   600 → contorno de enfoque (6.3:1 sobre blanco)
    */
-  --color-marca-50: #faf6f1;
-  --color-marca-100: #f3ece4;
-  --color-marca-200: #e8e2da; /* Pearl */
-  --color-marca-600: #5d3b2d; /* Cocoa */
-  --color-marca-700: #1f0c05; /* Dark Chocolate */
-  --color-marca-800: #530309; /* Black Cherry */
-  --color-marca-900: #140703;
-  --color-champan: #c6ae93; /* Champagne: detalles decorativos y textos sobre el menú vino (7.1:1) */
-  --color-perla: #e8e2da;
+  --color-marca-50: #f6eefa; /* tinte derivado: hover suave y fondo de opción marcada */
+  --color-marca-100: #e6ccef;
+  --color-marca-200: #cb9bde; /* anillo de foco en campos */
+  --color-marca-600: #9032bb;
+  --color-marca-700: #7900ac;
+  --color-marca-800: #4b0081;
+  --color-marca-900: #3a0064; /* derivado: botón presionado, más oscuro que el hover */
+  --color-champan: #cb9bde; /* detalles decorativos y textos sobre el menú morado (5.7:1) */
+  --color-perla: #e6ccef; /* elemento activo del menú (texto #4b0081: 8.8:1) */
 
   /*
    * Esquinas suaves al estilo Apple: el radio crece con el tamaño del elemento
@@ -57,16 +58,16 @@
   --color-info-800: #1e40af;
 
   /* Neutros: usar SIEMPRE estos nombres, nunca "gray-*" directamente */
-  /* Neutros cálidos (tono café). Contrastes medidos sobre blanco. */
-  --color-texto: #231a16; /* texto principal (17.1:1) */
-  --color-texto-suave: #4a3a32; /* texto secundario (10.8:1) */
-  --color-texto-tenue: #5d4a40; /* textos de ayuda, íconos, placeholder (8.3:1) */
-  --color-borde: #8c7a6e; /* borde de campos y controles: 4.1:1, cumple WCAG 1.4.11 (≥ 3:1) */
-  --color-linea: #e8e2da; /* bordes decorativos de tarjetas y separadores (Pearl) */
-  --color-linea-fuerte: #d6cbbd; /* separadores más marcados, bordes punteados */
-  --color-superficie: #fbf9f6; /* bloques internos de una tarjeta */
-  --color-superficie-apagada: #f3eee8; /* avisos neutros y elementos deshabilitados */
-  --color-fondo: #f7f3ee;
+  /* Neutros morados. Contrastes medidos sobre blanco / sobre el fondo lila #efdff5. */
+  --color-texto: #4b0081; /* texto principal (13.0:1 / 10.2:1) */
+  --color-texto-suave: #620096; /* texto secundario (10.7:1 / 8.4:1) */
+  --color-texto-tenue: #9032bb; /* textos de ayuda, íconos, placeholder (6.3:1 / 4.9:1) */
+  --color-borde: #9032bb; /* borde de campos y controles (6.3:1 / 4.9:1), cumple WCAG 1.4.11 (≥ 3:1) */
+  --color-linea: #e6ccef; /* bordes decorativos de tarjetas y separadores */
+  --color-linea-fuerte: #cb9bde; /* separadores más marcados, bordes punteados */
+  --color-superficie: #fcf9fd; /* bloques internos de una tarjeta (tinte derivado) */
+  --color-superficie-apagada: #f1e6f6; /* avisos neutros y elementos deshabilitados (tinte derivado) */
+  --color-fondo: #efdff5; /* fondo de página: lila intermedio entre #e6ccef y blanco */
 }
 
 /* Títulos con la letra de la marca: mayúsculas romanas con aire, como en la tienda */

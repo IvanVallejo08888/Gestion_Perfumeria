@@ -32,17 +32,17 @@ import { pesosCorto } from "@/lib/dashboard";
 import { anioMesColombia, pesos } from "@/lib/formato";
 import type { MesDashboard } from "@/tipos";
 
-/** Colores de las gráficas: Black Cherry (marca-800) del tema + dos tonos que se distinguen con daltonismo. */
+/** Colores de las gráficas: morado (marca-700) del tema + dos tonos que se distinguen con daltonismo. */
 export const COLOR = {
-  principal: "#530309",
+  principal: "#7900ac",
   /** "Otras" y "Sin categoría": no son una categoría real, van en gris. */
-  tenue: "#8c7a6e",
-  contado: "#530309",
+  tenue: "#9a8aa6",
+  contado: "#7900ac",
   credito: "#0891b2",
   recaudo: "#c2410c",
-  tinta: "#231a16",
-  tintaSuave: "#4a3a32",
-  rejilla: "#e8e2da",
+  tinta: "#4b0081",
+  tintaSuave: "#620096",
+  rejilla: "#e6ccef",
 } as const;
 
 /* ------------------------------ Tarjeta con título ------------------------------ */
@@ -258,7 +258,7 @@ export function GraficaMensual({ meses, anio }: { meses: MesDashboard[]; anio: n
         <ResponsiveContainer width="100%" height={320}>
           <ComposedChart data={datos} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} accessibilityLayer={false}>
             <CartesianGrid vertical={false} stroke={COLOR.rejilla} />
-            <XAxis dataKey="corto" tickLine={false} axisLine={{ stroke: "#d1d5db" }} tick={ejes} />
+            <XAxis dataKey="corto" tickLine={false} axisLine={{ stroke: "#cb9bde" }} tick={ejes} />
             <YAxis tickFormatter={pesosCorto} width={74} tickLine={false} axisLine={false} tick={ejes} />
             <Tooltip
               cursor={{ fill: "rgba(17, 24, 39, 0.05)" }}
