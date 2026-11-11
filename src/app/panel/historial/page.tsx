@@ -114,7 +114,7 @@ export default function PaginaHistorial() {
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center justify-between gap-4 sm:flex-col sm:items-end">
+                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:flex-col sm:flex-nowrap sm:items-end">
                     <p className="text-2xl font-bold text-marca-800">{pesos(f.total)}</p>
                     <Boton variante="secundario" icono="factura" onClick={() => setDetalleId(f.id)}>
                       Ver detalles

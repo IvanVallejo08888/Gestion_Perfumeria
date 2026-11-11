@@ -3,6 +3,13 @@
  * Todos los mensajes están en español y redactados de forma clara para el usuario.
  */
 import { z } from "zod";
+
+/*
+ * Mensajes por defecto de Zod en español (por ejemplo «Opción inválida…» en vez de «Invalid option…»).
+ * Aplica a todos los esquemas: los que traen su propio mensaje lo conservan. Este archivo lo cargan
+ * el servidor (vía src/lib/api.ts) y los formularios del navegador, así que se configura en ambos.
+ */
+z.config(z.locales.es());
 import { GENEROS, PUBLICOS, TAMANOS, TIPOS_PRODUCTO } from "./clasificacion";
 import { ESTADOS_STOCK } from "./inventario";
 

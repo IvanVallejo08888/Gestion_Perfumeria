@@ -223,18 +223,18 @@ export function BarrasHorizontales({ filas, titulo, columna }: { filas: FilaBarr
 /* ------------------------ Contado vs crédito mes a mes + recaudo ------------------------ */
 
 function Leyenda() {
-  const item = "inline-flex items-center gap-2 text-[16px] text-texto";
+  const claseItem = "inline-flex items-center gap-2 text-[16px] text-texto";
   return (
     <ul className="mb-3 flex flex-wrap gap-x-5 gap-y-1">
-      <li className={item}>
+      <li className={claseItem}>
         <span className="size-4 rounded-sm" style={{ background: COLOR.contado }} />
         Contado
       </li>
-      <li className={item}>
+      <li className={claseItem}>
         <span className="size-4 rounded-sm" style={{ background: COLOR.credito }} />
         Crédito
       </li>
-      <li className={item}>
+      <li className={claseItem}>
         <span className="relative h-0.5 w-6" style={{ background: COLOR.recaudo }}>
           <span className="absolute top-1/2 left-1/2 size-2.5 -translate-1/2 rounded-full" style={{ background: COLOR.recaudo }} />
         </span>
