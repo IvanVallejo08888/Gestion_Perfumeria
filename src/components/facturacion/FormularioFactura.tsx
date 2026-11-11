@@ -7,10 +7,12 @@
  *   · Secciones desplegables: descuento, costo adicional y notas.
  *   3. Medio de pago (factura normal) o cuotas (crédito).
  *   → "Registrar factura": se guarda, se descuenta el inventario y se abre la factura lista para compartir.
+ *
+ * Si llega "productoInicialId" (botón «Vender» del inventario), ese perfume se carga solo en la factura.
  */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useConsulta } from "@/hooks/useConsulta";
 import { avisarCambioNotificaciones } from "@/hooks/useNotificaciones";
 import { pesos } from "@/lib/formato";
@@ -36,7 +38,15 @@ interface Linea {
   cantidad: number;
 }
 
-export function FormularioFactura({ tipo }: { tipo: TipoFactura }) {
+interface Props {
+  tipo: TipoFactura;
+  /** Perfume que se carga al abrir (viene de «Vender» en el inventario). */
+  productoInicialId?: string | null;
+  /** Se llama después de registrar la factura (la página quita el perfume de la URL). */
+  onRegistrada?: () => void;
+}
+
+export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Props) {
   const avisos = useAvisos();
   const esCredito = tipo === "CREDITO";
 
@@ -65,6 +75,23 @@ export function FormularioFactura({ tipo }: { tipo: TipoFactura }) {
   useEffect(() => {
     if (esCredito) setCuotas(configInicial());
   }, [esCredito]);
+
+  /* --------------- Perfume que llega desde «Vender» del inventario --------------- */
+  const cargadoRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!productoInicialId || cargadoRef.current === productoInicialId) return;
+    cargadoRef.current = productoInicialId;
+    api<{ producto: ProductoVenta }>(`/api/productos/${productoInicialId}`)
+      .then(({ producto }) => {
+        if (producto.stock <= 0) {
+          avisos.error(`«${producto.nombre}» está agotado. No se puede vender.`);
+          return;
+        }
+        setLineas((actual) => (actual.some((l) => l.producto.id === producto.id) ? actual : [...actual, { producto, cantidad: 1 }]));
+        avisos.info(`Agregado desde el inventario: ${producto.nombre}`);
+      })
+      .catch((e: Error) => avisos.error(e.message));
+  }, [productoInicialId, avisos]);
 
   /* ------------------------------- Totales ------------------------------- */
   const subtotal = useMemo(() => lineas.reduce((acc, l) => acc + l.producto.precio * l.cantidad, 0), [lineas]);
@@ -198,6 +225,7 @@ export function FormularioFactura({ tipo }: { tipo: TipoFactura }) {
       avisos.exito(esCredito ? "Crédito registrado correctamente." : "Factura registrada correctamente.");
       limpiar();
       setVersionInventario((v) => v + 1);
+      onRegistrada?.();
       // Actualiza el contador de notificaciones (nuevos cobros o stock bajo)
       avisarCambioNotificaciones();
     } catch (err) {

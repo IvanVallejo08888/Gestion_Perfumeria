@@ -1,9 +1,9 @@
 /**
- * Administra una lista de nombres de un local: sirve para los sectores de la ciudad
- * y para las categorías de gastos, que funcionan igual.
+ * Administra una lista de nombres de un local: sirve para los sectores de la ciudad,
+ * las marcas y las categorías de gastos, que funcionan igual.
  *  - Agregar uno, o pegar varios a la vez (uno por línea).
  *  - Renombrar.
- *  - Quitar: los sectores se eliminan (o se desactivan si ya se usaron); las categorías solo se desactivan.
+ *  - Quitar: sectores y marcas se eliminan (o se desactivan si ya se usaron); las categorías solo se desactivan.
  *  - Reactivar lo que esté desactivado.
  */
 "use client";
@@ -22,7 +22,7 @@ import type { NombreActivo } from "@/tipos";
 interface Props {
   /** Dirección que lista (GET) y agrega (POST). Debe responder { [clave]: NombreActivo[] }. */
   urlLista: string;
-  clave: "sectores" | "categorias";
+  clave: "sectores" | "marcas" | "categorias";
   /** Dirección de un elemento, para editar (PUT) y eliminar (DELETE). */
   urlElemento: (id: string) => string;
   /** Textos: "sector" / "sectores", "categoría" / "categorías". */
@@ -32,11 +32,22 @@ interface Props {
   permiteEliminar: boolean;
   /** Mensaje de confirmación antes de quitar un elemento. */
   avisoQuitar: string;
+  /** Si al eliminar quedó solo desactivado, por qué: "ya se usó en facturas". */
+  motivoDesactivado?: string;
 }
 
 type Resultado = { agregados: number; reactivados: number; repetidos: number };
 
-export function GestorNombres({ urlLista, clave, urlElemento, singular, plural, permiteEliminar, avisoQuitar }: Props) {
+export function GestorNombres({
+  urlLista,
+  clave,
+  urlElemento,
+  singular,
+  plural,
+  permiteEliminar,
+  avisoQuitar,
+  motivoDesactivado = "ya se usó",
+}: Props) {
   const avisos = useAvisos();
   const consulta = useConsulta<Record<string, NombreActivo[]>>(urlLista);
   const lista = consulta.datos?.[clave] ?? null;
@@ -120,7 +131,7 @@ export function GestorNombres({ urlLista, clave, urlElemento, singular, plural, 
         avisos.exito(
           resultado === "eliminado"
             ? `«${quitando.nombre}» se eliminó.`
-            : `«${quitando.nombre}» ya se usó en facturas: quedó desactivado para no afectar el historial.`,
+            : `«${quitando.nombre}» ${motivoDesactivado}: quedó desactivado para no afectar el historial.`,
         );
       } else {
         await api(urlElemento(quitando.id), { method: "PUT", json: { activo: false } });

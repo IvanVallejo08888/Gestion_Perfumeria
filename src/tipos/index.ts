@@ -2,6 +2,15 @@
  * Tipos de datos que viajan entre la API y las pantallas.
  * (Las fechas llegan al navegador como texto ISO.)
  */
+import type { Clasificacion, Genero, Publico, Tamano, TipoProducto } from "@/lib/clasificacion";
+
+import type { EstadoStock, FiltrosInventario, TipoMovimiento } from "@/lib/inventario";
+
+export type { Clasificacion, Genero, Publico, Tamano, TipoProducto };
+import type { CorteVenta } from "@/lib/dashboard";
+
+export type { EstadoStock, FiltrosInventario, TipoMovimiento };
+export type { CorteVenta };
 
 export type Rol = "ADMIN" | "VENDEDOR";
 export type EstadoUsuario = "PENDIENTE" | "ACTIVO" | "PAUSADO";
@@ -26,8 +35,28 @@ export interface ProductoVenta {
   stock: number;
 }
 
+/** Producto del inventario. La clasificación es null en productos creados antes de clasificarlos. */
 export interface Producto extends ProductoVenta {
   stockMinimo: number;
+  marcaId: string | null;
+  marcaNombre: string | null;
+  tipo: TipoProducto | null;
+  genero: Genero | null;
+  publico: Publico | null;
+  tamano: Tamano | null;
+}
+
+/** Un cambio de stock (detalle del perfume). "cantidad" lleva signo: +5 entra, -2 sale. */
+export interface MovimientoInventario {
+  id: string;
+  tipo: TipoMovimiento;
+  cantidad: number;
+  stockResultante: number;
+  usuarioNombre: string;
+  /** Número de la factura cuando el movimiento es una VENTA. */
+  facturaNumero: number | null;
+  nota: string | null;
+  creadoEn: string;
 }
 
 export interface CuotaDetalle {
@@ -77,12 +106,12 @@ export interface FacturaDetalle extends FacturaResumen {
   descuento: number;
   notas: string | null;
   local: { nombre: string; direccion: string | null; telefono: string | null };
-  items: { id: string; nombreProducto: string; precioUnitario: number; cantidad: number; subtotal: number }[];
+  items: ({ id: string; nombreProducto: string; precioUnitario: number; cantidad: number; subtotal: number } & Clasificacion)[];
   cuotas: CuotaDetalle[];
   abonos: AbonoDetalle[];
 }
 
-/** Sector o categoría de gasto: un nombre que se puede desactivar. */
+/** Sector, marca o categoría de gasto: un nombre que se puede desactivar. */
 export interface NombreActivo {
   id: string;
   nombre: string;
@@ -144,4 +173,67 @@ export interface Estadisticas {
   totales: Omit<MesEstadistica, "mes" | "nombre">;
   topProductos: { nombre: string; cantidad: number; total: number }[];
   creditosPendientes: { cantidad: number; saldo: number };
+}
+
+/* -------------------------------- Dashboard -------------------------------- */
+
+export interface ProductoTop {
+  nombre: string;
+  unidades: number;
+  valor: number;
+}
+
+/** Un mes de la gráfica "contado vs crédito" (recaudo = contado + abonos recibidos). */
+export interface MesDashboard {
+  mes: number;
+  nombre: string;
+  contado: number;
+  credito: number;
+  recaudo: number;
+}
+
+/** Perfume agotado o con stock bajo (lista del dashboard). */
+export interface ProductoCritico {
+  id: string;
+  nombre: string;
+  marcaNombre: string | null;
+  stock: number;
+  stockMinimo: number;
+  /** Solo en el consolidado del administrador. */
+  localNombre: string | null;
+}
+
+/**
+ * Dashboard de reportes. Ventas → periodo elegido (año o mes), tomadas de la copia guardada
+ * en cada factura. Inventario, cartera y agotados → al día de hoy.
+ */
+export interface Dashboard {
+  /** localId null = consolidado de todos los locales (solo administrador). */
+  alcance: { localId: string | null; localNombre: string };
+  anio: number;
+  mes: number | null;
+  kpis: {
+    totalVendido: number;
+    recaudado: number;
+    unidadesVendidas: number;
+    valorInventario: number;
+    carteraPendiente: number;
+    creditosPendientes: number;
+    perfumesAgotados: number;
+  };
+  topPorUnidades: ProductoTop[];
+  topPorValor: ProductoTop[];
+  porPublico: CorteVenta[];
+  porTipo: CorteVenta[];
+  /** Top 8 + "Otras". */
+  porMarca: CorteVenta[];
+  porTamano: CorteVenta[];
+  /** Siempre los 12 meses del año elegido. */
+  meses: MesDashboard[];
+  inventario: {
+    porPublico: { clave: string; etiqueta: string; unidades: number }[];
+    criticos: ProductoCritico[];
+    /** Total de perfumes agotados o en stock bajo (la lista muestra solo los más urgentes). */
+    totalCriticos: number;
+  };
 }

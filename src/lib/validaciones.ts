@@ -3,6 +3,8 @@
  * Todos los mensajes están en español y redactados de forma clara para el usuario.
  */
 import { z } from "zod";
+import { GENEROS, PUBLICOS, TAMANOS, TIPOS_PRODUCTO } from "./clasificacion";
+import { ESTADOS_STOCK } from "./inventario";
 
 /* --------------------------- Reglas de contraseña --------------------------- */
 
@@ -125,13 +127,43 @@ export const productoSchema = z.object({
   precio: dineroSchema("El precio").refine((v) => v > 0, "El precio debe ser mayor que cero."),
   stock: z.coerce.number().int("El stock debe ser un número entero.").min(0, "El stock no puede ser negativo."),
   stockMinimo: z.coerce.number().int().min(0).default(3),
+  marcaId: z.uuid("Elige la marca."),
+  tipo: z.enum(TIPOS_PRODUCTO, { error: "Elige el tipo (Original, 1.1, Imitación, Versión o Esencia)." }),
+  genero: z.enum(GENEROS, { error: "Elige si es para hombre o para mujer." }),
+  publico: z.enum(PUBLICOS, { error: "Elige si es para adulto o infantil." }),
+  tamano: z.enum(TAMANOS, { error: "Elige el tamaño." }),
 });
 
+const notaMovimiento = z.string().trim().max(200, "La nota es demasiado larga (máximo 200 caracteres).");
+
+/** Ajuste manual (corrección, daño, conteo): suma o resta y SIEMPRE lleva el motivo. */
 export const ajusteStockSchema = z.object({
   cantidad: z.coerce
     .number()
     .int("La cantidad debe ser un número entero.")
     .refine((v) => v !== 0, "La cantidad no puede ser cero."),
+  nota: notaMovimiento.min(3, "Escribe el motivo del ajuste."),
+});
+
+/** Llegó mercancía: solo suma unidades. La nota es opcional. */
+export const ingresoStockSchema = z.object({
+  cantidad: z.coerce
+    .number({ error: "Escribe la cantidad de unidades." })
+    .int("La cantidad debe ser un número entero.")
+    .min(1, "Escribe una cantidad mayor que cero.")
+    .max(100_000, "La cantidad es demasiado alta."),
+  nota: notaMovimiento.optional().default(""),
+});
+
+/** Filtros del inventario (query params). Se valida en el servidor; el navegador ignora valores raros. */
+export const filtroProductosSchema = z.object({
+  q: z.string().trim().max(80).optional(),
+  genero: z.enum(GENEROS).optional(),
+  publico: z.enum(PUBLICOS).optional(),
+  marcaId: z.uuid("Marca no válida.").optional(),
+  tipo: z.enum(TIPOS_PRODUCTO).optional(),
+  tamano: z.enum(TAMANOS).optional(),
+  stock: z.enum(ESTADOS_STOCK).optional(),
 });
 
 /* ---------------------------------- Clientes -------------------------------- */
@@ -209,6 +241,24 @@ export const editarSectorSchema = z.object({
   activo: z.boolean().optional(),
 });
 
+/* ---------------------------------- Marcas --------------------------------- */
+
+const nombreMarca = texto("El nombre de la marca", 80);
+
+export const agregarMarcasSchema = z.object({
+  nombres: z.array(nombreMarca).min(1, "Escribe al menos una marca.").max(300, "Máximo 300 marcas a la vez."),
+});
+
+/** El vendedor agrega UNA marca desde el formulario de producto. */
+export const nuevaMarcaSchema = z.object({
+  nombre: nombreMarca,
+});
+
+export const editarMarcaSchema = z.object({
+  nombre: nombreMarca.optional(),
+  activo: z.boolean().optional(),
+});
+
 /* ---------------------------------- Gastos --------------------------------- */
 
 const nombreCategoria = texto("El nombre de la categoría", 60);
@@ -239,6 +289,13 @@ export const filtroGastosSchema = z.object({
 
 /** Identificador recibido en la dirección de un endpoint. */
 export const idSchema = z.uuid("El registro no existe.");
+
+/** Dashboard de reportes: año, mes opcional y (solo administrador) local; sin local = consolidado. */
+export const filtroDashboardSchema = z.object({
+  anio: z.coerce.number().int().min(2000).max(2100),
+  mes: z.coerce.number().int().min(1).max(12).optional(),
+  localId: z.uuid("Selecciona un local válido.").optional(),
+});
 
 /** Convierte los parámetros de la dirección en objeto y descarta los vacíos. */
 export function parametros(url: URLSearchParams): Record<string, string> {

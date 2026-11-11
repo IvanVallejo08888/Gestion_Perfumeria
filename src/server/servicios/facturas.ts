@@ -6,16 +6,17 @@
  *   2. Descuenta el stock de cada producto (si no alcanza, se cancela toda la venta).
  *   3. Asigna el número consecutivo del local.
  *   4. Calcula el medio de pago (contado): efectivo + transferencia = total.
- *   5. Guarda la factura, sus productos y (si es crédito) sus cuotas.
+ *   5. Guarda la factura, sus productos, un movimiento VENTA por producto y (si es crédito) sus cuotas.
  * Si algo falla, no se guarda nada y el inventario queda intacto.
  */
 import "server-only";
-import { and, asc, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { abonos, clientes, cuotas, facturaItems, facturas, locales, productos, sectores } from "@/db/schema";
+import { abonos, clientes, cuotas, facturaItems, facturas, locales, marcas, productos, sectores } from "@/db/schema";
 import { ApiError, type VendedorSesion } from "@/lib/api";
 import { escaparLike, normalizarTexto } from "@/lib/formato";
 import type { ClienteDatos, FacturaDetalle, FacturaResumen, MedioPago } from "@/tipos";
+import { registrarMovimientos } from "./movimientos";
 import { resolverPago } from "./pagos";
 
 export interface DatosNuevaFactura {
@@ -62,7 +63,15 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
       .returning();
 
     /* 2. Descontar inventario (solo si hay stock suficiente) */
-    const lineas: { productoId: string; nombre: string; precio: number; cantidad: number }[] = [];
+    const lineas: {
+      productoId: string;
+      nombre: string;
+      precio: number;
+      cantidad: number;
+      /** Stock que quedó después de descontar (para el movimiento VENTA). */
+      stockResultante: number;
+      clasificacion: Pick<typeof productos.$inferSelect, "marcaId" | "tipo" | "genero" | "publico" | "tamano">;
+    }[] = [];
     for (const [productoId, cantidad] of cantidades) {
       const [actualizado] = await tx
         .update(productos)
@@ -75,7 +84,16 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
             sql`${productos.stock} >= ${cantidad}`,
           ),
         )
-        .returning({ nombre: productos.nombre, precio: productos.precio });
+        .returning({
+          nombre: productos.nombre,
+          precio: productos.precio,
+          stock: productos.stock,
+          marcaId: productos.marcaId,
+          tipo: productos.tipo,
+          genero: productos.genero,
+          publico: productos.publico,
+          tamano: productos.tamano,
+        });
 
       if (!actualizado) {
         const producto = await tx.query.productos.findFirst({
@@ -89,7 +107,8 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
             : `Stock insuficiente de "${producto.nombre}": solo quedan ${producto.stock} unidades.`,
         );
       }
-      lineas.push({ productoId, nombre: actualizado.nombre, precio: actualizado.precio, cantidad });
+      const { nombre, precio, stock, ...clasificacion } = actualizado;
+      lineas.push({ productoId, nombre, precio, cantidad, stockResultante: stock, clasificacion });
     }
 
     /* 3. Totales (el precio SIEMPRE se toma del inventario, nunca del navegador) */
@@ -141,14 +160,42 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
       })
       .returning({ id: facturas.id });
 
+    /* Copia de la clasificación de cada producto (con el NOMBRE de la marca), para que el historial no cambie */
+    const idsMarca = [...new Set(lineas.map((l) => l.clasificacion.marcaId).filter((id): id is string => id !== null))];
+    const nombresMarca = new Map(
+      idsMarca.length
+        ? (await tx.select({ id: marcas.id, nombre: marcas.nombre }).from(marcas).where(inArray(marcas.id, idsMarca))).map((m) => [m.id, m.nombre])
+        : [],
+    );
+
     await tx.insert(facturaItems).values(
-      lineas.map((l) => ({
+      lineas.map(({ clasificacion: c, stockResultante: _stock, ...l }) => ({
         facturaId: factura.id,
         productoId: l.productoId,
         nombreProducto: l.nombre,
         precioUnitario: l.precio,
         cantidad: l.cantidad,
         subtotal: l.precio * l.cantidad,
+        marcaNombre: c.marcaId ? (nombresMarca.get(c.marcaId) ?? null) : null,
+        tipo: c.tipo,
+        genero: c.genero,
+        publico: c.publico,
+        tamano: c.tamano,
+      })),
+    );
+
+    /* Trazabilidad: un movimiento VENTA por producto, en esta misma transacción */
+    await registrarMovimientos(
+      tx,
+      lineas.map((l) => ({
+        localId,
+        productoId: l.productoId,
+        tipo: "VENTA" as const,
+        cantidad: -l.cantidad,
+        stockResultante: l.stockResultante,
+        autor: vendedor,
+        facturaId: factura.id,
+        nota: `Factura #${local.numero}`,
       })),
     );
 
@@ -252,6 +299,11 @@ export async function obtenerFactura(localId: string, id: string): Promise<Factu
       precioUnitario: i.precioUnitario,
       cantidad: i.cantidad,
       subtotal: i.subtotal,
+      marcaNombre: i.marcaNombre,
+      tipo: i.tipo,
+      genero: i.genero,
+      publico: i.publico,
+      tamano: i.tamano,
     })),
     cuotas: f.cuotas.map((c) => ({
       id: c.id,

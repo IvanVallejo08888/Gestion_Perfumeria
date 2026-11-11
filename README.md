@@ -3,7 +3,7 @@
 Sistema web para gestionar locales: **facturación (contado y crédito), medios de pago, créditos y abonos, gastos, inventario, notificaciones de cobro y reportes en Excel**.
 Funciona en **celular, tablet y computador**, con letra grande y colores de alto contraste pensados para personas adultas.
 
-**Tecnologías:** Next.js 15 (App Router) · React 19 · TypeScript · PostgreSQL · Drizzle ORM · Tailwind CSS 4 · ExcelJS · jsPDF
+**Tecnologías:** Next.js 15 (App Router) · React 19 · TypeScript · PostgreSQL · Drizzle ORM · Tailwind CSS 4 · Recharts 3 · ExcelJS · jsPDF
 
 ---
 
@@ -60,8 +60,20 @@ npm run start
 | `npm run db:migrate` | Aplicar migraciones pendientes |
 | `npm run db:generate` | Crear una migración nueva tras editar `src/db/schema.ts` |
 | `npm run db:seed` | Crear el administrador (si no existe) |
+| `npm run db:seed-perfumes -- "Local Centro"` | Cargar perfumes de ejemplo en ese local (ver abajo) |
 | `npm run db:recalcular-busqueda` | Recalcular los textos de búsqueda de productos e historial (una vez, después de migrar) |
 | `npm run db:studio` | Ver la base de datos en el navegador |
+
+### Perfumes de ejemplo (para pruebas)
+
+`npm run db:seed-perfumes -- "Nombre del local"` carga en un local que ya exista:
+
+- 8 marcas (Dior, Chanel, Carolina Herrera, Paco Rabanne, Lattafa, Armaf, Rasasi y Afnan).
+- 30 perfumes con códigos `DEMO-01` a `DEMO-30`, que cubren Hombre, Mujer, Niño y Niña, los 5 tipos y los 5 tamaños.
+- Precios según el tipo: Original > 1.1 > Versión / Imitación > Esencia.
+- 3 perfumes agotados y 4 en stock bajo, para ver las alertas y las notificaciones.
+
+Se puede ejecutar varias veces sin duplicar: las marcas que ya existen y los códigos `DEMO-xx` que ya están en el local se dejan como están (no se pisan cambios hechos a mano). Si el nombre del local no existe, muestra la lista de locales. No toca al administrador.
 
 ## 4. Cómo funciona
 
@@ -97,6 +109,14 @@ Búsqueda por identificación, abonos con medio de pago (se aplican a las cuotas
 ### Notificaciones
 Cobros vencidos, del día y de los próximos 3 días (según las fechas de las cuotas) + productos agotados o con stock bajo. El contador del menú se actualiza cada minuto y, si se activan, llegan avisos del navegador.
 
+### Dashboard de reportes
+Arriba de las estadísticas, en **Reportes** (vendedor: su local · administrador: un local o «Todos los locales»), con el año y el mes elegidos:
+
+- **Indicadores:** total vendido, recaudado, unidades vendidas, valor del inventario hoy, cartera pendiente y perfumes agotados.
+- **Gráficas:** top 10 perfumes (por unidades o por valor), ventas por Hombre / Niño / Mujer / Niña, por tipo, por marca (top 8 + «Otras») y por tamaño, contado y crédito mes a mes con el recaudo, y el inventario de hoy (stock por género y perfumes por reponer, con «Agregar unidades» para el vendedor).
+
+Las ventas por categoría salen de la copia guardada en cada factura (no del producto actual); las ventas anteriores a la clasificación aparecen como «Sin categoría». Todo se calcula en la base de datos (`src/server/servicios/dashboard.ts`, `GET /api/dashboard`).
+
 ### Reportes en Excel
 Se descargan desde **Reportes**, del año completo o de un mes.
 
@@ -107,13 +127,14 @@ Se descargan desde **Reportes**, del año completo o de un mes.
 | Resumen | Ventas de contado, créditos, abonos, recibido en efectivo/transferencia, gastos y utilidad mes a mes |
 | Facturas | Todas las facturas del periodo, con totales |
 | Productos vendidos | Unidades y valor vendido por producto |
+| Ventas por categoría | Unidades y valor vendido por público, tipo, marca y tamaño (los mismos cortes del dashboard) |
 | Abonos | Cada abono recibido en el periodo |
 | Ventas por vendedor | Lo que vendió cada vendedor y su % del total |
 | Gastos | Cada gasto del periodo, con categoría y medio de pago |
 | Cartera | Créditos con saldo **hoy**: valor vencido, días de atraso y próxima cuota (rojo = más de 30 días, amarillo = algo vencido) |
 | Inventario | Stock **hoy** y valor del inventario (rojo = agotado, amarillo = stock bajo) |
 
-**Consolidado** (solo administrador): hoja *Comparativo locales*, con las cifras de cada local lado a lado y su % de las ventas, y hoja *Cartera*, con los créditos pendientes de todos los locales.
+**Consolidado** (solo administrador): hoja *Comparativo locales*, con las cifras de cada local lado a lado y su % de las ventas, hoja *Ventas por categoría* de todos los locales, y hoja *Cartera*, con los créditos pendientes de todos los locales.
 
 > Las hojas *Cartera* e *Inventario* muestran el estado **al momento de descargar**, sin importar el periodo elegido.
 

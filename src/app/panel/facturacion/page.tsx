@@ -2,11 +2,13 @@
  * Facturación: dos pestañas grandes para elegir el tipo de factura.
  *  - Factura normal (contado)
  *  - Crédito (a cuotas)
+ * Con ?producto=<id> (botón «Vender» del inventario) ese perfume llega ya cargado en la factura.
  */
 "use client";
 
-import { useState } from "react";
-import { EncabezadoPagina } from "@/components/ui/Basicos";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
+import { Cargando, EncabezadoPagina } from "@/components/ui/Basicos";
 import { Icono } from "@/components/ui/Icono";
 import { FormularioFactura } from "@/components/facturacion/FormularioFactura";
 import type { TipoFactura } from "@/tipos";
@@ -17,7 +19,19 @@ const PESTANAS: { tipo: TipoFactura; titulo: string; detalle: string }[] = [
 ];
 
 export default function PaginaFacturacion() {
+  // useSearchParams necesita un <Suspense> alrededor (Next.js)
+  return (
+    <Suspense fallback={<Cargando />}>
+      <Facturacion />
+    </Suspense>
+  );
+}
+
+function Facturacion() {
   const [tipo, setTipo] = useState<TipoFactura>("NORMAL");
+  const router = useRouter();
+  const ruta = usePathname();
+  const productoInicialId = useSearchParams().get("producto");
 
   return (
     <>
@@ -51,7 +65,13 @@ export default function PaginaFacturacion() {
 
       <div role="tabpanel" id="panel-factura" aria-labelledby={`pestana-${tipo}`}>
         {/* "key" reinicia el formulario al cambiar de pestaña */}
-        <FormularioFactura key={tipo} tipo={tipo} />
+        <FormularioFactura
+          key={tipo}
+          tipo={tipo}
+          productoInicialId={productoInicialId}
+          // Ya vendido: se quita de la URL para que no se vuelva a cargar
+          onRegistrada={() => productoInicialId && router.replace(ruta, { scroll: false })}
+        />
       </div>
     </>
   );

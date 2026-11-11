@@ -22,6 +22,8 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { GENEROS, PUBLICOS, TAMANOS, TIPOS_PRODUCTO } from "../lib/clasificacion";
+import { TIPOS_MOVIMIENTO } from "../lib/inventario";
 
 /* ---------------------------- Enumeraciones ---------------------------- */
 
@@ -48,6 +50,17 @@ export const medioPagoEnum = pgEnum("medio_pago", ["EFECTIVO", "TRANSFERENCIA", 
 
 /** Cómo se pagó un gasto (los gastos no se dividen entre dos medios). */
 export const medioPagoGastoEnum = pgEnum("medio_pago_gasto", ["EFECTIVO", "TRANSFERENCIA"]);
+
+/* Clasificación de perfumes (las listas y sus etiquetas están en src/lib/clasificacion.ts) */
+export const tipoProductoEnum = pgEnum("tipo_producto", TIPOS_PRODUCTO);
+export const generoEnum = pgEnum("genero", GENEROS);
+/** ADULTO o INFANTIL. Hombre + Infantil = niño · Mujer + Infantil = niña. */
+export const publicoEnum = pgEnum("publico", PUBLICOS);
+/** Tamaño en onzas como enum: solo se aceptan los tamaños de la lista, sin riesgo de decimales. */
+export const tamanoProductoEnum = pgEnum("tamano_producto", TAMANOS);
+
+/** INGRESO = llegó mercancía · VENTA = salió en una factura · AJUSTE = corrección manual (con motivo). */
+export const tipoMovimientoEnum = pgEnum("tipo_movimiento", TIPOS_MOVIMIENTO);
 
 /* Columnas de fecha reutilizables (con zona horaria) */
 const creadoEn = () => timestamp("creado_en", { withTimezone: true }).notNull().defaultNow();
@@ -85,6 +98,21 @@ export const sectores = pgTable(
     creadoEn: creadoEn(),
   },
   (t) => [uniqueIndex("sectores_local_nombre_uq").on(t.localId, sql`lower(${t.nombre})`)],
+);
+
+/** Marcas (casas de perfume) de cada local. Una marca usada en productos no se borra: solo se desactiva. */
+export const marcas = pgTable(
+  "marcas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    localId: uuid("local_id")
+      .notNull()
+      .references(() => locales.id, { onDelete: "cascade" }),
+    nombre: text("nombre").notNull(),
+    activo: boolean("activo").notNull().default(true),
+    creadoEn: creadoEn(),
+  },
+  (t) => [uniqueIndex("marcas_local_nombre_uq").on(t.localId, sql`lower(${t.nombre})`)],
 );
 
 /** Categorías de gastos de cada local (Arriendo, Nómina…). */
@@ -136,6 +164,16 @@ export const productos = pgTable(
     stock: integer("stock").notNull().default(0),
     /** Si el stock llega a este número o menos, se genera una notificación. */
     stockMinimo: integer("stock_minimo").notNull().default(3),
+    /*
+     * Clasificación. Son opcionales en la base de datos para que los productos
+     * creados antes de la clasificación sigan funcionando ("Sin categoría").
+     * Al crear o editar un producto, la validación las exige.
+     */
+    marcaId: uuid("marca_id").references(() => marcas.id, { onDelete: "restrict" }),
+    tipo: tipoProductoEnum("tipo"),
+    genero: generoEnum("genero"),
+    publico: publicoEnum("publico"),
+    tamano: tamanoProductoEnum("tamano"),
     activo: boolean("activo").notNull().default(true),
     creadoEn: creadoEn(),
     actualizadoEn: actualizadoEn(),
@@ -143,6 +181,7 @@ export const productos = pgTable(
   (t) => [
     uniqueIndex("productos_local_codigo_uq").on(t.localId, t.codigo),
     index("productos_busqueda_idx").on(t.localId, t.nombreBusqueda),
+    index("productos_marca_idx").on(t.marcaId),
   ],
 );
 
@@ -222,6 +261,12 @@ export const facturaItems = pgTable("factura_items", {
   precioUnitario: integer("precio_unitario").notNull(),
   cantidad: integer("cantidad").notNull(),
   subtotal: integer("subtotal").notNull(),
+  // Copia de la clasificación al momento de la venta (null en facturas anteriores → "Sin categoría")
+  marcaNombre: text("marca_nombre"),
+  tipo: tipoProductoEnum("tipo"),
+  genero: generoEnum("genero"),
+  publico: publicoEnum("publico"),
+  tamano: tamanoProductoEnum("tamano"),
 });
 
 export const cuotas = pgTable(
@@ -281,6 +326,36 @@ export const gastos = pgTable(
   (t) => [index("gastos_local_fecha_idx").on(t.localId, t.fecha)],
 );
 
+/**
+ * Trazabilidad del inventario: cada cambio de stock deja un movimiento.
+ * "cantidad" lleva signo (+5 entra, -2 sale) y "stockResultante" es lo que quedó.
+ * El nombre del usuario se copia (snapshot) para que el historial no cambie.
+ */
+export const movimientosInventario = pgTable(
+  "movimientos_inventario",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    localId: uuid("local_id")
+      .notNull()
+      .references(() => locales.id, { onDelete: "cascade" }),
+    productoId: uuid("producto_id")
+      .notNull()
+      .references(() => productos.id, { onDelete: "cascade" }),
+    tipo: tipoMovimientoEnum("tipo").notNull(),
+    cantidad: integer("cantidad").notNull(),
+    stockResultante: integer("stock_resultante").notNull(),
+    usuarioId: uuid("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
+    usuarioNombre: text("usuario_nombre").notNull(),
+    facturaId: uuid("factura_id").references(() => facturas.id, { onDelete: "set null" }),
+    nota: text("nota"),
+    creadoEn: creadoEn(),
+  },
+  (t) => [
+    index("movimientos_producto_fecha_idx").on(t.productoId, t.creadoEn),
+    index("movimientos_local_fecha_idx").on(t.localId, t.creadoEn),
+  ],
+);
+
 /* ------------------------------ Relaciones ------------------------------ */
 /* Permiten consultas anidadas con db.query.<tabla>.findMany({ with: {...} }) */
 
@@ -290,12 +365,18 @@ export const localesRelations = relations(locales, ({ many }) => ({
   clientes: many(clientes),
   facturas: many(facturas),
   sectores: many(sectores),
+  marcas: many(marcas),
   categoriasGasto: many(categoriasGasto),
   gastos: many(gastos),
 }));
 
 export const sectoresRelations = relations(sectores, ({ one }) => ({
   local: one(locales, { fields: [sectores.localId], references: [locales.id] }),
+}));
+
+export const marcasRelations = relations(marcas, ({ one, many }) => ({
+  local: one(locales, { fields: [marcas.localId], references: [locales.id] }),
+  productos: many(productos),
 }));
 
 export const categoriasGastoRelations = relations(categoriasGasto, ({ one }) => ({
@@ -311,8 +392,15 @@ export const usuariosRelations = relations(usuarios, ({ one }) => ({
   local: one(locales, { fields: [usuarios.localId], references: [locales.id] }),
 }));
 
-export const productosRelations = relations(productos, ({ one }) => ({
+export const productosRelations = relations(productos, ({ one, many }) => ({
   local: one(locales, { fields: [productos.localId], references: [locales.id] }),
+  marca: one(marcas, { fields: [productos.marcaId], references: [marcas.id] }),
+  movimientos: many(movimientosInventario),
+}));
+
+export const movimientosInventarioRelations = relations(movimientosInventario, ({ one }) => ({
+  producto: one(productos, { fields: [movimientosInventario.productoId], references: [productos.id] }),
+  factura: one(facturas, { fields: [movimientosInventario.facturaId], references: [facturas.id] }),
 }));
 
 export const clientesRelations = relations(clientes, ({ one, many }) => ({
@@ -350,5 +438,7 @@ export type FacturaItem = typeof facturaItems.$inferSelect;
 export type Cuota = typeof cuotas.$inferSelect;
 export type Abono = typeof abonos.$inferSelect;
 export type Sector = typeof sectores.$inferSelect;
+export type Marca = typeof marcas.$inferSelect;
 export type CategoriaGasto = typeof categoriasGasto.$inferSelect;
 export type Gasto = typeof gastos.$inferSelect;
+export type MovimientoInventarioFila = typeof movimientosInventario.$inferSelect;

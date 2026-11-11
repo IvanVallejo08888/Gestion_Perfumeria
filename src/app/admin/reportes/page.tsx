@@ -1,6 +1,7 @@
 /**
  * Reportes del administrador:
- *  - Elegir local, año y (opcional) mes.
+ *  - Elegir local (o "Todos los locales"), año y (opcional) mes.
+ *  - Dashboard: indicadores y gráficas de un local o del consolidado.
  *  - Ver las estadísticas del local en pantalla.
  *  - Descargar Excel del AÑO o del MES elegido.
  *  - Ver los gastos del local en el periodo elegido.
@@ -10,6 +11,7 @@
 import { useState } from "react";
 import { TablaGastos, TotalesGastos } from "@/components/compartidos/TablaGastos";
 import { VistaEstadisticas } from "@/components/compartidos/VistaEstadisticas";
+import { VistaDashboard } from "@/components/dashboard/VistaDashboard";
 import { Cargando, EncabezadoPagina, Mensaje, Tarjeta, Vacio } from "@/components/ui/Basicos";
 import { Selector } from "@/components/ui/Campo";
 import { Icono } from "@/components/ui/Icono";
@@ -19,6 +21,8 @@ import type { Estadisticas, ListaGastos } from "@/tipos";
 
 const ANIO_ACTUAL = new Date().getFullYear();
 const ANIOS = Array.from({ length: 6 }, (_, i) => ANIO_ACTUAL - i);
+/** Valor del selector para ver el dashboard consolidado. */
+const TODOS = "TODOS";
 
 export default function ReportesAdmin() {
   const [localId, setLocalId] = useState("");
@@ -32,10 +36,14 @@ export default function ReportesAdmin() {
   });
   const locales = consultaLocales.datos?.locales ?? null;
 
-  const consultaDatos = useConsulta<Estadisticas>(localId ? `/api/admin/estadisticas?localId=${localId}&anio=${anio}` : null);
+  // Las estadísticas, los gastos y el Excel por local necesitan UN local; el dashboard también acepta todos
+  const todos = localId === TODOS;
+  const unLocal = localId && !todos ? localId : null;
+
+  const consultaDatos = useConsulta<Estadisticas>(unLocal ? `/api/admin/estadisticas?localId=${unLocal}&anio=${anio}` : null);
   const { datos, cargando } = consultaDatos;
-  const consultaGastos = useConsulta<ListaGastos>(localId ? `/api/admin/gastos?localId=${localId}&anio=${anio}${mes ? `&mes=${mes}` : ""}` : null);
-  const gastos = consultaGastos.datos;
+  const consultaGastos = useConsulta<ListaGastos>(unLocal ? `/api/admin/gastos?localId=${unLocal}&anio=${anio}${mes ? `&mes=${mes}` : ""}` : null);
+  const gastos = unLocal ? consultaGastos.datos : null;
   const error = consultaLocales.error || consultaDatos.error || consultaGastos.error;
 
   const urlExcel = (conMes: boolean) =>
@@ -67,6 +75,7 @@ export default function ReportesAdmin() {
                     {l.nombre}
                   </option>
                 ))}
+                <option value={TODOS}>Todos los locales (consolidado)</option>
               </Selector>
               <Selector etiqueta="Año" value={anio} onChange={(e) => setAnio(Number(e.target.value))}>
                 {ANIOS.map((a) => (
@@ -85,8 +94,8 @@ export default function ReportesAdmin() {
               </Selector>
             </div>
 
-            {/* Descargas: enlaces directos (el navegador descarga el archivo) */}
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+            {/* Descargas: enlaces directos (el navegador descarga el archivo). El Excel por local necesita un local. */}
+            <div className={unLocal ? "mt-5 flex flex-col gap-3 sm:flex-row" : "hidden"}>
               <a
                 href={urlExcel(false)}
                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-exito-700 px-5 text-lg font-bold text-white hover:bg-exito-800"
@@ -122,7 +131,20 @@ export default function ReportesAdmin() {
             </div>
           </Tarjeta>
 
-          {cargando || !datos ? <Cargando texto="Calculando estadísticas…" /> : <VistaEstadisticas datos={datos} mes={mes || undefined} />}
+          {localId && <VistaDashboard anio={anio} mes={mes || undefined} localId={unLocal ?? undefined} />}
+
+          {todos ? (
+            <div className="mt-10">
+              <Mensaje tono="info" titulo="Estás viendo todos los locales">
+                Las estadísticas mes a mes, los gastos y el Excel por local se ven eligiendo un local. El consolidado en Excel se descarga con el botón de arriba.
+              </Mensaje>
+            </div>
+          ) : (
+            <>
+              <h2 className="mt-10 mb-4 text-2xl font-bold">Estadísticas del año {anio}</h2>
+              {cargando || !datos ? <Cargando texto="Calculando estadísticas…" /> : <VistaEstadisticas datos={datos} mes={mes || undefined} />}
+            </>
+          )}
 
           {gastos && (
             <section className="mt-8 space-y-4">
