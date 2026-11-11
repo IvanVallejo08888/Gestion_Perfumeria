@@ -47,7 +47,7 @@ export function InventarioDashboard({ inventario, onAgregarUnidades }: Props) {
         vacio={criticos.length === 0}
         textoVacio="Todo el inventario tiene unidades suficientes"
       >
-        <ul className="divide-y-2 divide-gray-100">
+        <ul className="divide-y-2 divide-linea">
           {criticos.map((p) => (
             <li key={p.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3 first:pt-0">
               <div className="min-w-0 flex-1 basis-48">

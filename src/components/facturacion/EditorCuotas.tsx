@@ -120,7 +120,7 @@ export function EditorCuotas({ config, onCambio, total, error }: Props) {
 
       <ol className="mt-4 space-y-3">
         {config.fechas.map((f, i) => (
-          <li key={i} className="grid items-end gap-3 rounded-xl border-2 border-gray-200 bg-gray-50 p-4 md:grid-cols-[8rem_1fr_10rem]">
+          <li key={i} className="grid items-end gap-3 rounded-xl border-2 border-linea bg-superficie p-4 md:grid-cols-[8rem_1fr_10rem]">
             <p className="text-lg font-bold">Cuota {i + 1}</p>
             <Campo
               etiqueta={`Fecha y hora de cobro de la cuota ${i + 1}`}

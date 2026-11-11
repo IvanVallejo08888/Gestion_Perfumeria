@@ -177,11 +177,11 @@ export function GestorNombres({
       {!lista ? (
         <Cargando />
       ) : lista.length === 0 ? (
-        <p className="rounded-xl bg-gray-100 p-4 text-lg">Este local aún no tiene {plural}.</p>
+        <p className="rounded-xl bg-superficie-apagada p-4 text-lg">Este local aún no tiene {plural}.</p>
       ) : (
         <ul className="space-y-2">
           {lista.map((item) => (
-            <li key={item.id} className="rounded-xl border-2 border-gray-200 p-3">
+            <li key={item.id} className="rounded-xl border-2 border-linea p-3">
               {editando?.id === item.id ? (
                 <form onSubmit={guardarEdicion} className="space-y-3">
                   <Campo etiqueta={`Nuevo nombre de «${item.nombre}»`} maxLength={80} value={nombreEditado} onChange={(e) => setNombreEditado(e.target.value)} autoFocus />
@@ -233,7 +233,7 @@ export function GestorNombres({
         abierto={quitando !== null}
         titulo={quitando ? `${permiteEliminar ? "Eliminar" : "Desactivar"} «${quitando.nombre}»` : ""}
         mensaje={avisoQuitar}
-        textoConfirmar={permiteEliminar ? "Sí, eliminar" : "Sí, desactivar"}
+        textoConfirmar={`${permiteEliminar ? "Eliminar" : "Desactivar"} ${singular}`}
         peligro
         cargando={guardando}
         onConfirmar={quitar}

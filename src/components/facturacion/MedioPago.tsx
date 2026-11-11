@@ -74,7 +74,7 @@ export function SelectorMedioPago({ titulo, total, medio, onMedio, transferencia
     <div className="space-y-4">
       <BotonesMedioPago titulo={titulo} opciones={MEDIOS_PAGO} valor={medio} onCambio={onMedio} error={medio ? undefined : error} />
       {medio === "MIXTO" && (
-        <div className="grid items-start gap-4 rounded-xl border-2 border-gray-200 bg-gray-50 p-4 md:grid-cols-2">
+        <div className="grid items-start gap-4 rounded-xl border-2 border-linea bg-superficie p-4 md:grid-cols-2">
           <CampoDinero
             etiqueta="Valor de la transferencia"
             valor={transferencia}

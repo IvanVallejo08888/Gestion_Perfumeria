@@ -46,7 +46,7 @@ function BotonVender({ producto, compacto = false }: { producto: Producto; compa
   const base = `inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border-2 font-bold ${compacto ? "px-2 text-[16px]" : "w-full px-5 text-lg"}`;
   if (producto.stock <= 0) {
     return (
-      <span aria-disabled="true" className={`${base} cursor-not-allowed border-gray-300 bg-gray-100 text-gray-700`}>
+      <span aria-disabled="true" className={`${base} cursor-not-allowed border-linea-fuerte bg-superficie-apagada text-texto-suave`}>
         {!compacto && <Icono nombre="factura" className="size-5" />}
         Agotado
       </span>
@@ -73,7 +73,7 @@ export function ListaProductos({ productos, onAgregarUnidades, onDetalle }: Prop
           const publico = publicoDe(p);
           const sinCategoria = !p.tipo && !p.tamano && !publico;
           return (
-            <li key={p.id} className="flex flex-col rounded-2xl border-2 border-gray-200 bg-white p-4 shadow-sm">
+            <li key={p.id} className="flex flex-col rounded-2xl border-2 border-linea bg-white p-4 shadow-sm">
               <p className="text-base font-bold tracking-wide text-texto-suave uppercase">{p.marcaNombre ?? "Sin marca"}</p>
               <h2 className="text-xl font-bold break-words">{p.nombre}</h2>
               {p.codigo && <p className="text-base text-texto-suave">Código: {p.codigo}</p>}
@@ -117,11 +117,11 @@ export function ListaProductos({ productos, onAgregarUnidades, onDetalle }: Prop
 
       {/* ---------- Escritorio: tabla ---------- */}
       {/* Letra de 16px en la tabla para que quepan las 8 columnas; con letra A++ la tabla se desplaza por dentro */}
-      <div className="hidden overflow-x-auto rounded-2xl border-2 border-gray-200 bg-white shadow-sm xl:block">
+      <div className="hidden overflow-x-auto rounded-2xl border-2 border-linea bg-white shadow-sm xl:block">
         <table className="w-full text-left text-[16px]">
           <caption className="sr-only">Perfumes del inventario</caption>
-          <thead className="bg-gray-50">
-            <tr className="border-b-2 border-gray-300">
+          <thead className="bg-superficie">
+            <tr className="border-b-2 border-linea-fuerte">
               <th scope="col" className="px-2 py-3">Marca</th>
               <th scope="col" className="px-2 py-3">Nombre</th>
               <th scope="col" className="px-2 py-3">Tipo</th>
@@ -137,7 +137,7 @@ export function ListaProductos({ productos, onAgregarUnidades, onDetalle }: Prop
               const publico = publicoDe(p);
               const [oz, ml] = p.tamano ? ETIQUETA_TAMANO[p.tamano].split(" (") : [];
               return (
-                <tr key={p.id} className="border-b border-gray-200 align-top last:border-b-0">
+                <tr key={p.id} className="border-b border-linea align-top last:border-b-0">
                   <td className="px-2 py-3">{p.marcaNombre ?? <span className="text-texto-suave">—</span>}</td>
                   <th scope="row" className="px-2 py-3 font-bold">
                     {p.nombre}

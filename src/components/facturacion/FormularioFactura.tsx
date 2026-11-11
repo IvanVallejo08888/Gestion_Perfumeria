@@ -250,13 +250,13 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
         <div className="mt-6">
           <h3 className="mb-2 text-xl font-bold">Productos en la factura ({lineas.length})</h3>
           {lineas.length === 0 ? (
-            <p className="rounded-xl border-2 border-dashed border-gray-300 p-5 text-center text-lg text-texto-suave">
+            <p className="rounded-xl border-2 border-dashed border-linea-fuerte p-5 text-center text-lg text-texto-suave">
               Todavía no has agregado productos. Usa el botón + de la lista de arriba.
             </p>
           ) : (
             <ul className="space-y-3">
               {lineas.map((l) => (
-                <li key={l.producto.id} className="grid gap-3 rounded-xl border-2 border-gray-200 p-4 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+                <li key={l.producto.id} className="grid gap-3 rounded-xl border-2 border-linea p-4 sm:grid-cols-[1fr_auto_auto] sm:items-center">
                   <div>
                     <p className="text-lg font-bold">{l.producto.nombre}</p>
                     <p className="text-base text-texto-suave">

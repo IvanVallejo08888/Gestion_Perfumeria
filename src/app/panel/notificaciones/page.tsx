@@ -70,7 +70,7 @@ export default function PaginaNotificaciones() {
                   <li key={n.id}>
                     <article
                       className={`flex flex-col gap-3 rounded-2xl border-2 bg-white p-4 sm:flex-row sm:items-center sm:justify-between ${
-                        n.nivel === "VENCIDA" ? "border-peligro-700" : n.nivel === "HOY" ? "border-alerta-700" : "border-gray-200"
+                        n.nivel === "VENCIDA" ? "border-peligro-700" : n.nivel === "HOY" ? "border-alerta-700" : "border-linea"
                       }`}
                     >
                       <div>
@@ -107,7 +107,7 @@ export default function PaginaNotificaciones() {
             ) : (
               <ul className="grid gap-3 md:grid-cols-2">
                 {stock.map((n) => (
-                  <li key={n.id} className="rounded-2xl border-2 border-gray-200 bg-white p-4">
+                  <li key={n.id} className="rounded-2xl border border-linea bg-white p-4">
                     <Insignia tono={NIVEL[n.nivel].tono}>{NIVEL[n.nivel].texto}</Insignia>
                     <h3 className="mt-1 text-lg font-bold">{n.titulo}</h3>
                     <p className="text-base text-texto-suave">{n.descripcion}</p>

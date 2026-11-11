@@ -115,7 +115,7 @@ export function VistaFactura({ factura }: { factura: FacturaDetalle }) {
       </div>
 
       {/* ---------------- Factura (esto es lo que se convierte en imagen/PDF) ---------------- */}
-      <div className="overflow-x-auto rounded-xl border-2 border-gray-200 bg-gray-100 p-2 sm:p-4">
+      <div className="overflow-x-auto rounded-xl border-2 border-linea bg-superficie-apagada p-2 sm:p-4">
         <div
           ref={ref}
           id="factura-imprimible"
@@ -126,7 +126,7 @@ export function VistaFactura({ factura }: { factura: FacturaDetalle }) {
             <p className="text-[22px] font-bold">{factura.local.nombre}</p>
             {factura.local.direccion && <p>{factura.local.direccion}</p>}
             {factura.local.telefono && <p>Tel. {factura.local.telefono}</p>}
-            <p className="mt-3 inline-block rounded px-3 py-1 text-[16px] font-bold text-white" style={{ background: esCredito ? "#92400e" : "#4c1d95" }}>
+            <p className={`mt-3 inline-block rounded px-3 py-1 text-[16px] font-bold text-white ${esCredito ? "bg-alerta-800" : "bg-marca-800"}`}>
               {esCredito ? "FACTURA DE CRÉDITO" : "FACTURA DE VENTA"} N° {numeroFactura(factura.numero)}
             </p>
             <p className="mt-1">{fechaHora(factura.creadoEn)}</p>
@@ -154,9 +154,9 @@ export function VistaFactura({ factura }: { factura: FacturaDetalle }) {
                   <td className="py-1 pr-2">
                     {i.nombreProducto}
                     <br />
-                    <span className="text-[13px]">{describirClasificacion(i)}</span>
+                    <span className="text-[15px]">{describirClasificacion(i)}</span>
                     <br />
-                    <span className="text-[13px]">{pesos(i.precioUnitario)} c/u</span>
+                    <span className="text-[15px]">{pesos(i.precioUnitario)} c/u</span>
                   </td>
                   <td className="py-1 text-center">{i.cantidad}</td>
                   <td className="py-1 text-right whitespace-nowrap">{pesos(i.subtotal)}</td>
@@ -185,7 +185,7 @@ export function VistaFactura({ factura }: { factura: FacturaDetalle }) {
           {esCredito && (
             <div className="mt-3 border-t border-dashed border-black pt-2">
               <p className="font-bold">Plan de pagos ({factura.cuotas.length} cuotas)</p>
-              <table className="mt-1 w-full text-[14px]">
+              <table className="mt-1 w-full text-[15px]">
                 <tbody>
                   {factura.cuotas.map((c) => (
                     <tr key={c.id}>
@@ -208,8 +208,8 @@ export function VistaFactura({ factura }: { factura: FacturaDetalle }) {
             </div>
           )}
 
-          {factura.notas && <p className="mt-3 text-[14px]"><b>Notas:</b> {factura.notas}</p>}
-          <p className="mt-4 text-center text-[13px]">Atendido por: {factura.vendedorNombre}</p>
+          {factura.notas && <p className="mt-3 text-[15px]"><b>Notas:</b> {factura.notas}</p>}
+          <p className="mt-4 text-center text-[15px]">Atendido por: {factura.vendedorNombre}</p>
           <p className="mt-1 text-center font-bold">¡Gracias por su compra!</p>
         </div>
       </div>

@@ -1,7 +1,7 @@
 /**
  * Avisos flotantes ("toasts") que confirman acciones: "Factura registrada", "Error al guardar"…
- * Se anuncian automáticamente a lectores de pantalla (aria-live) y duran 6 segundos,
- * tiempo suficiente para leerlos con calma. También se pueden cerrar manualmente.
+ * Se anuncian automáticamente a lectores de pantalla (aria-live). Los de éxito e información
+ * duran 8 segundos; los de error se quedan hasta que la persona los cierra.
  */
 "use client";
 
@@ -26,6 +26,9 @@ export function useAvisos() {
   };
 }
 
+/** Confirmaciones e información: 8 s, tiempo suficiente para leer con calma. */
+const DURACION_MS = 8000;
+
 const ESTILOS: Record<TipoAviso, string> = {
   exito: "border-exito-700 bg-exito-50 text-exito-800",
   error: "border-peligro-700 bg-peligro-50 text-peligro-800",
@@ -41,7 +44,8 @@ export function ProveedorAvisos({ children }: { children: ReactNode }) {
     (tipo: TipoAviso, texto: string) => {
       const id = Date.now() + Math.random();
       setAvisos((lista) => [...lista.slice(-2), { id, tipo, texto }]);
-      setTimeout(() => cerrar(id), 6000);
+      // Los errores NO desaparecen solos (WCAG 2.2.1): la persona los cierra cuando termine de leerlos
+      if (tipo !== "error") setTimeout(() => cerrar(id), DURACION_MS);
     },
     [cerrar],
   );
@@ -61,8 +65,14 @@ export function ProveedorAvisos({ children }: { children: ReactNode }) {
           >
             <Icono nombre={a.tipo === "exito" ? "check" : a.tipo === "error" ? "alerta" : "info"} className="mt-0.5 size-6" />
             <p className="flex-1">{a.texto}</p>
-            <button type="button" onClick={() => cerrar(a.id)} className="rounded-lg p-1 hover:bg-black/10" aria-label="Cerrar aviso">
-              <Icono nombre="cerrar" className="size-5" />
+            {/* Área táctil de 44 px (WCAG 2.5.5), aunque el ícono sea pequeño */}
+            <button
+              type="button"
+              onClick={() => cerrar(a.id)}
+              className="-my-1.5 -mr-2 flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-black/10"
+              aria-label="Cerrar aviso"
+            >
+              <Icono nombre="cerrar" className="size-6" />
             </button>
           </div>
         ))}

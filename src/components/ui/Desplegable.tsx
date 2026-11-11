@@ -22,7 +22,7 @@ export function Desplegable({ titulo, resumen, children }: Props) {
   const panelId = useId();
 
   return (
-    <section className="rounded-2xl border-2 border-gray-200 bg-white shadow-sm">
+    <section className="rounded-2xl border border-linea bg-white shadow-sm">
       <h2>
         <button
           type="button"

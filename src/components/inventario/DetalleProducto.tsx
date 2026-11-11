@@ -68,7 +68,7 @@ export function DetalleProducto({ producto: p, onCerrar, onAgregarUnidades, onEd
               Vender
             </Link>
           ) : (
-            <span aria-disabled="true" className="inline-flex min-h-12 items-center justify-center rounded-xl border-2 border-gray-300 bg-gray-100 px-5 text-lg font-bold text-gray-700">
+            <span aria-disabled="true" className="inline-flex min-h-12 items-center justify-center rounded-xl border-2 border-linea-fuerte bg-superficie-apagada px-5 text-lg font-bold text-texto-suave">
               Agotado: no se puede vender
             </span>
           )}
@@ -95,11 +95,11 @@ export function DetalleProducto({ producto: p, onCerrar, onAgregarUnidades, onEd
           ) : !movimientos ? (
             <Cargando texto="Cargando movimientos…" />
           ) : movimientos.length === 0 ? (
-            <p className="mt-3 rounded-xl bg-gray-50 p-4 text-lg">Este perfume aún no tiene movimientos registrados.</p>
+            <p className="mt-3 rounded-xl bg-superficie p-4 text-lg">Este perfume aún no tiene movimientos registrados.</p>
           ) : (
             <ol className="mt-3 space-y-2">
               {movimientos.map((m) => (
-                <li key={m.id} className="rounded-xl border-2 border-gray-200 p-3">
+                <li key={m.id} className="rounded-xl border-2 border-linea p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="flex flex-wrap items-center gap-2">
                       <Insignia tono={TONO_MOVIMIENTO[m.tipo]}>{ETIQUETA_MOVIMIENTO[m.tipo]}</Insignia>

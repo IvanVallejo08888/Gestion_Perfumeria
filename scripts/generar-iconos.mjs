@@ -3,7 +3,7 @@
  * Uso: npm run iconos
  *
  * - icon-*.png: ícono normal (conserva las esquinas redondeadas y transparentes).
- * - icon-maskable-*.png: fondo morado de borde a borde y el dibujo reducido, para que
+ * - icon-maskable-*.png: fondo vino de borde a borde y el dibujo reducido, para que
  *   Android pueda recortarlo en círculo u otra forma sin cortar la botella.
  *   (La zona segura es un círculo del 80 % del ancho.)
  * - apple-touch-icon.png: sin transparencia, porque iOS pinta de negro lo transparente.
@@ -17,7 +17,7 @@ const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ORIGEN = path.join(RAIZ, "src", "app", "icon.svg");
 const DESTINO = path.join(RAIZ, "public", "icons");
 
-const COLOR_MARCA = "#5b21b6";
+const COLOR_MARCA = "#530309";
 /** Proporción del ícono maskable que ocupa el dibujo */
 const ESCALA_MASKABLE = 0.8;
 /** Ancho del viewBox de icon.svg */

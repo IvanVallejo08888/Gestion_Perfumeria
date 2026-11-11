@@ -46,7 +46,7 @@ export function ControlTexto({ claro = false }: { claro?: boolean }) {
                 : "border-marca-700 bg-marca-700 text-white"
               : claro
                 ? "border-white/60 text-white hover:bg-white/10"
-                : "border-borde bg-white text-texto hover:bg-gray-50"
+                : "border-borde bg-white text-texto hover:bg-superficie"
           }`}
         >
           <span aria-hidden="true">{o.etiqueta}</span>

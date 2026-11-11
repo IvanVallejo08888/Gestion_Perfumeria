@@ -46,7 +46,7 @@ export default async function InicioAdmin() {
           <Link
             key={t.titulo}
             href={t.href}
-            className="group rounded-2xl border-2 border-gray-200 bg-white p-5 shadow-sm transition hover:border-marca-700 hover:shadow-md"
+            className="group rounded-2xl border border-linea bg-white p-5 shadow-sm transition hover:border-marca-700 hover:shadow-md"
           >
             <div className="flex items-center gap-3 text-marca-700">
               <Icono nombre={t.icono} className="size-8" />

@@ -42,8 +42,45 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
   const [conteo, setConteo] = useState({ total: 0, urgentes: 0 });
   const ultimoAvisoRef = useRef<string | null>(null);
 
+  const botonMenuRef = useRef<HTMLButtonElement>(null);
+  const botonCerrarRef = useRef<HTMLButtonElement>(null);
+  const panelMenuRef = useRef<HTMLDivElement>(null);
+
   // Cerrar el menú del celular al cambiar de página
   useEffect(() => setMenuAbierto(false), [ruta]);
+
+  /*
+   * Menú del celular accesible con teclado (WCAG 2.1.2 y 2.4.3):
+   * al abrir, el foco pasa al botón «Cerrar»; Esc lo cierra; Tab no se sale del menú;
+   * al cerrar, el foco vuelve al botón «Menú».
+   */
+  useEffect(() => {
+    if (!menuAbierto) return;
+    botonCerrarRef.current?.focus();
+    const botonMenu = botonMenuRef.current;
+    function alTeclear(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setMenuAbierto(false);
+        return;
+      }
+      if (e.key !== "Tab" || !panelMenuRef.current) return;
+      const enfocables = panelMenuRef.current.querySelectorAll<HTMLElement>("a[href], button:not([disabled])");
+      const primero = enfocables[0];
+      const ultimo = enfocables[enfocables.length - 1];
+      if (e.shiftKey && document.activeElement === primero) {
+        e.preventDefault();
+        ultimo?.focus();
+      } else if (!e.shiftKey && document.activeElement === ultimo) {
+        e.preventDefault();
+        primero?.focus();
+      }
+    }
+    document.addEventListener("keydown", alTeclear);
+    return () => {
+      document.removeEventListener("keydown", alTeclear);
+      botonMenu?.focus();
+    };
+  }, [menuAbierto]);
 
   /* ---------- Consulta periódica de notificaciones (solo vendedores) ---------- */
   const consultar = useCallback(async () => {
@@ -91,7 +128,7 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
                 href={item.href}
                 aria-current={activo ? "page" : undefined}
                 className={`flex min-h-14 items-center gap-3 rounded-xl px-4 text-lg font-bold transition-colors ${
-                  activo ? "bg-white text-marca-800 shadow" : "text-white hover:bg-white/15"
+                  activo ? "bg-perla text-marca-800 shadow" : "text-white hover:bg-white/10"
                 }`}
               >
                 <Icono nombre={item.icono} className="size-7" />
@@ -115,7 +152,7 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
   );
 
   const pie = (
-    <div className="space-y-4 border-t-2 border-white/20 pt-4">
+    <div className="space-y-4 border-t border-champan/50 pt-4">
       <div>
         <p className="text-base text-white/80">Tamaño de letra</p>
         <div className="mt-1">
@@ -137,7 +174,7 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
 
   const cabecera = (
     <div className="mb-5">
-      <p className="text-sm font-bold uppercase tracking-wide text-white/70">Gestión de Perfumerías</p>
+      <p className="font-titulo text-lg font-semibold uppercase tracking-[0.12em] text-champan">Gestión de Perfumerías</p>
       <p className="mt-1 text-xl font-bold text-white">{nombreUsuario}</p>
       <p className="text-base text-white/85">{subtitulo}</p>
     </div>
@@ -146,19 +183,20 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
   return (
     <div className="min-h-dvh lg:flex">
       {/* Menú lateral (pantallas grandes) */}
-      <aside className="sticky top-0 hidden h-dvh w-80 shrink-0 flex-col overflow-y-auto bg-marca-800 p-5 lg:flex">
+      <aside className="zona-oscura sticky top-0 hidden h-dvh w-80 shrink-0 flex-col overflow-y-auto bg-marca-800 p-5 lg:flex">
         {cabecera}
         <div className="flex-1">{enlaces}</div>
         {pie}
       </aside>
 
       {/* Barra superior (celular y tablet) */}
-      <header className="sticky top-0 z-40 flex items-center justify-between gap-3 bg-marca-800 px-4 py-3 shadow-md lg:hidden">
+      <header className="zona-oscura sticky top-0 z-40 flex items-center justify-between gap-3 bg-marca-800 px-4 py-3 shadow-md lg:hidden">
         <div className="min-w-0">
           <p className="truncate text-lg font-bold text-white">{nombreUsuario}</p>
           <p className="truncate text-sm text-white/85">{subtitulo}</p>
         </div>
         <button
+          ref={botonMenuRef}
           type="button"
           onClick={() => setMenuAbierto(true)}
           aria-expanded={menuAbierto}
@@ -168,8 +206,9 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
           <Icono nombre="menu" />
           Menú
           {notificaciones && conteo.urgentes > 0 && (
-            <span className="absolute -right-2 -top-2 rounded-full bg-peligro-700 px-2 text-sm font-bold text-white">
+            <span className="absolute -right-2 -top-2 rounded-full border-2 border-white bg-peligro-700 px-2 text-base font-bold text-white">
               {conteo.urgentes}
+              <span className="sr-only"> cobros urgentes</span>
             </span>
           )}
         </button>
@@ -178,10 +217,16 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
       {/* Menú desplegable (celular) */}
       {menuAbierto && (
         <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Menú">
-          <button type="button" className="absolute inset-0 bg-black/60" onClick={() => setMenuAbierto(false)} aria-label="Cerrar menú" />
-          <div id="menu-movil" className="absolute inset-y-0 right-0 flex w-[88vw] max-w-sm flex-col overflow-y-auto bg-marca-800 p-5">
+          {/* Fondo oscuro: se cierra al tocarlo, pero no recibe foco (ya existe el botón «Cerrar») */}
+          <div className="absolute inset-0 bg-black/60" onClick={() => setMenuAbierto(false)} aria-hidden="true" />
+          <div
+            ref={panelMenuRef}
+            id="menu-movil"
+            className="zona-oscura absolute inset-y-0 right-0 flex w-[88vw] max-w-sm flex-col overflow-y-auto bg-marca-800 p-5"
+          >
             <div className="mb-3 flex justify-end">
               <button
+                ref={botonCerrarRef}
                 type="button"
                 onClick={() => setMenuAbierto(false)}
                 className="flex min-h-12 items-center gap-1 rounded-xl px-3 text-lg font-bold text-white hover:bg-white/15"

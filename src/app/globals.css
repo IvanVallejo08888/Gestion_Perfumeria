@@ -12,15 +12,35 @@
 @theme {
   /* Tipografía muy legible (Atkinson Hyperlegible, diseñada para baja visión) */
   --font-sans: "Atkinson Hyperlegible", "Segoe UI", Roboto, Arial, sans-serif;
+  /* Títulos: romana clásica de perfumería (solo h1/h2 y la marca; el texto corrido sigue en Atkinson) */
+  --font-titulo: "Cinzel", "Times New Roman", Georgia, serif;
 
-  /* Color principal: morado profundo (contraste 8.6:1 sobre blanco) */
-  --color-marca-50: #f5f3ff;
-  --color-marca-100: #ede9fe;
-  --color-marca-200: #ddd6fe;
-  --color-marca-600: #6d28d9;
-  --color-marca-700: #5b21b6;
-  --color-marca-800: #4c1d95;
-  --color-marca-900: #3b1773;
+  /*
+   * Paleta de la marca (perfumería de lujo):
+   *   Pearl #E8E2DA · Champagne #C6AE93 · Cocoa #5D3B2D · Black Cherry #530309 · Dark Chocolate #1F0C05
+   * Los nombres "marca-*" se conservan para no tocar cada pantalla:
+   *   700 = Dark Chocolate → botones principales y selección (18.9:1 sobre blanco)
+   *   800 = Black Cherry  → menú lateral, textos de marca, hover (15.2:1)
+   *   600 = Cocoa         → contorno de enfoque (9.9:1)
+   */
+  --color-marca-50: #faf6f1;
+  --color-marca-100: #f3ece4;
+  --color-marca-200: #e8e2da; /* Pearl */
+  --color-marca-600: #5d3b2d; /* Cocoa */
+  --color-marca-700: #1f0c05; /* Dark Chocolate */
+  --color-marca-800: #530309; /* Black Cherry */
+  --color-marca-900: #140703;
+  --color-champan: #c6ae93; /* Champagne: detalles decorativos y textos sobre el menú vino (7.1:1) */
+  --color-perla: #e8e2da;
+
+  /*
+   * Esquinas suaves al estilo Apple: el radio crece con el tamaño del elemento
+   * (controles pequeños < botones y campos < tarjetas < ventanas), para que todo se vea de la misma familia.
+   */
+  --radius-lg: 0.75rem; /* 12px: botones A/A+, «Ver» contraseña, X de avisos */
+  --radius-xl: 1rem; /* 16px: botones, campos, filtros, filas internas */
+  --radius-2xl: 1.375rem; /* 22px: tarjetas, pestañas, desplegables, ventanas emergentes */
+  --radius-3xl: 1.75rem; /* 28px: tarjeta del inicio de sesión y registro */
 
   /* Colores de estado (siempre se acompañan de texto o ícono, nunca solo color) */
   --color-exito-50: #ecfdf5;
@@ -36,11 +56,27 @@
   --color-info-700: #1d4ed8;
   --color-info-800: #1e40af;
 
-  /* Neutros */
-  --color-texto: #111827;
-  --color-texto-suave: #374151;
-  --color-borde: #9ca3af;
-  --color-fondo: #f6f5fb;
+  /* Neutros: usar SIEMPRE estos nombres, nunca "gray-*" directamente */
+  /* Neutros cálidos (tono café). Contrastes medidos sobre blanco. */
+  --color-texto: #231a16; /* texto principal (17.1:1) */
+  --color-texto-suave: #4a3a32; /* texto secundario (10.8:1) */
+  --color-texto-tenue: #5d4a40; /* textos de ayuda, íconos, placeholder (8.3:1) */
+  --color-borde: #8c7a6e; /* borde de campos y controles: 4.1:1, cumple WCAG 1.4.11 (≥ 3:1) */
+  --color-linea: #e8e2da; /* bordes decorativos de tarjetas y separadores (Pearl) */
+  --color-linea-fuerte: #d6cbbd; /* separadores más marcados, bordes punteados */
+  --color-superficie: #fbf9f6; /* bloques internos de una tarjeta */
+  --color-superficie-apagada: #f3eee8; /* avisos neutros y elementos deshabilitados */
+  --color-fondo: #f7f3ee;
+}
+
+/* Títulos con la letra de la marca: mayúsculas romanas con aire, como en la tienda */
+@layer base {
+  h1,
+  h2 {
+    font-family: var(--font-titulo);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
 }
 
 /* Tamaño de letra: normal (18px), grande (20px) y muy grande (22px) */
@@ -66,7 +102,11 @@ body {
 :focus-visible {
   outline: 3px solid var(--color-marca-600);
   outline-offset: 3px;
-  border-radius: 6px;
+  /* Sin border-radius aquí: el contorno sigue la forma redondeada de cada elemento */
+}
+/* Sobre fondos oscuros (menú morado) el contorno morado no se ve: se usa blanco */
+.zona-oscura :focus-visible {
+  outline-color: #ffffff;
 }
 
 /* Quitar flechas de los campos numéricos (se confunden al tocar en celular) */

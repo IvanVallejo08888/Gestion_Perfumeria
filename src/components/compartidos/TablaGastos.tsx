@@ -19,7 +19,7 @@ export function TotalesGastos({ datos }: { datos: ListaGastos }) {
   return (
     <ul className="grid gap-4 sm:grid-cols-3">
       {totales.map((t) => (
-        <li key={t.titulo} className="rounded-2xl border-2 border-gray-200 bg-white p-4 shadow-sm">
+        <li key={t.titulo} className="rounded-2xl border border-linea bg-white p-4 shadow-sm">
           <p className="text-lg font-bold text-texto-suave">{t.titulo}</p>
           <p className="mt-1 text-2xl font-bold text-marca-800 sm:text-3xl">{pesos(t.valor)}</p>
         </li>
@@ -40,7 +40,7 @@ export function TablaGastos({ gastos, onEliminar }: { gastos: GastoFila[]; onEli
   return (
     <ul className="space-y-3">
       {gastos.map((g) => (
-        <li key={g.id} className="flex flex-col gap-3 rounded-2xl border-2 border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <li key={g.id} className="flex flex-col gap-3 rounded-2xl border border-linea bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <h3 className="text-xl font-bold">{g.categoriaNombre}</h3>
             {g.descripcion && <p className="text-lg break-words">{g.descripcion}</p>}

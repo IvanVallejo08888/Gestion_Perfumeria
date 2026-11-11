@@ -163,7 +163,7 @@ export function BarraFiltros({ filtros, onCambiar, texto, onTexto, marcas }: Pro
         </div>
 
         {hayAlgo && (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t-2 border-gray-100 pt-4">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t-2 border-linea pt-4">
             <p className="text-lg text-texto-suave">{activos ? `${activos} ${activos === 1 ? "filtro activo" : "filtros activos"}.` : "Mostrando una parte del inventario."}</p>
             <Boton variante="fantasma" icono="cerrar" onClick={() => onCambiar({})}>
               Quitar filtros

@@ -130,16 +130,16 @@ export function BuscadorProductos({ onAgregar, enFactura, versionInventario }: P
         ) : !inventario.datos ? (
           <Cargando texto="Cargando productos…" />
         ) : buscando ? (
-          <p className="rounded-xl bg-gray-100 p-4 text-lg">Buscando…</p>
+          <p className="rounded-xl bg-superficie-apagada p-4 text-lg">Buscando…</p>
         ) : resultados.length === 0 ? (
-          <p className="rounded-xl bg-gray-100 p-4 text-lg">
+          <p className="rounded-xl bg-superficie-apagada p-4 text-lg">
             {hayBusqueda ? `No se encontró ningún producto con «${consulta}».` : "Este local aún no tiene productos en el inventario."}
           </p>
         ) : (
           <ul
             tabIndex={0}
             aria-label="Productos del inventario"
-            className="max-h-[18rem] space-y-2 overflow-y-auto rounded-xl border-2 border-gray-300 bg-gray-50 p-1.5 sm:p-2"
+            className="max-h-[18rem] space-y-2 overflow-y-auto rounded-xl border-2 border-linea-fuerte bg-superficie p-1.5 sm:p-2"
           >
             {resultados.map((p) => {
               const sinStock = p.stock <= 0;
@@ -151,7 +151,7 @@ export function BuscadorProductos({ onAgregar, enFactura, versionInventario }: P
                   // Las filas con stock solo agregan con el botón "+", para no agregar por error al deslizar.
                   onClick={sinStock ? () => elegir(p) : undefined}
                   className={`flex items-center justify-between gap-2 rounded-xl border-2 bg-white px-2 py-2 sm:px-3 ${
-                    sinStock ? "cursor-not-allowed border-gray-200 bg-gray-100" : "border-gray-200"
+                    sinStock ? "cursor-not-allowed border-linea bg-superficie-apagada" : "border-linea"
                   }`}
                 >
                   <div className={`min-w-0 flex-1 ${sinStock ? "opacity-70" : ""}`}>
@@ -182,7 +182,7 @@ export function BuscadorProductos({ onAgregar, enFactura, versionInventario }: P
                     aria-label={`Agregar ${p.nombre}`}
                     className={`flex size-12 shrink-0 items-center justify-center rounded-full border-2 sm:size-14 ${
                       sinStock
-                        ? "cursor-not-allowed border-gray-400 bg-gray-200 text-gray-600"
+                        ? "cursor-not-allowed border-borde bg-linea text-texto-tenue"
                         : "border-marca-700 bg-marca-700 text-white hover:bg-marca-800"
                     }`}
                   >

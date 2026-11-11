@@ -10,8 +10,8 @@ import { pesos } from "@/lib/formato";
 import { Icono } from "./Icono";
 
 const claseCampo =
-  "block w-full min-h-12 rounded-xl border-2 bg-white px-4 py-2.5 text-lg text-texto placeholder:text-gray-500 " +
-  "focus:border-marca-700 focus:outline-none focus:ring-4 focus:ring-marca-200 disabled:bg-gray-100";
+  "block w-full min-h-12 rounded-xl border-2 bg-white px-4 py-2.5 text-lg text-texto placeholder:text-texto-tenue " +
+  "focus:border-marca-700 focus:outline-none focus:ring-4 focus:ring-marca-200 disabled:bg-superficie-apagada";
 
 interface Base {
   etiqueta: string;

@@ -142,7 +142,7 @@ export function GestionCreditos({ identificacionInicial }: { identificacionInici
 
                   {/* Barra de progreso con texto */}
                   <div className="mt-4">
-                    <div className="h-4 overflow-hidden rounded-full bg-gray-200" aria-hidden="true">
+                    <div className="h-4 overflow-hidden rounded-full bg-linea" aria-hidden="true">
                       <div className="h-full rounded-full bg-exito-700" style={{ width: `${porcentaje}%` }} />
                     </div>
                     <p className="mt-1 text-base font-bold">
@@ -241,7 +241,7 @@ function ModalAbono({ facturaId, onCerrar, onListo }: { facturaId: string; onCer
         error ? <Mensaje tono="peligro">{error}</Mensaje> : <Cargando />
       ) : (
         <form onSubmit={guardar} className="space-y-5" noValidate>
-          <div className="rounded-xl bg-gray-50 p-4 text-lg">
+          <div className="rounded-xl bg-superficie p-4 text-lg">
             <p className="font-bold">{factura.clienteNombre}</p>
             <p>
               Saldo pendiente: <strong className="text-peligro-700">{pesos(factura.saldo)}</strong>
@@ -337,7 +337,7 @@ function ModalCuotas({ facturaId, onCerrar, onCambio }: { facturaId: string; onC
             <h3 className="mb-2 text-xl font-bold">Plan de pagos</h3>
             <ol className="space-y-3">
               {factura.cuotas.map((c) => (
-                <li key={c.id} className="rounded-xl border-2 border-gray-200 p-4">
+                <li key={c.id} className="rounded-xl border-2 border-linea p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-lg font-bold">
                       Cuota {c.numero} · {pesos(c.valor)}
@@ -382,7 +382,7 @@ function ModalCuotas({ facturaId, onCerrar, onCambio }: { facturaId: string; onC
             ) : (
               <ul className="space-y-2">
                 {factura.abonos.map((a) => (
-                  <li key={a.id} className="flex flex-wrap justify-between gap-2 rounded-xl bg-gray-50 px-4 py-3 text-lg">
+                  <li key={a.id} className="flex flex-wrap justify-between gap-2 rounded-xl bg-superficie px-4 py-3 text-lg">
                     <span>
                       {fechaHora(a.creadoEn)} · {textoMedioPago(a.medioPago)}
                       {a.medioPago === "MIXTO" ? ` (efectivo ${pesos(a.valorEfectivo)} + transferencia ${pesos(a.valorTransferencia)})` : ""}

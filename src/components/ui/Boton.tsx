@@ -57,7 +57,11 @@ export function Boton({
       ) : (
         icono && <Icono nombre={icono} className={pequeno ? "size-5" : "size-6"} />
       )}
-      <span>{cargando ? "Un momento…" : children}</span>
+      {/* Mientras carga se conserva el texto (la persona sigue sabiendo qué acción se está haciendo) */}
+      <span>
+        {children}
+        {cargando && <span className="sr-only"> — procesando, un momento</span>}
+      </span>
     </button>
   );
 }

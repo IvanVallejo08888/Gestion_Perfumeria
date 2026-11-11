@@ -7,6 +7,7 @@
 "use client";
 
 import { useEffect, useId, useRef, type ReactNode } from "react";
+import { Boton } from "./Boton";
 import { Icono } from "./Icono";
 
 interface Props {
@@ -47,14 +48,14 @@ export function Modal({ abierto, onCerrar, titulo, children, tamano = "md" }: Pr
     >
       {abierto && (
         <div className="flex max-h-[94dvh] flex-col">
-          <header className="flex items-center justify-between gap-3 border-b-2 border-gray-200 px-5 py-4">
+          <header className="flex items-center justify-between gap-3 border-b-2 border-linea px-5 py-4">
             <h2 id={tituloId} className="text-2xl font-bold">
               {titulo}
             </h2>
             <button
               type="button"
               onClick={onCerrar}
-              className="flex min-h-12 items-center gap-1 rounded-xl px-3 text-lg font-bold text-texto-suave hover:bg-gray-100"
+              className="flex min-h-12 items-center gap-1 rounded-xl px-3 text-lg font-bold text-texto-suave hover:bg-superficie-apagada"
             >
               <Icono nombre="cerrar" />
               Cerrar
@@ -78,6 +79,7 @@ export function Confirmar({
   titulo,
   mensaje,
   textoConfirmar = "Sí, continuar",
+  textoCancelar = "No, cancelar",
   peligro = false,
   cargando = false,
   onConfirmar,
@@ -86,7 +88,9 @@ export function Confirmar({
   abierto: boolean;
   titulo: string;
   mensaje: ReactNode;
+  /** Verbo + objeto de la acción ("Eliminar gasto"), nunca un genérico como "Aceptar". */
   textoConfirmar?: string;
+  textoCancelar?: string;
   peligro?: boolean;
   cargando?: boolean;
   onConfirmar: () => void;
@@ -96,23 +100,13 @@ export function Confirmar({
     <Modal abierto={abierto} onCerrar={onCerrar} titulo={titulo}>
       <div className="text-lg">{mensaje}</div>
       <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-        <button
-          type="button"
-          onClick={onCerrar}
-          className="min-h-12 rounded-xl border-2 border-borde bg-white px-5 text-lg font-bold hover:bg-gray-50"
-        >
-          No, cancelar
-        </button>
-        <button
-          type="button"
-          onClick={onConfirmar}
-          disabled={cargando}
-          className={`min-h-12 rounded-xl px-5 text-lg font-bold text-white disabled:opacity-60 ${
-            peligro ? "bg-peligro-700 hover:bg-peligro-800" : "bg-marca-700 hover:bg-marca-800"
-          }`}
-        >
-          {cargando ? "Un momento…" : textoConfirmar}
-        </button>
+        {/* Mismos botones del sistema de diseño que el resto de la app */}
+        <Boton variante="secundario" onClick={onCerrar} disabled={cargando}>
+          {textoCancelar}
+        </Boton>
+        <Boton variante={peligro ? "peligro" : "primario"} onClick={onConfirmar} cargando={cargando}>
+          {textoConfirmar}
+        </Boton>
       </div>
     </Modal>
   );

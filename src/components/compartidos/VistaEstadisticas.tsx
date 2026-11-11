@@ -43,7 +43,7 @@ export function VistaEstadisticas({ datos, mes }: { datos: Estadisticas; mes?: n
     <div className="space-y-6">
       <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {resumen.map((r) => (
-          <li key={r.titulo} className="rounded-2xl border-2 border-gray-200 bg-white p-5 shadow-sm">
+          <li key={r.titulo} className="rounded-2xl border border-linea bg-white p-5 shadow-sm">
             <p className="text-lg font-bold text-texto-suave">{r.titulo}</p>
             <p className={`mt-1 text-3xl font-bold ${r.peligro ? "text-peligro-700" : "text-marca-800"}`}>{r.valor}</p>
             <p className="mt-1 text-base text-texto-suave">{r.detalle}</p>
@@ -78,7 +78,7 @@ export function VistaEstadisticas({ datos, mes }: { datos: Estadisticas; mes?: n
           <table className="w-full min-w-[960px] text-left text-base">
             <caption className="sr-only">Detalle de ventas por mes del año {datos.anio}</caption>
             <thead>
-              <tr className="border-b-2 border-gray-300">
+              <tr className="border-b-2 border-linea-fuerte">
                 <th scope="col" className="py-2 pr-3">Mes</th>
                 <th scope="col" className="py-2 pr-3 text-right">Contado</th>
                 <th scope="col" className="py-2 pr-3 text-right">Créditos</th>
@@ -91,7 +91,7 @@ export function VistaEstadisticas({ datos, mes }: { datos: Estadisticas; mes?: n
             </thead>
             <tbody>
               {datos.meses.map((m) => (
-                <tr key={m.mes} className={`border-b border-gray-200 ${m.mes === mes ? "bg-marca-50 font-bold" : ""}`}>
+                <tr key={m.mes} className={`border-b border-linea ${m.mes === mes ? "bg-marca-50 font-bold" : ""}`}>
                   <th scope="row" className="py-2 pr-3">{m.nombre}</th>
                   <td className="py-2 pr-3 text-right">{pesos(m.ventasContado)}</td>
                   <td className="py-2 pr-3 text-right">{pesos(m.ventasCredito)}</td>
@@ -104,7 +104,7 @@ export function VistaEstadisticas({ datos, mes }: { datos: Estadisticas; mes?: n
               ))}
             </tbody>
             <tfoot>
-              <tr className="border-t-2 border-gray-400 font-bold">
+              <tr className="border-t-2 border-borde font-bold">
                 <th scope="row" className="py-2 pr-3">Total</th>
                 <td className="py-2 pr-3 text-right">{pesos(datos.totales.ventasContado)}</td>
                 <td className="py-2 pr-3 text-right">{pesos(datos.totales.ventasCredito)}</td>
@@ -126,7 +126,7 @@ export function VistaEstadisticas({ datos, mes }: { datos: Estadisticas; mes?: n
         ) : (
           <ol className="space-y-2">
             {datos.topProductos.map((p, i) => (
-              <li key={p.nombre} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-gray-50 px-4 py-3 text-lg">
+              <li key={p.nombre} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-superficie px-4 py-3 text-lg">
                 <span>
                   <span className="mr-2 font-bold text-marca-700">{i + 1}.</span>
                   {p.nombre}

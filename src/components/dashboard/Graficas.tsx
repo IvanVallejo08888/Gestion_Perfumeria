@@ -32,17 +32,17 @@ import { pesosCorto } from "@/lib/dashboard";
 import { anioMesColombia, pesos } from "@/lib/formato";
 import type { MesDashboard } from "@/tipos";
 
-/** Colores de las gráficas (marca-700 del tema + dos tonos que se distinguen con daltonismo). */
+/** Colores de las gráficas: Black Cherry (marca-800) del tema + dos tonos que se distinguen con daltonismo. */
 export const COLOR = {
-  principal: "#5b21b6",
+  principal: "#530309",
   /** "Otras" y "Sin categoría": no son una categoría real, van en gris. */
-  tenue: "#6b7280",
-  contado: "#5b21b6",
+  tenue: "#8c7a6e",
+  contado: "#530309",
   credito: "#0891b2",
   recaudo: "#c2410c",
-  tinta: "#111827",
-  tintaSuave: "#374151",
-  rejilla: "#e5e7eb",
+  tinta: "#231a16",
+  tintaSuave: "#4a3a32",
+  rejilla: "#e8e2da",
 } as const;
 
 /* ------------------------------ Tarjeta con título ------------------------------ */
@@ -66,12 +66,12 @@ export function TarjetaGrafica({
   children: ReactNode;
 }) {
   return (
-    <section className={`relative flex min-w-0 flex-col rounded-2xl border-2 border-gray-200 bg-white p-4 shadow-sm sm:p-5 ${className}`}>
+    <section className={`relative flex min-w-0 flex-col rounded-2xl border-2 border-linea bg-white p-4 shadow-sm sm:p-5 ${className}`}>
       <h3 className="text-xl font-bold">{titulo}</h3>
       {descripcion && <p className="text-base text-texto-suave">{descripcion}</p>}
       {acciones && <div className="mt-3">{acciones}</div>}
       {vacio ? (
-        <p className="mt-4 flex flex-1 items-center justify-center rounded-xl border-2 border-dashed border-gray-300 px-4 py-10 text-center text-lg text-texto-suave">
+        <p className="mt-4 flex flex-1 items-center justify-center rounded-xl border-2 border-dashed border-linea-fuerte px-4 py-10 text-center text-lg text-texto-suave">
           {textoVacio}
         </p>
       ) : (
@@ -85,7 +85,7 @@ export function TarjetaGrafica({
 
 function CajaDetalle({ titulo, lineas }: { titulo: string; lineas: [string, string][] }) {
   return (
-    <div className="max-w-64 rounded-xl border-2 border-gray-300 bg-white px-3 py-2 text-[16px] shadow-lg">
+    <div className="max-w-64 rounded-xl border-2 border-linea-fuerte bg-white px-3 py-2 text-[16px] shadow-lg">
       <p className="font-bold break-words">{titulo}</p>
       {lineas.map(([etiqueta, valor]) => (
         <p key={etiqueta} className="flex justify-between gap-4">
@@ -302,7 +302,7 @@ export function GraficaMensual({ meses, anio }: { meses: MesDashboard[]; anio: n
           <table className="w-full min-w-[34rem] text-left text-[16px]">
             <caption className="sr-only">Contado, crédito y recaudo por mes del año {anio}</caption>
             <thead>
-              <tr className="border-b-2 border-gray-300">
+              <tr className="border-b-2 border-linea-fuerte">
                 <th scope="col" className="py-2 pr-3">Mes</th>
                 <th scope="col" className="py-2 pr-3 text-right">Contado</th>
                 <th scope="col" className="py-2 pr-3 text-right">Crédito</th>
@@ -312,7 +312,7 @@ export function GraficaMensual({ meses, anio }: { meses: MesDashboard[]; anio: n
             </thead>
             <tbody>
               {meses.map((m) => (
-                <tr key={m.mes} className="border-b border-gray-200">
+                <tr key={m.mes} className="border-b border-linea">
                   <th scope="row" className="py-2 pr-3">{m.nombre}</th>
                   <td className="py-2 pr-3 text-right">{pesos(m.contado)}</td>
                   <td className="py-2 pr-3 text-right">{pesos(m.credito)}</td>

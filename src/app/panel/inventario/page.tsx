@@ -157,10 +157,10 @@ function Inventario() {
         titulo="Eliminar producto"
         mensaje={
           <>
-            ¿Seguro que deseas eliminar <strong>{eliminando?.nombre}</strong> del inventario? Las facturas anteriores no se afectan.
+            ¿Eliminar <strong>{eliminando?.nombre}</strong> del inventario? Ya no se podrá vender. Las facturas anteriores no se afectan.
           </>
         }
-        textoConfirmar="Sí, eliminar"
+        textoConfirmar="Eliminar producto"
         peligro
         cargando={cargandoEliminar}
         onConfirmar={eliminar}

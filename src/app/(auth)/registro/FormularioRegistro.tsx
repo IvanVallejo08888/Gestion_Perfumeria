@@ -84,7 +84,7 @@ export function FormularioRegistro() {
   }
 
   return (
-    <div className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
+    <div className="w-full max-w-2xl rounded-3xl border border-linea bg-white p-6 shadow-xl shadow-marca-700/5 sm:p-8">
       <h1 className="text-3xl font-bold">Crear una cuenta</h1>
       <p className="mt-1 text-lg text-texto-suave">
         Completa tus datos. Los campos con <span className="font-bold text-peligro-700">*</span> son obligatorios.
@@ -159,7 +159,7 @@ export function FormularioRegistro() {
         <div className="flex flex-col-reverse gap-3 sm:col-span-2 sm:flex-row sm:justify-between">
           <Link
             href="/login"
-            className="inline-flex min-h-12 items-center justify-center rounded-xl border-2 border-borde px-5 text-lg font-bold hover:bg-gray-50"
+            className="inline-flex min-h-12 items-center justify-center rounded-xl border-2 border-borde px-5 text-lg font-bold hover:bg-superficie"
           >
             Ya tengo cuenta
           </Link>
