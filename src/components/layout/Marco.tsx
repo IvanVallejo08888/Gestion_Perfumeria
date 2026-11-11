@@ -1,7 +1,7 @@
 /**
  * Marco principal de la aplicación (después de iniciar sesión).
- * - Computador / tablet horizontal: menú lateral que se oculta o muestra con el botón de la barra
- *   superior; la preferencia se guarda en este navegador (localStorage).
+ * - Computador / tablet horizontal: menú lateral con su propio botón (arriba a la derecha). Al ocultarlo
+ *   queda una franja angosta con solo ese botón; la preferencia se guarda en este navegador (localStorage).
  * - Celular / tablet vertical: barra superior compacta con botón que desliza el menú desde la izquierda.
  * - Para vendedores: contador de notificaciones que se actualiza cada minuto y,
  *   si la persona lo permite, avisos del navegador cuando hay cobros para hoy o vencidos.
@@ -201,9 +201,24 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
     </div>
   );
 
-  const cabecera = (
+  // Mismo número y color que el contador de «Notificaciones» dentro del menú
+  const insigniaContador = notificaciones && conteo.total > 0 && (
+    <span
+      className={`absolute -right-1 -top-1 min-w-6 rounded-full border-2 border-white px-1 text-center text-sm leading-5 font-bold ${
+        conteo.urgentes > 0 ? "bg-peligro-700 text-white" : "bg-alerta-50 text-alerta-800"
+      }`}
+    >
+      {conteo.total}
+      <span className="sr-only"> notificaciones{conteo.urgentes > 0 ? `, ${conteo.urgentes} urgentes` : ""}</span>
+    </span>
+  );
+
+  /** `conBoton`: en el menú lateral el título deja espacio para el botón de ocultar/mostrar. */
+  const cabecera = (conBoton: boolean) => (
     <div className="mb-5">
-      <p className="font-titulo text-lg font-semibold uppercase tracking-[0.12em] text-champan">Gestión de Perfumerías</p>
+      <p className={`font-titulo text-lg font-semibold uppercase tracking-[0.12em] text-champan ${conBoton ? "pr-14" : ""}`}>
+        Gestión de Perfumerías
+      </p>
       <p className="mt-1 text-xl font-bold text-white">{nombreUsuario}</p>
       <p className="text-base text-white/85">{subtitulo}</p>
     </div>
@@ -213,23 +228,43 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
 
   return (
     <div className="min-h-dvh lg:flex">
-      {/* Menú lateral (pantallas grandes). Se oculta encogiendo el ancho a 0; el contenido interno conserva su ancho. */}
+      {/*
+       * Menú lateral (pantallas grandes). Al ocultarlo se encoge a una franja de 80px que deja visible
+       * solo el botón; el contenido interno conserva su ancho y queda fuera del foco (inert).
+       */}
       <aside
-        id="menu-lateral"
-        inert={!lateralAbierta}
         className={`zona-oscura sticky top-0 hidden h-dvh shrink-0 overflow-hidden bg-marca-800 lg:block ${
           lateralListo ? "transition-[width] duration-250 ease-out" : ""
-        } ${lateralAbierta ? "w-80" : "w-0"}`}
+        } ${lateralAbierta ? "w-80" : "w-20"}`}
       >
-        <div className="flex h-full w-80 flex-col overflow-y-auto p-5">
-          {cabecera}
+        <button
+          type="button"
+          onClick={alternarLateral}
+          aria-expanded={lateralAbierta}
+          aria-controls="menu-lateral"
+          aria-label={etiquetaLateral}
+          title={etiquetaLateral}
+          className="absolute right-4 top-4 z-10 flex size-12 items-center justify-center rounded-xl text-white hover:bg-white/15"
+        >
+          <Icono nombre="menu" className="size-7" />
+          {/* Con el menú oculto no se ve el contador de «Notificaciones»: se muestra sobre el botón */}
+          {!lateralAbierta && insigniaContador}
+        </button>
+        <div
+          id="menu-lateral"
+          inert={!lateralAbierta}
+          className={`flex h-full w-80 flex-col overflow-y-auto p-5 ${lateralListo ? "transition-opacity duration-200" : ""} ${
+            lateralAbierta ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          {cabecera(true)}
           <div className="flex-1">{enlaces}</div>
           {pie}
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Barra superior: en celular abre el menú deslizable; en escritorio oculta o muestra el menú lateral */}
+        {/* Barra superior: en celular abre el menú deslizable; en escritorio solo muestra usuario y local */}
         <header className="zona-oscura sticky top-0 z-40 flex min-h-14 items-center gap-2 bg-marca-800 px-2 py-1 shadow-md sm:px-3 lg:px-4">
           <button
             ref={botonMenuRef}
@@ -241,28 +276,7 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
             className="relative flex size-12 shrink-0 items-center justify-center rounded-xl text-white hover:bg-white/15 lg:hidden"
           >
             <Icono nombre="menu" className="size-7" />
-            {/* Mismo número y color que el contador de «Notificaciones» dentro del menú */}
-            {notificaciones && conteo.total > 0 && (
-              <span
-                className={`absolute -right-1 -top-1 min-w-6 rounded-full border-2 border-white px-1 text-center text-sm leading-5 font-bold ${
-                  conteo.urgentes > 0 ? "bg-peligro-700 text-white" : "bg-alerta-50 text-alerta-800"
-                }`}
-              >
-                {conteo.total}
-                <span className="sr-only"> notificaciones{conteo.urgentes > 0 ? `, ${conteo.urgentes} urgentes` : ""}</span>
-              </span>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={alternarLateral}
-            aria-expanded={lateralAbierta}
-            aria-controls="menu-lateral"
-            aria-label={etiquetaLateral}
-            title={etiquetaLateral}
-            className="hidden size-12 shrink-0 items-center justify-center rounded-xl text-white hover:bg-white/15 lg:flex"
-          >
-            <Icono nombre="menu" className="size-7" />
+            {insigniaContador}
           </button>
           <div className="min-w-0 leading-tight">
             <p className="truncate text-base font-bold text-white">{nombreUsuario}</p>
@@ -304,7 +318,7 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
               Cerrar
             </button>
           </div>
-          {cabecera}
+          {cabecera(false)}
           <div className="flex-1">{enlaces}</div>
           <div className="mt-6">{pie}</div>
         </div>
