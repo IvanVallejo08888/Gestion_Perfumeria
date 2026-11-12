@@ -4,12 +4,14 @@
  *  2. Guía de usuario: un desplegable por módulo (textos en src/lib/guia-usuario.ts).
  *  3. Quejas e inquietudes: arma un mensaje para el desarrollador por WhatsApp o correo (no se guarda nada).
  *  4. Cuenta: cambiar contraseña y cerrar sesión.
+ *  5. Manual de usuario: botón que despliega una pestaña por sección (ver ManualUsuario.tsx).
  * Las preferencias se guardan en este dispositivo (ver hooks/usePreferencias.ts).
  */
 "use client";
 
 import { useId, useState, type ReactNode } from "react";
 import { CambiarMiPassword } from "@/components/compartidos/CambiarMiPassword";
+import { ManualUsuario } from "@/components/compartidos/ManualUsuario";
 import { Boton } from "@/components/ui/Boton";
 import { AreaTexto, Selector } from "@/components/ui/Campo";
 import { Desplegable } from "@/components/ui/Desplegable";
@@ -54,6 +56,9 @@ export function Ajustes({ usuario }: { usuario: UsuarioAjustes }) {
         </Seccion>
         <Seccion titulo="Cuenta">
           <Cuenta />
+        </Seccion>
+        <Seccion titulo="Manual de usuario">
+          <ManualUsuario rol={usuario.rol} />
         </Seccion>
       </div>
     </>
