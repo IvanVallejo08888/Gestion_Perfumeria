@@ -114,8 +114,9 @@ export function VistaDashboard({ anio, mes, localId, puedeAgregarUnidades = fals
             vacio={top.length === 0}
             className="xl:col-span-2"
             acciones={
-              <div role="group" aria-label="Ordenar el top por" className="grid grid-cols-2 items-center gap-2 sm:inline-grid sm:grid-cols-[auto_auto_auto]">
-                <span className="col-span-2 text-lg font-bold sm:col-span-1 sm:mr-1">Ordenar por:</span>
+              <div role="group" aria-label="Ordenar los más vendidos por" className="flex flex-wrap items-center gap-2">
+                {/* Fila flexible: cada botón toma el ancho de su texto, así caben con letra A++ a 360px */}
+                <span className="basis-full text-lg font-bold sm:mr-1 sm:basis-auto">Ordenar por:</span>
                 {(
                   [
                     ["unidades", "Unidades"],
@@ -127,8 +128,8 @@ export function VistaDashboard({ anio, mes, localId, puedeAgregarUnidades = fals
                     type="button"
                     aria-pressed={medida === valor}
                     onClick={() => setMedida(valor)}
-                    className={`inline-flex min-h-12 items-center justify-center gap-1.5 rounded-xl border-2 px-4 text-lg font-bold ${
-                      medida === valor ? "border-marca-700 bg-marca-700 text-white" : "border-borde bg-white hover:border-marca-700 hover:bg-marca-50"
+                    className={`inline-flex min-h-12 flex-1 items-center justify-center gap-1 rounded-xl border-2 px-3 text-lg font-bold sm:flex-none sm:px-4 ${
+                      medida === valor ? "border-marca-700 bg-marca-700 text-white" : "border-borde bg-tarjeta hover:border-marca-700 hover:bg-marca-50"
                     }`}
                   >
                     {medida === valor && <Icono nombre="check" className="size-5 shrink-0" />}

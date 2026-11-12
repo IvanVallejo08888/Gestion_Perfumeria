@@ -78,8 +78,8 @@ Se puede ejecutar varias veces sin duplicar: las marcas que ya existen y los có
 ## 4. Cómo funciona
 
 ### Roles
-- **Administrador (único):** inicia sesión con identificación `12345987600`. Crea locales, administra sus **sectores de la ciudad** y sus **categorías de gastos**, ve y gestiona usuarios (asignar local, editar, cambiar contraseña, pausar/reactivar, eliminar), ve las estadísticas y los gastos de cada local y descarga reportes Excel (del año o del mes) por local o el **consolidado de todos los locales**.
-- **Vendedor:** se registra (nombre, identificación, correo, teléfono, contraseña validada) y queda **en espera** hasta que el administrador le asigna un local. Luego trabaja solo sobre su local, y puede descargar el Excel de **su** local (nunca el de otro).
+- **Administrador (único):** inicia sesión con identificación `12345987600`. Crea locales, administra sus **sectores de la ciudad**, sus **marcas** de perfume y sus **categorías de gastos**, ve y gestiona usuarios (asignar local, editar, cambiar contraseña, pausar/reactivar, eliminar), ve las estadísticas y los gastos de cada local y descarga reportes Excel (del año o del mes) por local o el **consolidado de todos los locales**.
+- **Vendedor:** se registra (nombre, identificación, correo, teléfono, contraseña validada) y queda **en espera** hasta que el administrador le asigna un local. Luego trabaja solo sobre su local: factura, maneja el inventario (y puede agregar marcas nuevas desde el formulario de producto) y descarga el Excel de **su** local (nunca el de otro).
 
 ### Seguridad de sesión
 Cada petición se valida contra la base de datos: si el administrador **pausa, elimina o cambia la contraseña** de un usuario, su sesión se cierra al instante.
@@ -98,6 +98,26 @@ Al registrar, todo ocurre en una **transacción**: se descuenta el inventario, s
 ### Sectores
 En **Locales → Sectores de la ciudad** el administrador agrega sectores (uno a uno o pegando varios, uno por línea), los edita y los elimina. Si un sector ya se usó en facturas solo se desactiva. La factura guarda el nombre del sector, así el historial no cambia.
 
+### Marcas
+Cada local tiene sus propias marcas (Dior, Lattafa…). El administrador las maneja en **Locales → Editar → Marcas** igual que los sectores: agregar una o varias, renombrar, desactivar o eliminar. El nombre no se repite en el local aunque cambien las mayúsculas, y una marca que ya se usó en productos solo se desactiva.
+
+El vendedor elige la marca al crear o editar un perfume y, si no está, la agrega ahí mismo con **«Agregar marca»** (queda elegida). Si el administrador desactivó una marca, el vendedor no la puede volver a crear.
+
+### Inventario
+Cada perfume se clasifica con **marca**, **tipo** (Original, 1.1, Imitación, Versión, Esencia), **género** (Hombre/Mujer), **público** (Adulto/Infantil → Niño/Niña) y **tamaño** (2, 2.5, 3.4, 4 y 4.2 oz). Los productos creados antes de la clasificación aparecen como «Sin categoría» hasta que se editen.
+
+- **Buscar y filtrar:** pestañas Todos | Hombre | Mujer, con chips Adulto/Niño o Adulta/Niña, más filtros de marca, tipo, tamaño y estado de stock (disponible, bajo, agotado) y el buscador por nombre o código. Los filtros se combinan, se aplican en el servidor y quedan en la dirección (`/panel/inventario?genero=MUJER&tipo=ORIGINAL`), así se pueden guardar o compartir.
+- **En celular y tablet** cada perfume es una tarjeta con dos botones grandes; **en escritorio** (desde 1280 px) se ve una tabla con Marca, Nombre, Tipo, Género, Tamaño, Precio, Stock y Acciones.
+- **Agregar unidades:** cantidad y nota opcional (por ejemplo, la factura del proveedor).
+- **Vender:** abre **Facturación** con ese perfume ya cargado (`?producto=…`), en contado o en crédito. No hay otro flujo de venta. Si está agotado, el botón lo dice y no deja vender.
+- **Detalle:** datos del perfume, sus **últimos 20 movimientos**, y los botones Editar, Ajustar stock y Eliminar.
+- **Ajustar stock:** sumar o restar unidades por daño o conteo, con **motivo obligatorio**. Nunca deja el stock en negativo.
+- **Editar** un perfume no cambia su stock: las unidades solo cambian con movimientos. Al **eliminar**, si ya se vendió solo se oculta (el historial no cambia).
+
+**Trazabilidad:** cada cambio de stock queda en la tabla `movimientos_inventario` con el tipo (**Ingreso**, **Venta** o **Ajuste**), la cantidad, el stock que quedó, quién lo hizo (se guarda su nombre), la factura (en las ventas) y la nota. La factura registra sus movimientos de venta en la misma transacción que descuenta el stock; crear un perfume con unidades registra un ingreso «Stock inicial».
+
+Para cargar datos de prueba: `npm run db:seed-perfumes -- "Nombre del local"` (ver *Comandos útiles*).
+
 ### Gastos
 El vendedor los registra en **Gastos** (categoría, valor, medio de pago, fecha y descripción), los consulta por mes y categoría, y puede eliminar solo los suyos registrados ese día. El administrador maneja las categorías en **Locales → Editar** y ve los gastos en **Reportes**. Cada local nuevo empieza con 7 categorías.
 
@@ -115,7 +135,13 @@ Arriba de las estadísticas, en **Reportes** (vendedor: su local · administrado
 - **Indicadores:** total vendido, recaudado, unidades vendidas, valor del inventario hoy, cartera pendiente y perfumes agotados.
 - **Gráficas:** top 10 perfumes (por unidades o por valor), ventas por Hombre / Niño / Mujer / Niña, por tipo, por marca (top 8 + «Otras») y por tamaño, contado y crédito mes a mes con el recaudo, y el inventario de hoy (stock por género y perfumes por reponer, con «Agregar unidades» para el vendedor).
 
-Las ventas por categoría salen de la copia guardada en cada factura (no del producto actual); las ventas anteriores a la clasificación aparecen como «Sin categoría». Todo se calcula en la base de datos (`src/server/servicios/dashboard.ts`, `GET /api/dashboard`).
+**Qué periodo usa cada cosa:** las ventas, el recaudo, las unidades y las gráficas de ventas usan el año o mes elegido; la gráfica mes a mes muestra siempre los 12 meses del año; el valor del inventario, la cartera, los agotados y la sección de inventario son **de hoy**.
+
+Las ventas por categoría salen de la copia guardada en cada factura (no del producto actual): si luego se reclasifica un perfume, las ventas pasadas no cambian. Las ventas anteriores a la clasificación aparecen como «Sin categoría». El «valor vendido» por categoría es la suma de los productos, sin descuentos ni costos adicionales.
+
+Cada gráfica escribe el nombre y el valor en sus barras, trae sus datos en una tabla para lectores de pantalla y muestra «Aún no hay ventas en este periodo» si no hay datos. En celular los indicadores van de 2 en 2 y una gráfica por fila; en escritorio, 3 indicadores y 2 gráficas por fila.
+
+Todo se calcula en la base de datos (`src/server/servicios/dashboard.ts`, `GET /api/dashboard`): al navegador solo llegan totales. El vendedor siempre ve su local; el administrador elige un local o el consolidado.
 
 ### Reportes en Excel
 Se descargan desde **Reportes**, del año completo o de un mes.

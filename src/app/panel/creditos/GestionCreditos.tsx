@@ -38,16 +38,16 @@ interface Credito {
   proximaCuota: string | null;
 }
 
-export function GestionCreditos({ identificacionInicial }: { identificacionInicial: string }) {
+export function GestionCreditos({ busquedaInicial }: { busquedaInicial: string }) {
   const avisos = useAvisos();
-  const [identificacion, setIdentificacion] = useState(identificacionInicial);
-  const [buscada, setBuscada] = useState(identificacionInicial);
+  const [texto, setTexto] = useState(busquedaInicial);
+  const [buscada, setBuscada] = useState(busquedaInicial);
   const [abonando, setAbonando] = useState<string | null>(null);
   const [cuotasDe, setCuotasDe] = useState<string | null>(null);
   const [detalleId, setDetalleId] = useState<string | null>(null);
 
   const consulta = useConsulta<{ creditos: Credito[] }>(
-    `/api/creditos${buscada ? `?identificacion=${encodeURIComponent(buscada)}` : ""}`,
+    `/api/creditos${buscada ? `?q=${encodeURIComponent(buscada)}` : ""}`,
     { alError: avisos.error },
   );
   const creditos = consulta.cargando ? null : (consulta.datos?.creditos ?? (consulta.error ? [] : null));
@@ -55,24 +55,28 @@ export function GestionCreditos({ identificacionInicial }: { identificacionInici
 
   function buscar(e: FormEvent) {
     e.preventDefault();
-    setBuscada(identificacion.trim());
+    setBuscada(texto.trim());
   }
 
   const vencida = (fechaIso: string | null) => !!fechaIso && new Date(fechaIso).getTime() < Date.now();
 
   return (
     <>
-      <EncabezadoPagina titulo="Créditos y abonos" descripcion="Busca al cliente por su identificación para ver y abonar a sus créditos." />
+      <EncabezadoPagina titulo="Créditos y abonos" descripcion="Busca al cliente por identificación, celular o nombre para ver y abonar a sus créditos." />
 
       <Tarjeta className="mb-6">
         <form onSubmit={buscar} className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <Campo
             className="sm:flex-1"
-            etiqueta="Identificación del cliente"
-            inputMode="numeric"
-            placeholder="Ej. 1085123456"
-            value={identificacion}
-            onChange={(e) => setIdentificacion(e.target.value.replace(/\D/g, ""))}
+            etiqueta="Buscar cliente"
+            ayuda="Identificación, celular o nombre. Puedes escribir solo una parte."
+            type="search"
+            enterKeyHint="search"
+            autoComplete="off"
+            maxLength={100}
+            placeholder="Ej. 1085 o maria"
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
           />
           <Boton type="submit" icono="buscar">
             Buscar
@@ -81,7 +85,7 @@ export function GestionCreditos({ identificacionInicial }: { identificacionInici
             <Boton
               variante="secundario"
               onClick={() => {
-                setIdentificacion("");
+                setTexto("");
                 setBuscada("");
               }}
             >
@@ -92,14 +96,14 @@ export function GestionCreditos({ identificacionInicial }: { identificacionInici
       </Tarjeta>
 
       <h2 className="mb-3 text-2xl font-bold">
-        {buscada ? `Créditos del cliente ${buscada}` : "Todos los créditos pendientes"}
+        {buscada ? `Créditos que coinciden con «${buscada}»` : "Todos los créditos pendientes"}
       </h2>
 
       {!creditos ? (
         <Cargando />
       ) : creditos.length === 0 ? (
-        <Vacio icono="credito" titulo={buscada ? "Este cliente no tiene créditos" : "No hay créditos pendientes"}>
-          {buscada ? "Revisa que la identificación esté bien escrita." : "¡Todos los créditos están al día!"}
+        <Vacio icono="credito" titulo={buscada ? "No se encontraron créditos" : "No hay créditos pendientes"}>
+          {buscada ? "Revisa lo que escribiste o prueba con otra parte del nombre, la identificación o el celular." : "¡Todos los créditos están al día!"}
         </Vacio>
       ) : (
         <ul className="grid gap-4 lg:grid-cols-2">
@@ -126,11 +130,11 @@ export function GestionCreditos({ identificacionInicial }: { identificacionInici
 
                   <dl className="mt-4 grid grid-cols-2 gap-3 text-lg">
                     <div><dt className="text-base font-bold text-texto-suave">Valor del crédito</dt><dd className="font-bold">{pesos(c.total)}</dd></div>
-                    <div><dt className="text-base font-bold text-texto-suave">Saldo pendiente</dt><dd className="text-xl font-bold text-peligro-700">{pesos(c.saldo)}</dd></div>
+                    <div><dt className="text-base font-bold text-texto-suave">Saldo pendiente</dt><dd className="text-xl font-bold text-peligro-800">{pesos(c.saldo)}</dd></div>
                     <div><dt className="text-base font-bold text-texto-suave">Cuotas pagadas</dt><dd>{c.cuotasPagadas} de {c.totalCuotas}</dd></div>
                     <div>
                       <dt className="text-base font-bold text-texto-suave">{c.estado === "COMPLETADA" ? "Pagado el" : "Próximo cobro"}</dt>
-                      <dd className={vencida(c.proximaCuota) && c.estado === "PENDIENTE" ? "font-bold text-peligro-700" : ""}>
+                      <dd className={vencida(c.proximaCuota) && c.estado === "PENDIENTE" ? "font-bold text-peligro-800" : ""}>
                         {c.estado === "COMPLETADA"
                           ? c.completadaEn && fechaHora(c.completadaEn)
                           : c.proximaCuota
@@ -142,7 +146,7 @@ export function GestionCreditos({ identificacionInicial }: { identificacionInici
 
                   {/* Barra de progreso con texto */}
                   <div className="mt-4">
-                    <div className="h-4 overflow-hidden rounded-full bg-gray-200" aria-hidden="true">
+                    <div className="h-4 overflow-hidden rounded-full bg-linea" aria-hidden="true">
                       <div className="h-full rounded-full bg-exito-700" style={{ width: `${porcentaje}%` }} />
                     </div>
                     <p className="mt-1 text-base font-bold">
@@ -241,10 +245,10 @@ function ModalAbono({ facturaId, onCerrar, onListo }: { facturaId: string; onCer
         error ? <Mensaje tono="peligro">{error}</Mensaje> : <Cargando />
       ) : (
         <form onSubmit={guardar} className="space-y-5" noValidate>
-          <div className="rounded-xl bg-gray-50 p-4 text-lg">
+          <div className="rounded-xl bg-superficie p-4 text-lg">
             <p className="font-bold">{factura.clienteNombre}</p>
             <p>
-              Saldo pendiente: <strong className="text-peligro-700">{pesos(factura.saldo)}</strong>
+              Saldo pendiente: <strong className="text-peligro-800">{pesos(factura.saldo)}</strong>
             </p>
             {proxima && (
               <p>
@@ -337,7 +341,7 @@ function ModalCuotas({ facturaId, onCerrar, onCambio }: { facturaId: string; onC
             <h3 className="mb-2 text-xl font-bold">Plan de pagos</h3>
             <ol className="space-y-3">
               {factura.cuotas.map((c) => (
-                <li key={c.id} className="rounded-xl border-2 border-gray-200 p-4">
+                <li key={c.id} className="rounded-xl border-2 border-linea p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-lg font-bold">
                       Cuota {c.numero} · {pesos(c.valor)}
@@ -382,7 +386,7 @@ function ModalCuotas({ facturaId, onCerrar, onCambio }: { facturaId: string; onC
             ) : (
               <ul className="space-y-2">
                 {factura.abonos.map((a) => (
-                  <li key={a.id} className="flex flex-wrap justify-between gap-2 rounded-xl bg-gray-50 px-4 py-3 text-lg">
+                  <li key={a.id} className="flex flex-wrap justify-between gap-2 rounded-xl bg-superficie px-4 py-3 text-lg">
                     <span>
                       {fechaHora(a.creadoEn)} · {textoMedioPago(a.medioPago)}
                       {a.medioPago === "MIXTO" ? ` (efectivo ${pesos(a.valorEfectivo)} + transferencia ${pesos(a.valorTransferencia)})` : ""}

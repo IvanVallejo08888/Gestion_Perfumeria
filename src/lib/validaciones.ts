@@ -3,8 +3,16 @@
  * Todos los mensajes están en español y redactados de forma clara para el usuario.
  */
 import { z } from "zod";
+
+/*
+ * Mensajes por defecto de Zod en español (por ejemplo «Opción inválida…» en vez de «Invalid option…»).
+ * Aplica a todos los esquemas: los que traen su propio mensaje lo conservan. Este archivo lo cargan
+ * el servidor (vía src/lib/api.ts) y los formularios del navegador, así que se configura en ambos.
+ */
+z.config(z.locales.es());
 import { GENEROS, PUBLICOS, TAMANOS, TIPOS_PRODUCTO } from "./clasificacion";
 import { ESTADOS_STOCK } from "./inventario";
+import { MODULOS } from "./guia-usuario";
 
 /* --------------------------- Reglas de contraseña --------------------------- */
 
@@ -31,12 +39,15 @@ export const passwordSchema = z
 
 /* ------------------------------ Campos comunes ------------------------------ */
 
-const texto = (campo: string, max = 120) =>
-  z
-    .string({ error: `${campo} es obligatorio.` })
+/** `genero` concuerda el mensaje con el campo: "El nombre … obligatorio" / "La dirección … obligatoria". */
+const texto = (campo: string, max = 120, genero: "m" | "f" = "m") => {
+  const o = genero === "f" ? "a" : "o";
+  return z
+    .string({ error: `${campo} es obligatori${o}.` })
     .trim()
-    .min(1, `${campo} es obligatorio.`)
-    .max(max, `${campo} es demasiado largo.`);
+    .min(1, `${campo} es obligatori${o}.`)
+    .max(max, `${campo} es demasiado larg${o}.`);
+};
 
 export const identificacionSchema = z
   .string({ error: "La identificación es obligatoria." })
@@ -172,7 +183,7 @@ export const clienteSchema = z.object({
   identificacion: identificacionSchema,
   nombre: texto("El nombre del cliente"),
   telefono: telefonoSchema,
-  direccion: texto("La dirección", 160),
+  direccion: texto("La dirección", 160, "f"),
   sector: texto("El sector", 80),
 });
 
@@ -297,6 +308,12 @@ export const filtroDashboardSchema = z.object({
   localId: z.uuid("Selecciona un local válido.").optional(),
 });
 
+/** Créditos: búsqueda libre del cliente por identificación, celular o nombre (también acepta ?identificacion=). */
+export const filtroCreditosSchema = z.object({
+  q: z.string().trim().max(100, "La búsqueda es demasiado larga.").optional(),
+  identificacion: z.string().trim().max(30).optional(),
+});
+
 /** Convierte los parámetros de la dirección en objeto y descarta los vacíos. */
 export function parametros(url: URLSearchParams): Record<string, string> {
   return Object.fromEntries([...url].filter(([, valor]) => valor !== ""));
@@ -306,3 +323,28 @@ export function parametros(url: URLSearchParams): Record<string, string> {
 export function primerError(error: z.ZodError): string {
   return error.issues[0]?.message ?? "Los datos enviados no son válidos.";
 }
+
+/* ------------------------ Quejas e inquietudes (soporte) ------------------------ */
+
+export const TIPOS_QUEJA = [
+  { valor: "ERROR", texto: "Error" },
+  { valor: "SUGERENCIA", texto: "Sugerencia" },
+  { valor: "DUDA", texto: "Duda" },
+] as const;
+
+/** Pantallas que se pueden elegir en «¿En qué pantalla pasó?»: los módulos + Ajustes + Otra. */
+export const PANTALLAS_QUEJA = [...MODULOS, { id: "ajustes", nombre: "Ajustes" }, { id: "otra", nombre: "Otra / no estoy seguro" }] as const;
+
+export const quejaSchema = z.object({
+  tipo: z.enum(["ERROR", "SUGERENCIA", "DUDA"], { error: "Elige si es un error, una sugerencia o una duda." }),
+  pantalla: z
+    .string({ error: "Elige la pantalla donde pasó." })
+    .refine((v) => PANTALLAS_QUEJA.some((p) => p.id === v), "Elige la pantalla donde pasó."),
+  descripcion: z
+    .string({ error: "Cuéntanos qué pasó." })
+    .trim()
+    .min(10, "Cuéntanos un poco más: escribe mínimo 10 caracteres.")
+    .max(1000, "El texto es demasiado largo (máximo 1000 caracteres)."),
+});
+
+export type Queja = z.infer<typeof quejaSchema>;

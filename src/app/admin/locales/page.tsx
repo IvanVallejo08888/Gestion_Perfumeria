@@ -148,7 +148,7 @@ export default function PaginaLocales() {
         </form>
 
         {editando && editando !== "nuevo" && (
-          <section className="mt-8 border-t-2 border-gray-200 pt-6">
+          <section className="mt-8 border-t-2 border-linea pt-6">
             <h3 className="mb-1 text-2xl font-bold">Marcas</h3>
             <p className="mb-4 text-lg text-texto-suave">Son las casas de perfume que eligen los vendedores al crear un producto.</p>
             <GestorNombres
@@ -165,7 +165,7 @@ export default function PaginaLocales() {
         )}
 
         {editando && editando !== "nuevo" && (
-          <section className="mt-8 border-t-2 border-gray-200 pt-6">
+          <section className="mt-8 border-t-2 border-linea pt-6">
             <h3 className="mb-1 text-2xl font-bold">Categorías de gastos</h3>
             <p className="mb-4 text-lg text-texto-suave">Son las que eligen los vendedores al registrar un gasto.</p>
             <GestorNombres

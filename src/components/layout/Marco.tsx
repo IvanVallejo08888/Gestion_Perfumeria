@@ -1,7 +1,8 @@
 /**
  * Marco principal de la aplicación (después de iniciar sesión).
- * - Computador / tablet horizontal: menú lateral fijo.
- * - Celular / tablet vertical: barra superior con botón "Menú" que abre el menú completo.
+ * - Computador / tablet horizontal: menú lateral con su propio botón (arriba a la derecha). Al ocultarlo
+ *   queda una franja angosta con solo ese botón; la preferencia se guarda en este navegador (localStorage).
+ * - Celular / tablet vertical: barra superior compacta con botón que desliza el menú desde la izquierda.
  * - Para vendedores: contador de notificaciones que se actualiza cada minuto y,
  *   si la persona lo permite, avisos del navegador cuando hay cobros para hoy o vencidos.
  */
@@ -12,9 +13,9 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useIntervalo } from "@/hooks/useIntervalo";
 import { useAlCambiarNotificaciones } from "@/hooks/useNotificaciones";
+import { cerrarSesion, ETIQUETA_COBRO } from "@/lib/cerrar-sesion";
 import { api } from "@/lib/http";
 import { BotonInstalar } from "../pwa/BotonInstalar";
-import { ControlTexto } from "./ControlTexto";
 import { Icono, type NombreIcono } from "../ui/Icono";
 
 export interface ItemMenu {
@@ -34,16 +35,77 @@ interface Props {
 }
 
 const INTERVALO_NOTIFICACIONES_MS = 60_000;
-const ETIQUETA_COBRO = "recordatorio-cobro";
+const CLAVE_LATERAL = "menu-lateral-abierto";
 
 export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false, children }: Props) {
   const ruta = usePathname();
   const [menuAbierto, setMenuAbierto] = useState(false);
+  const [lateralAbierta, setLateralAbierta] = useState(true);
+  // La transición se activa después de leer la preferencia, para que al recargar no se vea cerrarse
+  const [lateralListo, setLateralListo] = useState(false);
   const [conteo, setConteo] = useState({ total: 0, urgentes: 0 });
   const ultimoAvisoRef = useRef<string | null>(null);
 
+  const botonMenuRef = useRef<HTMLButtonElement>(null);
+  const botonCerrarRef = useRef<HTMLButtonElement>(null);
+  const panelMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(CLAVE_LATERAL) === "0") setLateralAbierta(false);
+    } catch {
+      /* almacenamiento bloqueado: se queda abierto */
+    }
+    const id = requestAnimationFrame(() => setLateralListo(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  function alternarLateral() {
+    setLateralAbierta((abierta) => {
+      try {
+        localStorage.setItem(CLAVE_LATERAL, abierta ? "0" : "1");
+      } catch {
+        /* sin almacenamiento: solo dura mientras la página está abierta */
+      }
+      return !abierta;
+    });
+  }
+
   // Cerrar el menú del celular al cambiar de página
   useEffect(() => setMenuAbierto(false), [ruta]);
+
+  /*
+   * Menú del celular accesible con teclado (WCAG 2.1.2 y 2.4.3):
+   * al abrir, el foco pasa al botón «Cerrar»; Esc lo cierra; Tab no se sale del menú;
+   * al cerrar, el foco vuelve al botón «Menú».
+   */
+  useEffect(() => {
+    if (!menuAbierto) return;
+    botonCerrarRef.current?.focus();
+    const botonMenu = botonMenuRef.current;
+    function alTeclear(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setMenuAbierto(false);
+        return;
+      }
+      if (e.key !== "Tab" || !panelMenuRef.current) return;
+      const enfocables = panelMenuRef.current.querySelectorAll<HTMLElement>("a[href], button:not([disabled])");
+      const primero = enfocables[0];
+      const ultimo = enfocables[enfocables.length - 1];
+      if (e.shiftKey && document.activeElement === primero) {
+        e.preventDefault();
+        ultimo?.focus();
+      } else if (!e.shiftKey && document.activeElement === ultimo) {
+        e.preventDefault();
+        primero?.focus();
+      }
+    }
+    document.addEventListener("keydown", alTeclear);
+    return () => {
+      document.removeEventListener("keydown", alTeclear);
+      botonMenu?.focus();
+    };
+  }, [menuAbierto]);
 
   /* ---------- Consulta periódica de notificaciones (solo vendedores) ---------- */
   const consultar = useCallback(async () => {
@@ -73,12 +135,6 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
   // Cuando otra pantalla avisa que algo cambió (venta, abono, stock…)
   useAlCambiarNotificaciones(consultar, notificaciones);
 
-  async function salir() {
-    await api("/api/auth/logout", { method: "POST" }).catch(() => {});
-    await cerrarNotificaciones().catch(() => {});
-    window.location.href = "/login";
-  }
-
   const enlaces = (
     <nav aria-label="Menú principal">
       <ul className="space-y-1.5">
@@ -91,7 +147,7 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
                 href={item.href}
                 aria-current={activo ? "page" : undefined}
                 className={`flex min-h-14 items-center gap-3 rounded-xl px-4 text-lg font-bold transition-colors ${
-                  activo ? "bg-white text-marca-800 shadow" : "text-white hover:bg-white/15"
+                  activo ? "bg-perla text-menu shadow" : "text-white hover:bg-white/10"
                 }`}
               >
                 <Icono nombre={item.icono} className="size-7" />
@@ -115,18 +171,13 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
   );
 
   const pie = (
-    <div className="space-y-4 border-t-2 border-white/20 pt-4">
-      <div>
-        <p className="text-base text-white/80">Tamaño de letra</p>
-        <div className="mt-1">
-          <ControlTexto claro />
-        </div>
-      </div>
+    // El tamaño de letra se cambia en Ajustes (y en el inicio de sesión, antes de entrar)
+    <div className="space-y-4 border-t border-champan/50 pt-4">
       <BotonInstalar claro />
       {notificaciones && <PermisoAvisos />}
       <button
         type="button"
-        onClick={salir}
+        onClick={cerrarSesion}
         className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border-2 border-white/70 text-lg font-bold text-white hover:bg-white/15"
       >
         <Icono nombre="salir" />
@@ -135,71 +186,128 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
     </div>
   );
 
-  const cabecera = (
+  // Mismo número y color que el contador de «Notificaciones» dentro del menú
+  const insigniaContador = notificaciones && conteo.total > 0 && (
+    <span
+      className={`absolute -right-1 -top-1 min-w-6 rounded-full border-2 border-white px-1 text-center text-sm leading-5 font-bold ${
+        conteo.urgentes > 0 ? "bg-peligro-700 text-white" : "bg-alerta-50 text-alerta-800"
+      }`}
+    >
+      {conteo.total}
+      <span className="sr-only"> notificaciones{conteo.urgentes > 0 ? `, ${conteo.urgentes} urgentes` : ""}</span>
+    </span>
+  );
+
+  /** `conBoton`: en el menú lateral el título deja espacio para el botón de ocultar/mostrar. */
+  const cabecera = (conBoton: boolean) => (
     <div className="mb-5">
-      <p className="text-sm font-bold uppercase tracking-wide text-white/70">Gestión de Perfumerías</p>
+      <p className={`font-titulo text-lg font-semibold uppercase tracking-[0.12em] text-champan ${conBoton ? "pr-14" : ""}`}>
+        Gestión de Perfumerías
+      </p>
       <p className="mt-1 text-xl font-bold text-white">{nombreUsuario}</p>
       <p className="text-base text-white/85">{subtitulo}</p>
     </div>
   );
 
+  const etiquetaLateral = lateralAbierta ? "Ocultar menú lateral" : "Mostrar menú lateral";
+
   return (
     <div className="min-h-dvh lg:flex">
-      {/* Menú lateral (pantallas grandes) */}
-      <aside className="sticky top-0 hidden h-dvh w-80 shrink-0 flex-col overflow-y-auto bg-marca-800 p-5 lg:flex">
-        {cabecera}
-        <div className="flex-1">{enlaces}</div>
-        {pie}
-      </aside>
-
-      {/* Barra superior (celular y tablet) */}
-      <header className="sticky top-0 z-40 flex items-center justify-between gap-3 bg-marca-800 px-4 py-3 shadow-md lg:hidden">
-        <div className="min-w-0">
-          <p className="truncate text-lg font-bold text-white">{nombreUsuario}</p>
-          <p className="truncate text-sm text-white/85">{subtitulo}</p>
-        </div>
+      {/*
+       * Menú lateral (pantallas grandes). Al ocultarlo se encoge a una franja de 80px que deja visible
+       * solo el botón; el contenido interno conserva su ancho y queda fuera del foco (inert).
+       */}
+      <aside
+        className={`zona-oscura sticky top-0 hidden h-dvh shrink-0 overflow-hidden bg-menu lg:block ${
+          lateralListo ? "transition-[width] duration-250 ease-out" : ""
+        } ${lateralAbierta ? "w-80" : "w-20"}`}
+      >
         <button
           type="button"
-          onClick={() => setMenuAbierto(true)}
-          aria-expanded={menuAbierto}
-          aria-controls="menu-movil"
-          className="relative flex min-h-12 items-center gap-2 rounded-xl border-2 border-white/70 px-4 text-lg font-bold text-white"
+          onClick={alternarLateral}
+          aria-expanded={lateralAbierta}
+          aria-controls="menu-lateral"
+          aria-label={etiquetaLateral}
+          title={etiquetaLateral}
+          className="absolute right-4 top-4 z-10 flex size-12 items-center justify-center rounded-xl text-white hover:bg-white/15"
         >
-          <Icono nombre="menu" />
-          Menú
-          {notificaciones && conteo.urgentes > 0 && (
-            <span className="absolute -right-2 -top-2 rounded-full bg-peligro-700 px-2 text-sm font-bold text-white">
-              {conteo.urgentes}
-            </span>
-          )}
+          <Icono nombre="menu" className="size-7" />
+          {/* Con el menú oculto no se ve el contador de «Notificaciones»: se muestra sobre el botón */}
+          {!lateralAbierta && insigniaContador}
         </button>
-      </header>
-
-      {/* Menú desplegable (celular) */}
-      {menuAbierto && (
-        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Menú">
-          <button type="button" className="absolute inset-0 bg-black/60" onClick={() => setMenuAbierto(false)} aria-label="Cerrar menú" />
-          <div id="menu-movil" className="absolute inset-y-0 right-0 flex w-[88vw] max-w-sm flex-col overflow-y-auto bg-marca-800 p-5">
-            <div className="mb-3 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setMenuAbierto(false)}
-                className="flex min-h-12 items-center gap-1 rounded-xl px-3 text-lg font-bold text-white hover:bg-white/15"
-              >
-                <Icono nombre="cerrar" />
-                Cerrar
-              </button>
-            </div>
-            {cabecera}
-            <div className="flex-1">{enlaces}</div>
-            <div className="mt-6">{pie}</div>
-          </div>
+        <div
+          id="menu-lateral"
+          inert={!lateralAbierta}
+          className={`flex h-full w-80 flex-col overflow-y-auto p-5 ${lateralListo ? "transition-opacity duration-200" : ""} ${
+            lateralAbierta ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          {cabecera(true)}
+          <div className="flex-1">{enlaces}</div>
+          {pie}
         </div>
-      )}
+      </aside>
 
-      <main id="contenido" className="min-w-0 flex-1 px-3 py-6 sm:px-6 lg:px-10 lg:py-8">
-        <div className="mx-auto max-w-6xl">{children}</div>
-      </main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Barra superior: en celular abre el menú deslizable; en escritorio solo muestra usuario y local */}
+        <header className="zona-oscura sticky top-0 z-40 flex min-h-14 items-center gap-2 bg-menu px-2 py-1 shadow-md sm:px-3 lg:px-4">
+          <button
+            ref={botonMenuRef}
+            type="button"
+            onClick={() => setMenuAbierto(true)}
+            aria-expanded={menuAbierto}
+            aria-controls="menu-movil"
+            aria-label="Abrir menú"
+            className="relative flex size-12 shrink-0 items-center justify-center rounded-xl text-white hover:bg-white/15 lg:hidden"
+          >
+            <Icono nombre="menu" className="size-7" />
+            {insigniaContador}
+          </button>
+          <div className="min-w-0 leading-tight">
+            <p className="truncate text-base font-bold text-white">{nombreUsuario}</p>
+            <p className="truncate text-sm text-white/85">{subtitulo}</p>
+          </div>
+        </header>
+
+        <main id="contenido" className="min-w-0 flex-1 px-3 py-5 sm:px-6 lg:px-10 lg:py-8">
+          <div className="mx-auto max-w-6xl">{children}</div>
+        </main>
+      </div>
+
+      {/* Menú deslizable (celular y tablet): siempre montado para animar la entrada y la salida */}
+      <div className={`fixed inset-0 z-50 lg:hidden ${menuAbierto ? "" : "pointer-events-none"}`} inert={!menuAbierto}>
+        {/* Fondo oscuro: se cierra al tocarlo, pero no recibe foco (ya existe el botón «Cerrar») */}
+        <div
+          className={`absolute inset-0 bg-black/60 transition-opacity duration-250 ease-out ${menuAbierto ? "opacity-100" : "opacity-0"}`}
+          onClick={() => setMenuAbierto(false)}
+          aria-hidden="true"
+        />
+        <div
+          ref={panelMenuRef}
+          id="menu-movil"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menú"
+          className={`zona-oscura absolute inset-y-0 left-0 flex w-[88vw] max-w-sm flex-col overflow-y-auto bg-menu p-5 shadow-2xl transition-transform duration-250 ease-out ${
+            menuAbierto ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <div className="mb-3 flex justify-end">
+            <button
+              ref={botonCerrarRef}
+              type="button"
+              onClick={() => setMenuAbierto(false)}
+              className="flex min-h-12 items-center gap-1 rounded-xl px-3 text-lg font-bold text-white hover:bg-white/15"
+            >
+              <Icono nombre="cerrar" />
+              Cerrar
+            </button>
+          </div>
+          {cabecera(false)}
+          <div className="flex-1">{enlaces}</div>
+          <div className="mt-6">{pie}</div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -216,14 +324,6 @@ async function mostrarNotificacion(titulo: string, cuerpo: string) {
   } else {
     new Notification(titulo, { body: cuerpo });
   }
-}
-
-/** Al salir se quitan los avisos: en un dispositivo compartido, el siguiente vendedor no debe verlos. */
-async function cerrarNotificaciones() {
-  if (!("serviceWorker" in navigator)) return;
-  const registro = await navigator.serviceWorker.getRegistration();
-  const avisos = await registro?.getNotifications({ tag: ETIQUETA_COBRO });
-  avisos?.forEach((aviso) => aviso.close());
 }
 
 /** Botón para activar los avisos del navegador (recordatorios de cobro). */

@@ -115,7 +115,7 @@ export const marcas = pgTable(
   (t) => [uniqueIndex("marcas_local_nombre_uq").on(t.localId, sql`lower(${t.nombre})`)],
 );
 
-/** Categorías de gastos de cada local (Arriendo, Nómina…). */
+/** Categorías de gastos de cada local (Nómina, Servicios públicos…). */
 export const categoriasGasto = pgTable(
   "categorias_gasto",
   {

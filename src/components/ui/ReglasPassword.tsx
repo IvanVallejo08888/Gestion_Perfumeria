@@ -16,15 +16,15 @@ export function ReglasPassword({ valor, confirmacion }: { valor: string; confirm
   ];
 
   return (
-    <div className="rounded-xl border-2 border-gray-200 bg-gray-50 p-4">
+    <div className="rounded-xl border-2 border-linea bg-superficie p-4">
       <p className="mb-2 text-lg font-bold" id="requisitos-password">
         Tu contraseña debe tener:
       </p>
       <ul className="grid gap-1.5 sm:grid-cols-2" aria-labelledby="requisitos-password">
         {reglas.map((r) => (
-          <li key={r.id} className={`flex items-center gap-2 text-base font-bold ${r.cumple ? "text-exito-700" : "text-texto-suave"}`}>
+          <li key={r.id} className={`flex items-center gap-2 text-base font-bold ${r.cumple ? "text-exito-800" : "text-texto-suave"}`}>
             <span
-              className={`flex size-6 items-center justify-center rounded-full border-2 ${r.cumple ? "border-exito-700 bg-exito-700 text-white" : "border-gray-400"}`}
+              className={`flex size-6 items-center justify-center rounded-full border-2 ${r.cumple ? "border-exito-700 bg-exito-700 text-white" : "border-borde"}`}
               aria-hidden="true"
             >
               {r.cumple ? <Icono nombre="check" className="size-4" /> : null}

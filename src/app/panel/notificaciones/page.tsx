@@ -59,7 +59,7 @@ export default function PaginaNotificaciones() {
         <div className="space-y-8">
           <section aria-labelledby="titulo-cobros">
             <h2 id="titulo-cobros" className="mb-3 flex items-center gap-2 text-2xl font-bold">
-              <Icono nombre="dinero" className="size-7 text-marca-700" />
+              <Icono nombre="dinero" className="size-7 text-acento" />
               Cobros ({cobros.length})
             </h2>
             {cobros.length === 0 ? (
@@ -69,8 +69,8 @@ export default function PaginaNotificaciones() {
                 {cobros.map((n) => (
                   <li key={n.id}>
                     <article
-                      className={`flex flex-col gap-3 rounded-2xl border-2 bg-white p-4 sm:flex-row sm:items-center sm:justify-between ${
-                        n.nivel === "VENCIDA" ? "border-peligro-700" : n.nivel === "HOY" ? "border-alerta-700" : "border-gray-200"
+                      className={`flex flex-col gap-3 rounded-2xl border-2 bg-tarjeta p-4 sm:flex-row sm:items-center sm:justify-between ${
+                        n.nivel === "VENCIDA" ? "border-peligro-700" : n.nivel === "HOY" ? "border-alerta-700" : "border-linea"
                       }`}
                     >
                       <div>
@@ -99,7 +99,7 @@ export default function PaginaNotificaciones() {
 
           <section aria-labelledby="titulo-stock">
             <h2 id="titulo-stock" className="mb-3 flex items-center gap-2 text-2xl font-bold">
-              <Icono nombre="inventario" className="size-7 text-marca-700" />
+              <Icono nombre="inventario" className="size-7 text-acento" />
               Inventario ({stock.length})
             </h2>
             {stock.length === 0 ? (
@@ -107,7 +107,7 @@ export default function PaginaNotificaciones() {
             ) : (
               <ul className="grid gap-3 md:grid-cols-2">
                 {stock.map((n) => (
-                  <li key={n.id} className="rounded-2xl border-2 border-gray-200 bg-white p-4">
+                  <li key={n.id} className="rounded-2xl border border-linea bg-tarjeta p-4">
                     <Insignia tono={NIVEL[n.nivel].tono}>{NIVEL[n.nivel].texto}</Insignia>
                     <h3 className="mt-1 text-lg font-bold">{n.titulo}</h3>
                     <p className="text-base text-texto-suave">{n.descripcion}</p>
@@ -116,7 +116,7 @@ export default function PaginaNotificaciones() {
               </ul>
             )}
             {stock.length > 0 && (
-              <Link href="/panel/inventario" className="mt-3 inline-block text-lg font-bold text-marca-800 underline underline-offset-4">
+              <Link href="/panel/inventario" className="mt-3 inline-block text-lg font-bold text-acento underline underline-offset-4">
                 Ir al inventario
               </Link>
             )}

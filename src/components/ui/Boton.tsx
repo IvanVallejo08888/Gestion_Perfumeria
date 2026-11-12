@@ -10,10 +10,10 @@ type Variante = "primario" | "secundario" | "peligro" | "exito" | "fantasma";
 
 const ESTILOS: Record<Variante, string> = {
   primario: "bg-marca-700 text-white hover:bg-marca-800 active:bg-marca-900 border-2 border-marca-700",
-  secundario: "bg-white text-marca-800 border-2 border-marca-700 hover:bg-marca-50",
+  secundario: "bg-tarjeta text-acento border-2 border-marca-700 hover:bg-marca-50",
   peligro: "bg-peligro-700 text-white border-2 border-peligro-700 hover:bg-peligro-800",
   exito: "bg-exito-700 text-white border-2 border-exito-700 hover:bg-exito-800",
-  fantasma: "bg-transparent text-texto border-2 border-transparent hover:bg-black/5",
+  fantasma: "bg-transparent text-texto border-2 border-transparent hover:bg-marca-50",
 };
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -57,7 +57,11 @@ export function Boton({
       ) : (
         icono && <Icono nombre={icono} className={pequeno ? "size-5" : "size-6"} />
       )}
-      <span>{cargando ? "Un momento…" : children}</span>
+      {/* Mientras carga se conserva el texto (la persona sigue sabiendo qué acción se está haciendo) */}
+      <span>
+        {children}
+        {cargando && <span className="sr-only"> — procesando, un momento</span>}
+      </span>
     </button>
   );
 }

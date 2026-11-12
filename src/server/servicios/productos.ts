@@ -153,7 +153,10 @@ export async function crearProducto(localId: string, datos: DatosProducto, autor
 export async function editarProducto(localId: string, id: string, datos: DatosProducto) {
   const actual = await obtenerProducto(localId, id);
   await validarMarcaDelLocal(localId, datos.marcaId, actual.marcaId);
-  await db.update(productos).set(columnas(datos)).where(eq(productos.id, id));
+  await db
+    .update(productos)
+    .set(columnas(datos))
+    .where(and(eq(productos.id, id), eq(productos.localId, localId)));
 }
 
 /**
@@ -208,10 +211,12 @@ export function ajustarStock(localId: string, id: string, datos: { cantidad: num
 export async function eliminarProducto(localId: string, id: string) {
   await obtenerProducto(localId, id);
   const vendido = await db.query.facturaItems.findFirst({ where: eq(facturaItems.productoId, id) });
+  // El local se repite en la sentencia: nunca se toca un producto de otro local
+  const delLocal = and(eq(productos.id, id), eq(productos.localId, localId));
   if (vendido) {
-    await db.update(productos).set({ activo: false }).where(eq(productos.id, id));
+    await db.update(productos).set({ activo: false }).where(delLocal);
   } else {
-    await db.delete(productos).where(eq(productos.id, id));
+    await db.delete(productos).where(delLocal);
   }
 }
 

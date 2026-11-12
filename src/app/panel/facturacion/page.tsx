@@ -3,14 +3,17 @@
  *  - Factura normal (contado)
  *  - Crédito (a cuotas)
  * Con ?producto=<id> (botón «Vender» del inventario) ese perfume llega ya cargado en la factura.
+ * Si hay una factura sin terminar (borrador), se abre en su misma pestaña.
  */
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Cargando, EncabezadoPagina } from "@/components/ui/Basicos";
+import { moverConFlechas } from "@/components/ui/GrupoOpciones";
 import { Icono } from "@/components/ui/Icono";
 import { FormularioFactura } from "@/components/facturacion/FormularioFactura";
+import { cargarBorradorGuardado } from "@/lib/borrador-factura";
 import type { TipoFactura } from "@/tipos";
 
 const PESTANAS: { tipo: TipoFactura; titulo: string; detalle: string }[] = [
@@ -29,6 +32,13 @@ export default function PaginaFacturacion() {
 
 function Facturacion() {
   const [tipo, setTipo] = useState<TipoFactura>("NORMAL");
+  // El formulario se muestra después de leer el borrador (sessionStorage solo existe en el navegador)
+  const [listo, setListo] = useState(false);
+  useEffect(() => {
+    const borrador = cargarBorradorGuardado();
+    if (borrador) setTipo(borrador.tipo);
+    setListo(true);
+  }, []);
   const router = useRouter();
   const ruta = usePathname();
   const productoInicialId = useSearchParams().get("producto");
@@ -38,7 +48,7 @@ function Facturacion() {
       <EncabezadoPagina titulo="Facturación" descripcion="Elige el tipo de factura y completa los pasos." />
 
       <div role="tablist" aria-label="Tipo de factura" className="mb-6 grid gap-3 sm:grid-cols-2">
-        {PESTANAS.map((p) => {
+        {PESTANAS.map((p, i) => {
           const activa = tipo === p.tipo;
           return (
             <button
@@ -48,9 +58,12 @@ function Facturacion() {
               id={`pestana-${p.tipo}`}
               aria-selected={activa}
               aria-controls="panel-factura"
+              // Solo la pestaña activa entra en el orden de Tab; las flechas cambian entre pestañas
+              tabIndex={activa ? 0 : -1}
+              onKeyDown={(e) => moverConFlechas(e, i, PESTANAS.length, (j) => setTipo(PESTANAS[j].tipo))}
               onClick={() => setTipo(p.tipo)}
               className={`flex items-center gap-4 rounded-2xl border-[3px] p-4 text-left transition ${
-                activa ? "border-marca-700 bg-marca-700 text-white shadow-lg" : "border-gray-300 bg-white hover:border-marca-700"
+                activa ? "border-marca-700 bg-marca-700 text-white shadow-lg" : "border-borde bg-tarjeta hover:border-marca-700"
               }`}
             >
               <Icono nombre={p.tipo === "NORMAL" ? "factura" : "credito"} className="size-10" />
@@ -64,14 +77,18 @@ function Facturacion() {
       </div>
 
       <div role="tabpanel" id="panel-factura" aria-labelledby={`pestana-${tipo}`}>
-        {/* "key" reinicia el formulario al cambiar de pestaña */}
-        <FormularioFactura
-          key={tipo}
-          tipo={tipo}
-          productoInicialId={productoInicialId}
-          // Ya vendido: se quita de la URL para que no se vuelva a cargar
-          onRegistrada={() => productoInicialId && router.replace(ruta, { scroll: false })}
-        />
+        {/* "key" vuelve a montar el formulario al cambiar de pestaña; el borrador conserva cliente y productos */}
+        {listo ? (
+          <FormularioFactura
+            key={tipo}
+            tipo={tipo}
+            productoInicialId={productoInicialId}
+            // Ya vendido: se quita de la URL para que no se vuelva a cargar
+            onRegistrada={() => productoInicialId && router.replace(ruta, { scroll: false })}
+          />
+        ) : (
+          <Cargando />
+        )}
       </div>
     </>
   );

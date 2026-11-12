@@ -36,10 +36,10 @@ export function TarjetasKpi({ kpis, periodo }: { kpis: Dashboard["kpis"]; period
   return (
     <ul className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
       {lista.map((k) => (
-        <li key={k.titulo} className="flex min-w-0 flex-col rounded-2xl border-2 border-gray-200 bg-white p-2.5 shadow-sm sm:p-5">
+        <li key={k.titulo} className="flex min-w-0 flex-col rounded-2xl border-2 border-linea bg-tarjeta p-2.5 shadow-sm sm:p-5">
           <p className="text-base font-bold text-texto-suave sm:text-lg">{k.titulo}</p>
           {/* En celular el valor es más pequeño para que quepan cifras de millones en media pantalla */}
-          <p className={`mt-1 text-lg font-bold break-words sm:text-2xl ${k.alerta ? "text-peligro-700" : "text-marca-800"}`}>{k.valor}</p>
+          <p className={`mt-1 text-lg font-bold break-words sm:text-2xl ${k.alerta ? "text-peligro-800" : "text-acento"}`}>{k.valor}</p>
           <p className="mt-1 text-[15px] text-texto-suave sm:text-base">{k.detalle}</p>
         </li>
       ))}

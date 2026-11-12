@@ -114,8 +114,8 @@ export default function PaginaGastos() {
       <Confirmar
         abierto={eliminando !== null}
         titulo="Eliminar gasto"
-        mensaje={eliminando && `¿Seguro que quieres eliminar el gasto de ${eliminando.categoriaNombre} por ${pesos(eliminando.valor)}?`}
-        textoConfirmar="Sí, eliminar"
+        mensaje={eliminando && `¿Eliminar el gasto de ${eliminando.categoriaNombre} por ${pesos(eliminando.valor)}? Dejará de contar en las estadísticas y en el Excel. Esta acción no se puede deshacer.`}
+        textoConfirmar="Eliminar gasto"
         peligro
         cargando={borrando}
         onConfirmar={eliminar}

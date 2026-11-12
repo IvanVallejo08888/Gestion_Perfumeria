@@ -9,6 +9,7 @@
 import { useState } from "react";
 import { DetalleFactura } from "@/components/facturacion/DetalleFactura";
 import { Boton } from "@/components/ui/Boton";
+import { GrupoOpciones } from "@/components/ui/GrupoOpciones";
 import { Campo } from "@/components/ui/Campo";
 import { Cargando, EncabezadoPagina, Insignia, Tarjeta, Vacio } from "@/components/ui/Basicos";
 import { useAvisos } from "@/components/ui/Avisos";
@@ -60,36 +61,25 @@ export default function PaginaHistorial() {
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
           />
-          <div role="group" aria-label="Filtrar facturas" className="flex flex-wrap gap-2">
-            {FILTROS.map((f) => (
-              <button
-                key={f.valor}
-                type="button"
-                onClick={() => setEstado(f.valor)}
-                aria-pressed={estado === f.valor}
-                className={`min-h-12 rounded-xl border-2 px-4 text-lg font-bold ${
-                  estado === f.valor ? "border-marca-700 bg-marca-700 text-white" : "border-borde bg-white hover:bg-gray-50"
-                }`}
-              >
-                {f.texto}
-              </button>
-            ))}
-          </div>
+          <GrupoOpciones etiqueta="Filtrar facturas" opciones={FILTROS} valor={estado} onCambio={setEstado} />
         </div>
       </Tarjeta>
 
       {!facturas ? (
         <Cargando />
       ) : facturas.length === 0 ? (
-        <Vacio icono="historial" titulo="No hay facturas para mostrar">
-          Las facturas que registres aparecerán aquí.
+        // Estado vacío: qué pasó + cómo seguir (distinto si hay una búsqueda escrita)
+        <Vacio icono="historial" titulo={texto.trim() ? "No se encontraron facturas" : "No hay facturas para mostrar"}>
+          {texto.trim()
+            ? "Revisa el nombre, la identificación o el número, o prueba con el filtro «Todas»."
+            : "Las facturas que registres en «Facturación» aparecerán aquí."}
         </Vacio>
       ) : (
         <>
           <ul className="space-y-3">
             {facturas.map((f) => (
               <li key={f.id}>
-                <article className="flex flex-col gap-3 rounded-2xl border-2 border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                <article className="flex flex-col gap-3 rounded-2xl border border-linea bg-tarjeta p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     {/* El nombre de la factura es el nombre del cliente */}
                     <h2 className="text-xl font-bold">{f.clienteNombre}</h2>
@@ -114,8 +104,8 @@ export default function PaginaHistorial() {
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center justify-between gap-4 sm:flex-col sm:items-end">
-                    <p className="text-2xl font-bold text-marca-800">{pesos(f.total)}</p>
+                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:flex-col sm:flex-nowrap sm:items-end">
+                    <p className="text-2xl font-bold text-acento">{pesos(f.total)}</p>
                     <Boton variante="secundario" icono="factura" onClick={() => setDetalleId(f.id)}>
                       Ver detalles
                     </Boton>

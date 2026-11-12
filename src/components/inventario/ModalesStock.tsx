@@ -146,7 +146,7 @@ export function ModalAjuste({ producto, onCerrar, onListo }: Props) {
           ayuda="Por ejemplo: «Frasco roto» o «Conteo físico del sábado»."
         />
         <p className="text-lg" aria-live="polite">
-          Quedarán <strong className={resultado < 0 ? "text-peligro-700" : ""}>{resultado}</strong> unidades.
+          Quedarán <strong className={resultado < 0 ? "text-peligro-800" : ""}>{resultado}</strong> unidades.
         </p>
         <Boton type="submit" ancho cargando={cargando} icono="check">
           Guardar ajuste

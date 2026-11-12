@@ -36,7 +36,7 @@ export function BotonesMedioPago<T extends string>({ titulo, opciones, valor, on
             <label
               key={o.valor}
               className={`flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-xl border-2 px-4 text-lg font-bold has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-3 has-[:focus-visible]:outline-marca-600 ${
-                elegido ? "border-marca-700 bg-marca-700 text-white" : "border-borde bg-white hover:border-marca-700 hover:bg-marca-50"
+                elegido ? "border-marca-700 bg-marca-700 text-white" : "border-borde bg-tarjeta hover:border-marca-700 hover:bg-marca-50"
               }`}
             >
               <input type="radio" name={nombre} value={o.valor} checked={elegido} onChange={() => onCambio(o.valor)} className="sr-only" />
@@ -48,7 +48,7 @@ export function BotonesMedioPago<T extends string>({ titulo, opciones, valor, on
         })}
       </div>
       {error && (
-        <p role="alert" className="mt-1.5 flex items-start gap-1.5 text-base font-bold text-peligro-700">
+        <p role="alert" className="mt-1.5 flex items-start gap-1.5 text-base font-bold text-peligro-800">
           <Icono nombre="alerta" className="mt-0.5 size-5" />
           {error}
         </p>
@@ -74,7 +74,7 @@ export function SelectorMedioPago({ titulo, total, medio, onMedio, transferencia
     <div className="space-y-4">
       <BotonesMedioPago titulo={titulo} opciones={MEDIOS_PAGO} valor={medio} onCambio={onMedio} error={medio ? undefined : error} />
       {medio === "MIXTO" && (
-        <div className="grid items-start gap-4 rounded-xl border-2 border-gray-200 bg-gray-50 p-4 md:grid-cols-2">
+        <div className="grid items-start gap-4 rounded-xl border-2 border-linea bg-superficie p-4 md:grid-cols-2">
           <CampoDinero
             etiqueta="Valor de la transferencia"
             valor={transferencia}
@@ -85,7 +85,7 @@ export function SelectorMedioPago({ titulo, total, medio, onMedio, transferencia
           />
           <div aria-live="polite">
             <p className="text-lg font-bold">Efectivo a recibir</p>
-            <p className="text-4xl font-bold text-marca-800">{pesos(Math.max(0, reparto.valorEfectivo))}</p>
+            <p className="text-4xl font-bold text-acento">{pesos(Math.max(0, reparto.valorEfectivo))}</p>
             <p className="text-base text-texto-suave">Se calcula solo: total − transferencia.</p>
           </div>
         </div>

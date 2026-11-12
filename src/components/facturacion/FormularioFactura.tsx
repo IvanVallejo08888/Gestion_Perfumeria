@@ -16,7 +16,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useConsulta } from "@/hooks/useConsulta";
 import { avisarCambioNotificaciones } from "@/hooks/useNotificaciones";
 import { pesos } from "@/lib/formato";
-import { api } from "@/lib/http";
+import { cargarBorradorGuardado, cuotasVigentes, guardarBorradorFactura, reconciliarLineas } from "@/lib/borrador-factura";
+import { api, ErrorApi } from "@/lib/http";
 import { calcularPago } from "@/lib/pagos";
 import { clienteSchema } from "@/lib/validaciones";
 import type { ClienteDatos, FacturaDetalle, MedioPago, NombreActivo, ProductoVenta, TipoFactura } from "@/tipos";
@@ -61,7 +62,14 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
   const [errorPago, setErrorPago] = useState("");
   // Las fechas se crean en el navegador (para usar la hora local del dispositivo)
   const [cuotas, setCuotas] = useState<ConfigCuotas | null>(null);
-  const [errorGeneral, setErrorGeneral] = useState("");
+  const [erroresGenerales, setErroresGenerales] = useState<string[]>([]);
+  const avisoErrorRef = useRef<HTMLDivElement>(null);
+  // Cada vez que aparecen errores, el aviso sube a la vista y recibe el foco (también lo anuncia el lector de pantalla)
+  useEffect(() => {
+    if (erroresGenerales.length === 0) return;
+    avisoErrorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    avisoErrorRef.current?.focus({ preventScroll: true });
+  }, [erroresGenerales]);
   const [errorCuotas, setErrorCuotas] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [facturaCreada, setFacturaCreada] = useState<FacturaDetalle | null>(null);
@@ -75,6 +83,78 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
   useEffect(() => {
     if (esCredito) setCuotas(configInicial());
   }, [esCredito]);
+
+  /* ------------- Borrador: la factura sin terminar no se pierde al recargar ------------- */
+  // Mientras se restaura no se guarda nada (si no, el formulario vacío borraría el borrador)
+  const [restaurado, setRestaurado] = useState(false);
+  const [recuperado, setRecuperado] = useState<{ productos: number; cambios: string[] } | null>(null);
+
+  useEffect(() => {
+    const borrador = cargarBorradorGuardado();
+    if (!borrador) {
+      setRestaurado(true);
+      return;
+    }
+    let cancelado = false;
+    // Igual tipo = se recargó la página. Distinto = se cambió de pestaña: se conservan cliente y productos.
+    const mismoTipo = borrador.tipo === tipo;
+    const cambios: string[] = [];
+
+    // 1. Lo guardado aparece al instante (así nada de lo que se escriba después se pisa)
+    setCliente(borrador.cliente);
+    // Si llegó un perfume desde «Vender» del inventario, se conserva
+    setLineas((actual) => [...borrador.lineas, ...actual.filter((a) => !borrador.lineas.some((l) => l.producto.id === a.producto.id))]);
+    setDescuento(borrador.descuento);
+    setAdicional(borrador.adicional);
+    setNotas(borrador.notas);
+    if (mismoTipo && !esCredito) {
+      setMedioPago(borrador.medioPago);
+      setTransferencia(borrador.transferencia);
+    }
+    if (mismoTipo && esCredito) {
+      const vigentes = cuotasVigentes(borrador.cuotas);
+      if (vigentes) setCuotas(vigentes);
+      else if (borrador.cuotas) cambios.push("Algunas fechas de las cuotas ya pasaron: se calcularon de nuevo.");
+    }
+    if (mismoTipo || cambios.length > 0) setRecuperado({ productos: borrador.lineas.length, cambios });
+    setRestaurado(true);
+
+    // 2. Precio y stock salen del servidor; sin conexión se conserva lo guardado (el servidor revisa al registrar)
+    if (borrador.lineas.length === 0) return;
+    (async () => {
+      const respuestas = await Promise.allSettled(
+        borrador.lineas.map((l) => api<{ producto: ProductoVenta }>(`/api/productos/${l.producto.id}`)),
+      );
+      const frescos = new Map<string, ProductoVenta | null>();
+      respuestas.forEach((r, i) => {
+        const id = borrador.lineas[i].producto.id;
+        if (r.status === "fulfilled") frescos.set(id, r.value.producto);
+        else if (r.reason instanceof ErrorApi && r.reason.estado === 404) frescos.set(id, null);
+      });
+      if (cancelado) return;
+      const resultado = reconciliarLineas(borrador.lineas, frescos);
+      // Se aplica sobre lo que haya en pantalla (la persona pudo cambiar cantidades mientras tanto)
+      setLineas((actual) => reconciliarLineas(actual, frescos).lineas);
+      if (resultado.cambios.length > 0) {
+        setRecuperado((r) => ({
+          productos: resultado.lineas.length,
+          cambios: [...(r?.cambios ?? cambios), ...resultado.cambios],
+        }));
+      } else {
+        setRecuperado((r) => (r ? { ...r, productos: resultado.lineas.length } : r));
+      }
+    })();
+    return () => {
+      cancelado = true;
+    };
+    // Solo al abrir el formulario (cambiar de pestaña lo vuelve a montar)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!restaurado) return;
+    guardarBorradorFactura({ tipo, cliente, lineas, descuento, adicional, notas, medioPago, transferencia, cuotas });
+  }, [restaurado, tipo, cliente, lineas, descuento, adicional, notas, medioPago, transferencia, cuotas]);
 
   /* --------------- Perfume que llega desde «Vender» del inventario --------------- */
   const cargadoRef = useRef<string | null>(null);
@@ -138,71 +218,74 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
     setTransferencia(0);
     setErrorPago("");
     setErroresCliente({});
-    setErrorGeneral("");
+    setErroresGenerales([]);
     setErrorCuotas("");
+    setRecuperado(null);
     if (esCredito) setCuotas(configInicial());
   }
 
   /* -------------------------------- Registrar ------------------------------- */
   async function registrar() {
-    setErrorGeneral("");
+    setErroresGenerales([]);
     setErrorCuotas("");
     setErrorPago("");
+    // Se revisan TODOS los pasos y se listan juntos, para que la persona vea de una vez qué falta
+    const errores: string[] = [];
 
     // 1. Cliente
     const validacion = clienteSchema.safeParse(cliente);
     if (!validacion.success) {
-      const errores: Partial<Record<keyof ClienteDatos, string>> = {};
+      const erroresCampos: Partial<Record<keyof ClienteDatos, string>> = {};
       for (const i of validacion.error.issues) {
         const campo = i.path[0] as keyof ClienteDatos;
-        if (!errores[campo]) errores[campo] = i.message;
+        if (!erroresCampos[campo]) erroresCampos[campo] = i.message;
       }
-      setErroresCliente(errores);
-      setErrorGeneral("Revisa los datos del cliente: hay campos sin completar o con errores.");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
-    // El sector debe ser uno de los activos del local (el servidor lo vuelve a verificar)
-    if (!sectores?.some((s) => s.nombre === validacion.data.sector)) {
+      setErroresCliente(erroresCampos);
+      errores.push("Paso 1: hay datos del cliente sin completar o con errores.");
+    } else if (!sectores?.some((s) => s.nombre === validacion.data.sector)) {
+      // El sector debe ser uno de los activos del local (el servidor lo vuelve a verificar)
       setErroresCliente({ sector: "Elige un sector de la lista." });
-      setErrorGeneral(consultaSectores.error || "Revisa los datos del cliente: falta el sector.");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      return;
+      errores.push(consultaSectores.error || "Paso 1: falta elegir el sector.");
+    } else {
+      setErroresCliente({});
     }
-    setErroresCliente({});
 
     // 2. Productos y totales
-    if (lineas.length === 0) return setErrorGeneral("Agrega al menos un producto a la factura.");
-    if (total < 0) return setErrorGeneral("El descuento no puede ser mayor que el valor de la factura.");
-    if (esCredito && total <= 0) return setErrorGeneral("Un crédito debe tener un valor mayor que cero.");
+    const productosOk = lineas.length > 0 && total >= 0 && !(esCredito && total <= 0);
+    if (lineas.length === 0) errores.push("Paso 2: agrega al menos un producto a la factura.");
+    else if (total < 0) errores.push("Paso 2: el descuento no puede ser mayor que el valor de la factura.");
+    else if (esCredito && total <= 0) errores.push("Paso 2: un crédito debe tener un valor mayor que cero.");
 
-    // 3. Medio de pago (solo factura normal)
+    // 3. Medio de pago (solo factura normal). Los valores solo se revisan si el total ya es válido.
     if (!esCredito) {
       if (!medioPago) {
         setErrorPago("Elige el medio de pago.");
-        return setErrorGeneral("Falta elegir el medio de pago.");
-      }
-      const { error } = calcularPago(medioPago, total, transferencia);
-      if (error) {
-        setErrorPago(error);
-        return setErrorGeneral(error);
+        errores.push("Paso 3: falta elegir el medio de pago.");
+      } else if (productosOk) {
+        const { error } = calcularPago(medioPago, total, transferencia);
+        if (error) {
+          setErrorPago(error);
+          errores.push(`Paso 3: ${error}`);
+        }
       }
     }
 
-    // 4. Cuotas (deben estar completas y ser fechas futuras)
+    // 3. Cuotas (deben estar completas y ser fechas futuras)
     let fechasIso: string[] | undefined;
     if (esCredito) {
       const fechas = cuotas?.fechas ?? [];
       if (fechas.length === 0 || fechas.some((f) => !f || Number.isNaN(new Date(f).getTime()))) {
         setErrorCuotas("Completa la fecha y hora de todas las cuotas.");
-        return setErrorGeneral("Faltan fechas en las cuotas.");
-      }
-      if (fechas.some((f) => new Date(f).getTime() < Date.now())) {
+        errores.push("Paso 3: faltan fechas en las cuotas.");
+      } else if (fechas.some((f) => new Date(f).getTime() < Date.now())) {
         setErrorCuotas("Hay cuotas con fecha pasada. Todas las fechas de cobro deben ser futuras.");
-        return setErrorGeneral("Revisa las fechas de las cuotas.");
+        errores.push("Paso 3: revisa las fechas de las cuotas.");
+      } else {
+        fechasIso = fechas.map((f) => new Date(f).toISOString());
       }
-      fechasIso = fechas.map((f) => new Date(f).toISOString());
     }
+
+    if (errores.length > 0 || !validacion.success) return setErroresGenerales(errores);
 
     setGuardando(true);
     try {
@@ -229,7 +312,7 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
       // Actualiza el contador de notificaciones (nuevos cobros o stock bajo)
       avisarCambioNotificaciones();
     } catch (err) {
-      setErrorGeneral((err as Error).message);
+      setErroresGenerales([(err as Error).message]);
     } finally {
       setGuardando(false);
     }
@@ -237,7 +320,44 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
 
   return (
     <div className="space-y-6">
-      {errorGeneral && <Mensaje tono="peligro" titulo="No se pudo registrar">{errorGeneral}</Mensaje>}
+      {recuperado && (
+        <Mensaje tono="info" titulo="Recuperamos tu factura sin terminar">
+          <p>
+            {recuperado.productos === 1 ? "Tiene 1 producto." : `Tiene ${recuperado.productos} productos.`} Revisa los datos antes de registrar.
+          </p>
+          {recuperado.cambios.length > 0 && (
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {recuperado.cambios.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+          )}
+          <div className="mt-3 flex flex-wrap gap-3">
+            <Boton variante="secundario" icono="basura" onClick={limpiar}>
+              Descartar borrador
+            </Boton>
+            <Boton variante="fantasma" onClick={() => setRecuperado(null)}>
+              Entendido
+            </Boton>
+          </div>
+        </Mensaje>
+      )}
+
+      {erroresGenerales.length > 0 && (
+        <div ref={avisoErrorRef} tabIndex={-1} className="scroll-mt-20 rounded-xl focus:outline-none">
+          <Mensaje tono="peligro" titulo="No se pudo registrar">
+            {erroresGenerales.length === 1 ? (
+              erroresGenerales[0]
+            ) : (
+              <ul className="list-disc space-y-1 pl-5">
+                {erroresGenerales.map((e) => (
+                  <li key={e}>{e}</li>
+                ))}
+              </ul>
+            )}
+          </Mensaje>
+        </div>
+      )}
 
       <Tarjeta>
         <DatosCliente valor={cliente} onCambio={setCliente} errores={erroresCliente} sectores={sectores} />
@@ -250,13 +370,13 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
         <div className="mt-6">
           <h3 className="mb-2 text-xl font-bold">Productos en la factura ({lineas.length})</h3>
           {lineas.length === 0 ? (
-            <p className="rounded-xl border-2 border-dashed border-gray-300 p-5 text-center text-lg text-texto-suave">
+            <p className="rounded-xl border-2 border-dashed border-linea-fuerte p-5 text-center text-lg text-texto-suave">
               Todavía no has agregado productos. Usa el botón + de la lista de arriba.
             </p>
           ) : (
             <ul className="space-y-3">
               {lineas.map((l) => (
-                <li key={l.producto.id} className="grid gap-3 rounded-xl border-2 border-gray-200 p-4 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+                <li key={l.producto.id} className="grid gap-3 rounded-xl border-2 border-linea p-4 sm:grid-cols-[1fr_auto_auto] sm:items-center">
                   <div>
                     <p className="text-lg font-bold">{l.producto.nombre}</p>
                     <p className="text-base text-texto-suave">
@@ -269,7 +389,7 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
                       type="button"
                       onClick={() => cambiarCantidad(l.producto.id, l.cantidad - 1)}
                       disabled={l.cantidad <= 1}
-                      className="flex size-12 items-center justify-center rounded-xl border-2 border-borde bg-white disabled:opacity-40"
+                      className="flex size-12 items-center justify-center rounded-xl border-2 border-borde bg-tarjeta disabled:opacity-40"
                       aria-label="Quitar una unidad"
                     >
                       <Icono nombre="menos" />
@@ -288,7 +408,7 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
                       type="button"
                       onClick={() => cambiarCantidad(l.producto.id, l.cantidad + 1)}
                       disabled={l.cantidad >= l.producto.stock}
-                      className="flex size-12 items-center justify-center rounded-xl border-2 border-borde bg-white disabled:opacity-40"
+                      className="flex size-12 items-center justify-center rounded-xl border-2 border-borde bg-tarjeta disabled:opacity-40"
                       aria-label="Agregar una unidad"
                     >
                       <Icono nombre="mas" />
@@ -299,7 +419,7 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
                     <button
                       type="button"
                       onClick={() => quitar(l.producto.id)}
-                      className="flex min-h-12 items-center gap-1 rounded-xl px-3 text-base font-bold text-peligro-700 hover:bg-peligro-50"
+                      className="flex min-h-12 items-center gap-1 rounded-xl px-3 text-base font-bold text-peligro-800 hover:bg-peligro-50"
                     >
                       <Icono nombre="basura" className="size-5" />
                       Quitar
@@ -366,7 +486,7 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
           <div className="flex justify-between"><dt>Subtotal</dt><dd>{pesos(subtotal)}</dd></div>
           {adicional > 0 && <div className="flex justify-between"><dt>Costo adicional</dt><dd>+ {pesos(adicional)}</dd></div>}
           {descuento > 0 && <div className="flex justify-between"><dt>Descuento</dt><dd>− {pesos(descuento)}</dd></div>}
-          <div className={`flex justify-between border-t-2 pt-2 text-3xl font-bold ${total < 0 ? "text-peligro-700" : "text-marca-800"}`}>
+          <div className={`flex justify-between border-t-2 pt-2 text-3xl font-bold ${total < 0 ? "text-peligro-800" : "text-acento"}`}>
             <dt>Total</dt>
             <dd aria-live="polite">{pesos(total)}</dd>
           </div>

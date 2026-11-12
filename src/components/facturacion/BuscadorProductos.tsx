@@ -94,6 +94,7 @@ export function BuscadorProductos({ onAgregar, enFactura, versionInventario }: P
         <input
           ref={inputRef}
           id={idCampo}
+          aria-describedby={`${idCampo}-ayuda`}
           type="search"
           autoComplete="off"
           value={texto}
@@ -108,13 +109,13 @@ export function BuscadorProductos({ onAgregar, enFactura, versionInventario }: P
               if (hayBusqueda && resultados[0]) elegir(resultados[0], true);
             }
           }}
-          placeholder="Buscar producto (ignora tildes y signos)…"
-          className="block min-h-14 w-full rounded-xl border-2 border-marca-700 bg-white py-3 pl-12 pr-4 text-lg focus:outline-none focus:ring-4 focus:ring-marca-200"
+          placeholder="Nombre o código, ej. Dior"
+          className="block min-h-14 w-full rounded-xl border-2 border-marca-700 bg-tarjeta py-3 pl-12 pr-4 text-lg focus:outline-none focus:ring-4 focus:ring-marca-200"
         />
       </div>
 
-      {/* En celular el texto de ayuda del campo no cabe completo: aquí se ve entero */}
-      <p className="mt-1 text-base text-texto-suave sm:hidden">Ignora tildes y signos.</p>
+      {/* Ayuda siempre visible (no depende del placeholder, que desaparece al escribir) */}
+      <p id={`${idCampo}-ayuda`} className="mt-1 text-base text-texto-suave">Ignora tildes y signos.</p>
 
       {advertencia && (
         <div className="mt-3">
@@ -130,16 +131,16 @@ export function BuscadorProductos({ onAgregar, enFactura, versionInventario }: P
         ) : !inventario.datos ? (
           <Cargando texto="Cargando productos…" />
         ) : buscando ? (
-          <p className="rounded-xl bg-gray-100 p-4 text-lg">Buscando…</p>
+          <p className="rounded-xl bg-superficie-apagada p-4 text-lg">Buscando…</p>
         ) : resultados.length === 0 ? (
-          <p className="rounded-xl bg-gray-100 p-4 text-lg">
+          <p className="rounded-xl bg-superficie-apagada p-4 text-lg">
             {hayBusqueda ? `No se encontró ningún producto con «${consulta}».` : "Este local aún no tiene productos en el inventario."}
           </p>
         ) : (
           <ul
             tabIndex={0}
             aria-label="Productos del inventario"
-            className="max-h-[18rem] space-y-2 overflow-y-auto rounded-xl border-2 border-gray-300 bg-gray-50 p-1.5 sm:p-2"
+            className="max-h-[18rem] space-y-2 overflow-y-auto rounded-xl border-2 border-linea-fuerte bg-superficie p-1.5 sm:p-2"
           >
             {resultados.map((p) => {
               const sinStock = p.stock <= 0;
@@ -150,8 +151,8 @@ export function BuscadorProductos({ onAgregar, enFactura, versionInventario }: P
                   // Tocar una fila sin stock también avisa por qué no se puede vender.
                   // Las filas con stock solo agregan con el botón "+", para no agregar por error al deslizar.
                   onClick={sinStock ? () => elegir(p) : undefined}
-                  className={`flex items-center justify-between gap-2 rounded-xl border-2 bg-white px-2 py-2 sm:px-3 ${
-                    sinStock ? "cursor-not-allowed border-gray-200 bg-gray-100" : "border-gray-200"
+                  className={`flex items-center justify-between gap-2 rounded-xl border-2 bg-tarjeta px-2 py-2 sm:px-3 ${
+                    sinStock ? "cursor-not-allowed border-linea bg-superficie-apagada" : "border-linea"
                   }`}
                 >
                   <div className={`min-w-0 flex-1 ${sinStock ? "opacity-70" : ""}`}>
@@ -182,7 +183,7 @@ export function BuscadorProductos({ onAgregar, enFactura, versionInventario }: P
                     aria-label={`Agregar ${p.nombre}`}
                     className={`flex size-12 shrink-0 items-center justify-center rounded-full border-2 sm:size-14 ${
                       sinStock
-                        ? "cursor-not-allowed border-gray-400 bg-gray-200 text-gray-600"
+                        ? "cursor-not-allowed border-borde bg-linea text-texto-tenue"
                         : "border-marca-700 bg-marca-700 text-white hover:bg-marca-800"
                     }`}
                   >

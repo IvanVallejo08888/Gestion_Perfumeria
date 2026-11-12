@@ -53,7 +53,7 @@ function Opcion({ activa, onClick, children, grande = false }: { activa: boolean
       aria-pressed={activa}
       onClick={onClick}
       className={`inline-flex min-h-12 items-center justify-center gap-1 rounded-xl border-2 px-2 font-bold sm:px-4 ${grande ? "text-lg sm:text-xl" : "text-lg"} ${
-        activa ? "border-marca-700 bg-marca-700 text-white" : "border-borde bg-white text-texto hover:border-marca-700 hover:bg-marca-50"
+        activa ? "border-marca-700 bg-marca-700 text-white" : "border-borde bg-tarjeta text-texto hover:border-marca-700 hover:bg-marca-50"
       }`}
     >
       {activa && <Icono nombre="check" className="size-5 shrink-0" />}
@@ -163,7 +163,7 @@ export function BarraFiltros({ filtros, onCambiar, texto, onTexto, marcas }: Pro
         </div>
 
         {hayAlgo && (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t-2 border-gray-100 pt-4">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t-2 border-linea pt-4">
             <p className="text-lg text-texto-suave">{activos ? `${activos} ${activos === 1 ? "filtro activo" : "filtros activos"}.` : "Mostrando una parte del inventario."}</p>
             <Boton variante="fantasma" icono="cerrar" onClick={() => onCambiar({})}>
               Quitar filtros

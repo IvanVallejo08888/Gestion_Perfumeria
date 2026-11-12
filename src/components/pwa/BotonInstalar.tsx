@@ -94,7 +94,7 @@ export function BotonInstalar({ claro = false }: { /** Para fondos oscuros, como
         <ol className="space-y-4 text-left text-lg">
           {PASOS_IOS.map((paso, indice) => (
             <li key={paso.texto} className="flex items-center gap-3">
-              <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-marca-100 text-marca-800">
+              <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-marca-100 text-acento">
                 <Icono nombre={paso.icono} className="size-7" />
               </span>
               <span>

@@ -55,7 +55,7 @@ export function RegistroPWA() {
   if (!nuevaVersion) return null;
 
   return (
-    <div className="fixed inset-x-3 top-3 z-[150] mx-auto max-w-lg space-y-3 rounded-2xl bg-white p-3 shadow-2xl">
+    <div className="fixed inset-x-3 top-3 z-[150] mx-auto max-w-lg space-y-3 rounded-2xl bg-tarjeta p-3 shadow-2xl">
       <Mensaje tono="marca" titulo="Hay una nueva versión disponible" />
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         <Boton variante="secundario" onClick={() => setNuevaVersion(null)}>

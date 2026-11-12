@@ -140,7 +140,7 @@ export function ModalProducto({ producto, onCerrar, onListo }: Props) {
           {producto ? (
             <div>
               <p className="mb-1.5 text-lg font-bold">Unidades en stock</p>
-              <p className="flex min-h-14 items-center rounded-xl border-2 border-gray-200 bg-gray-50 px-4 text-2xl font-bold">{producto.stock}</p>
+              <p className="flex min-h-14 items-center rounded-xl border-2 border-linea bg-superficie px-4 text-2xl font-bold">{producto.stock}</p>
               <p className="mt-1.5 text-base text-texto-suave">Para cambiarlas usa «Agregar unidades» o «Ajustar stock».</p>
             </div>
           ) : (

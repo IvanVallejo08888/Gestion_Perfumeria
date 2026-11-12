@@ -1,5 +1,5 @@
 /**
- * Servicio de créditos: consulta por identificación del cliente, abonos y fechas de cuotas.
+ * Servicio de créditos: búsqueda del cliente (ID, celular o nombre), abonos y fechas de cuotas.
  *
  * Al abonar:
  *  - El valor se aplica a las cuotas en orden (primero la más antigua).
@@ -7,17 +7,38 @@
  *    y aparece en el historial de ventas completadas.
  */
 import "server-only";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { abonos, cuotas, facturas } from "@/db/schema";
 import { ApiError, type VendedorSesion } from "@/lib/api";
+import { escaparLike, normalizarTexto } from "@/lib/formato";
 import { obtenerFactura } from "./facturas";
 import { resolverPago, type DatosPago } from "./pagos";
 
-export async function listarCreditos(localId: string, identificacion?: string) {
+/**
+ * Condición de búsqueda del cliente: coincidencia parcial, sin distinguir mayúsculas ni tildes.
+ *  - Identificación o celular: se comparan solo los dígitos ("300 123" encuentra "3001234567").
+ *  - Nombre: cada palabra debe aparecer, en cualquier orden ("perez maria" encuentra "María Pérez").
+ */
+function condicionBusquedaCliente(texto: string): SQL | undefined {
+  const opciones: SQL[] = [ilike(facturas.clienteNombre, `%${escaparLike(texto)}%`)];
+  const digitos = texto.replace(/\D/g, "");
+  if (digitos) {
+    const parecido = `%${digitos}%`;
+    opciones.push(ilike(facturas.clienteIdentificacion, parecido));
+    opciones.push(sql`regexp_replace(${facturas.clienteTelefono}, '\\D', '', 'g') like ${parecido}`);
+  }
+  const palabras = normalizarTexto(texto).split(" ").filter(Boolean);
+  if (palabras.length) opciones.push(and(...palabras.map((p) => ilike(facturas.clienteNombreBusqueda, `%${escaparLike(p)}%`)))!);
+  return or(...opciones);
+}
+
+export async function listarCreditos(localId: string, busqueda?: string) {
   const condiciones = [eq(facturas.localId, localId), eq(facturas.tipo, "CREDITO")];
-  // Sin identificación: solo los créditos pendientes. Con identificación: todos los del cliente.
-  if (identificacion?.trim()) condiciones.push(eq(facturas.clienteIdentificacion, identificacion.trim()));
+  // Sin búsqueda: solo los créditos pendientes. Con búsqueda: todos los créditos de los clientes que coinciden.
+  const texto = busqueda?.trim();
+  const condicionCliente = texto ? condicionBusquedaCliente(texto) : undefined;
+  if (condicionCliente) condiciones.push(condicionCliente);
   else condiciones.push(eq(facturas.estado, "PENDIENTE"));
 
   const lista = await db.query.facturas.findMany({

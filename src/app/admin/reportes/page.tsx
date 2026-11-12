@@ -108,7 +108,7 @@ export default function ReportesAdmin() {
                 aria-disabled={!mes}
                 onClick={(e) => !mes && e.preventDefault()}
                 className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border-2 px-5 text-lg font-bold ${
-                  mes ? "border-exito-700 bg-white text-exito-800 hover:bg-exito-50" : "cursor-not-allowed border-gray-300 text-gray-500"
+                  mes ? "border-exito-700 bg-tarjeta text-exito-800 hover:bg-exito-50" : "cursor-not-allowed border-linea-fuerte text-texto-tenue"
                 }`}
               >
                 <Icono nombre="descargar" />
@@ -117,13 +117,13 @@ export default function ReportesAdmin() {
             </div>
 
             {/* Consolidado: todos los locales en un solo archivo (usa el año y el mes elegidos arriba) */}
-            <div className="mt-6 border-t-2 border-gray-200 pt-5">
-              <p className="mb-3 text-lg text-gray-700">
+            <div className="mt-6 border-t-2 border-linea pt-5">
+              <p className="mb-3 text-lg text-texto-suave">
                 <strong>Todos los locales:</strong> compara las ventas de cada local y ve la cartera completa en un solo archivo.
               </p>
               <a
                 href={`/api/admin/reportes/consolidado?anio=${anio}${mes ? `&mes=${mes}` : ""}`}
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border-2 border-exito-700 bg-white px-5 text-lg font-bold text-exito-800 hover:bg-exito-50"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border-2 border-exito-700 bg-tarjeta px-5 text-lg font-bold text-exito-800 hover:bg-exito-50"
               >
                 <Icono nombre="descargar" />
                 Descargar consolidado de {mes ? `${MESES[mes - 1]} ${anio}` : `todo ${anio}`}
