@@ -12,6 +12,13 @@ describe("etiquetas de clasificación", () => {
     assert.equal(ETIQUETA_TAMANO.OZ_3_4, "3.4 oz (100 ml)");
     for (const t of TAMANOS) assert.match(ETIQUETA_TAMANO[t], /^\d(\.\d)? oz \(\d+ ml\)$/);
   });
+  it("incluye los tamaños de esencias, cremas y frascos pequeños", () => {
+    assert.equal(ETIQUETA_TAMANO.OZ_1, "1 oz (30 ml)");
+    assert.equal(ETIQUETA_TAMANO.OZ_1_40ML, "1 oz (40 ml)");
+    assert.equal(ETIQUETA_TAMANO.OZ_6_8, "6.8 oz (200 ml)");
+    assert.equal(ETIQUETA_TAMANO.OZ_8_4, "8.4 oz (250 ml)");
+    assert.equal(new Set(Object.values(ETIQUETA_TAMANO)).size, TAMANOS.length, "las etiquetas no se repiten");
+  });
   it("Hombre/Mujer + Infantil = Niño/Niña", () => {
     assert.equal(etiquetaPara("HOMBRE", "INFANTIL"), "Niño");
     assert.equal(etiquetaPara("MUJER", "INFANTIL"), "Niña");

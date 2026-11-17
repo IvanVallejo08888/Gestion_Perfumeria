@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/lib/formato.test.ts src/lib/pagos.test.ts src/lib/whatsapp.test.ts src/lib/clasificacion.test.ts src/lib/inventario.test.ts src/lib/dashboard.test.ts src/db/datos-perfumes.test.ts src/lib/validaciones.test.ts src/lib/borrador-factura.test.ts src/lib/soporte.test.ts src/lib/manual.test.ts src/lib/imagen-factura.test.ts src/lib/gastos.test.ts src/lib/cuentas-por-pagar.test.ts",
+    "test": "node --import tsx --test src/lib/formato.test.ts src/lib/pagos.test.ts src/lib/whatsapp.test.ts src/lib/clasificacion.test.ts src/lib/inventario.test.ts src/lib/dashboard.test.ts src/db/datos-perfumes.test.ts src/lib/validaciones.test.ts src/lib/borrador-factura.test.ts src/lib/soporte.test.ts src/lib/manual.test.ts src/lib/imagen-factura.test.ts src/lib/gastos.test.ts src/lib/cuentas-por-pagar.test.ts src/lib/correccion-tamanos.test.ts",
     "iconos": "node scripts/generar-iconos.mjs",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
@@ -16,6 +16,7 @@
     "db:seed-perfumes": "tsx src/db/seed-perfumes.ts",
     "db:recalcular-busqueda": "tsx src/db/recalcular-busqueda.ts",
     "db:quitar-arriendo": "tsx src/db/quitar-arriendo.ts",
+    "db:corregir-tamanos": "tsx src/db/corregir-tamanos.ts",
     "db:studio": "drizzle-kit studio",
     "db:generate": "drizzle-kit generate",
     "setup": "npm run db:migrate && npm run db:seed"

@@ -12,7 +12,21 @@ export const PUBLICOS = ["ADULTO", "INFANTIL"] as const;
  * la base de datos rechaza cualquier otro valor y no hay errores de redondeo.
  * El orden de la lista es de menor a mayor.
  */
-export const TAMANOS = ["OZ_2", "OZ_2_5", "OZ_3_4", "OZ_4", "OZ_4_2"] as const;
+export const TAMANOS = [
+  "OZ_1",
+  "OZ_1_40ML",
+  "OZ_1_6",
+  "OZ_1_7",
+  "OZ_2",
+  "OZ_2_2",
+  "OZ_2_5",
+  "OZ_2_7",
+  "OZ_3_4",
+  "OZ_4",
+  "OZ_4_2",
+  "OZ_6_8",
+  "OZ_8_4",
+] as const;
 
 export type TipoProducto = (typeof TIPOS_PRODUCTO)[number];
 export type Genero = (typeof GENEROS)[number];
@@ -32,11 +46,20 @@ export const ETIQUETA_PUBLICO: Record<Publico, string> = { ADULTO: "Adulto", INF
 
 /** Mililitros con los que se venden comercialmente (1 oz ≈ 29,57 ml, redondeado como en las etiquetas). */
 export const ETIQUETA_TAMANO: Record<Tamano, string> = {
+  OZ_1: "1 oz (30 ml)",
+  /** Las esencias se venden como "1 oz" pero el frasco trae 40 ml. */
+  OZ_1_40ML: "1 oz (40 ml)",
+  OZ_1_6: "1.6 oz (47 ml)",
+  OZ_1_7: "1.7 oz (50 ml)",
   OZ_2: "2 oz (60 ml)",
+  OZ_2_2: "2.2 oz (65 ml)",
   OZ_2_5: "2.5 oz (75 ml)",
+  OZ_2_7: "2.7 oz (80 ml)",
   OZ_3_4: "3.4 oz (100 ml)",
   OZ_4: "4 oz (120 ml)",
   OZ_4_2: "4.2 oz (125 ml)",
+  OZ_6_8: "6.8 oz (200 ml)",
+  OZ_8_4: "8.4 oz (250 ml)",
 };
 
 export const SIN_CATEGORIA = "Sin categoría";

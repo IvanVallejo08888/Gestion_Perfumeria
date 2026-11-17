@@ -50,6 +50,13 @@
       "when": 1794595763100,
       "tag": "0006_compras_credito_proveedores",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794958458349,
+      "tag": "0007_breezy_bruce_banner",
+      "breakpoints": true
     }
   ]
 }

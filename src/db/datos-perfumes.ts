@@ -2,7 +2,7 @@
  * Catálogo de EJEMPLO para probar la aplicación (lo usa `npm run db:seed-perfumes`).
  * Solo datos: no se conecta a la base de datos, así se puede probar con `npm test`.
  *
- * Cubre los 4 públicos (Hombre, Mujer, Niño, Niña), los 5 tipos y los 5 tamaños.
+ * Cubre los 4 públicos (Hombre, Mujer, Niño, Niña), los 5 tipos y los 5 tamaños de TAMANOS_EJEMPLO.
  * Stock: 3 agotados y 4 en stock bajo (stock ≤ mínimo) para ver alertas y notificaciones.
  */
 import type { Genero, Publico, Tamano, TipoProducto } from "../lib/clasificacion";
@@ -25,12 +25,16 @@ export type MarcaEjemplo = (typeof MARCAS_EJEMPLO)[number];
 /** Stock mínimo de todos los productos de ejemplo (el mismo valor por defecto de la app). */
 export const STOCK_MINIMO_EJEMPLO = 3;
 
+/** Tamaños que usa el catálogo de ejemplo (la app admite más; ver TAMANOS). */
+export const TAMANOS_EJEMPLO = ["OZ_2", "OZ_2_5", "OZ_3_4", "OZ_4", "OZ_4_2"] as const satisfies readonly Tamano[];
+export type TamanoEjemplo = (typeof TAMANOS_EJEMPLO)[number];
+
 /**
  * Precio en pesos COP (entero) según tipo y tamaño.
  * El precio más barato de un tipo siempre supera al más caro del tipo siguiente:
  * Original > 1.1 > Versión / Imitación > Esencia.
  */
-export const PRECIOS_EJEMPLO: Record<TipoProducto, Record<Tamano, number>> = {
+export const PRECIOS_EJEMPLO: Record<TipoProducto, Record<TamanoEjemplo, number>> = {
   ORIGINAL: { OZ_2: 380_000, OZ_2_5: 420_000, OZ_3_4: 520_000, OZ_4: 590_000, OZ_4_2: 650_000 },
   UNO_UNO: { OZ_2: 150_000, OZ_2_5: 165_000, OZ_3_4: 190_000, OZ_4: 215_000, OZ_4_2: 230_000 },
   VERSION: { OZ_2: 75_000, OZ_2_5: 85_000, OZ_3_4: 100_000, OZ_4: 112_000, OZ_4_2: 120_000 },
@@ -46,11 +50,11 @@ export interface PerfumeEjemplo {
   tipo: TipoProducto;
   genero: Genero;
   publico: Publico;
-  tamano: Tamano;
+  tamano: TamanoEjemplo;
   stock: number;
 }
 
-type Fila = [codigo: string, nombre: string, marca: MarcaEjemplo, tipo: TipoProducto, genero: Genero, publico: Publico, tamano: Tamano, stock: number];
+type Fila = [codigo: string, nombre: string, marca: MarcaEjemplo, tipo: TipoProducto, genero: Genero, publico: Publico, tamano: TamanoEjemplo, stock: number];
 
 const FILAS: Fila[] = [
   // Hombre adulto
