@@ -22,7 +22,7 @@ export function Desplegable({ titulo, resumen, children }: Props) {
   const panelId = useId();
 
   return (
-    <section className="rounded-2xl border-2 border-gray-200 bg-white shadow-sm">
+    <section className="rounded-2xl border border-linea bg-tarjeta shadow-sm">
       <h2>
         <button
           type="button"
@@ -34,7 +34,7 @@ export function Desplegable({ titulo, resumen, children }: Props) {
           <span>
             {titulo}
             {/* El valor no se parte en dos líneas: el signo siempre queda junto al monto */}
-            {resumen && <span className="whitespace-nowrap text-marca-800"> · {resumen}</span>}
+            {resumen && <span className="whitespace-nowrap text-acento"> · {resumen}</span>}
           </span>
           <Icono
             nombre="flechaAbajo"

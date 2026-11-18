@@ -28,9 +28,9 @@ export function TotalesGastos({ datos }: { datos: ListaGastos }) {
   return (
     <ul className="grid gap-4 sm:grid-cols-3">
       {totales.map((t) => (
-        <li key={t.titulo} className="rounded-2xl border-2 border-gray-200 bg-white p-4 shadow-sm">
+        <li key={t.titulo} className="rounded-2xl border border-linea bg-tarjeta p-4 shadow-sm">
           <p className="text-lg font-bold text-texto-suave">{t.titulo}</p>
-          <p className="mt-1 text-2xl font-bold text-marca-800 sm:text-3xl">{pesos(t.valor)}</p>
+          <p className="mt-1 text-2xl font-bold text-acento sm:text-3xl">{pesos(t.valor)}</p>
         </li>
       ))}
     </ul>
@@ -59,8 +59,8 @@ export function TablaGastos({
       {gastos.map((g) => (
         <li
           key={g.id}
-          className={`flex flex-col gap-3 rounded-2xl border-2 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between ${
-            g.anulado ? "border-peligro-700/50" : "border-gray-200"
+          className={`flex flex-col gap-3 rounded-2xl border-2 bg-tarjeta p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between ${
+            g.anulado ? "border-peligro-700/50" : "border-linea"
           }`}
         >
           <div className="min-w-0">
@@ -86,7 +86,7 @@ export function TablaGastos({
             )}
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 sm:flex-col sm:items-end">
-            <p className={`text-2xl font-bold ${g.anulado ? "text-texto-suave line-through" : "text-marca-800"}`}>{pesos(g.valor)}</p>
+            <p className={`text-2xl font-bold ${g.anulado ? "text-texto-suave line-through" : "text-acento"}`}>{pesos(g.valor)}</p>
             {onEliminar && !g.anulado && (
               <Boton
                 variante="peligro"
@@ -162,7 +162,7 @@ export function ConfirmarAnulacionGasto({
         gasto && (
           <div className="space-y-4">
             <p>¿Seguro que quieres eliminar este gasto? Dejará de contar en los totales, pero quedará registrado.</p>
-            <dl className="grid gap-1 rounded-xl bg-gray-50 p-4">
+            <dl className="grid gap-1 rounded-xl bg-superficie p-4">
               {[
                 ["Categoría", gasto.categoriaNombre],
                 ["Valor", pesos(gasto.valor)],

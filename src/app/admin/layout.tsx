@@ -8,7 +8,7 @@ const MENU: ItemMenu[] = [
   { href: "/admin/usuarios", texto: "Usuarios", icono: "usuarios" },
   { href: "/admin/locales", texto: "Locales", icono: "local" },
   { href: "/admin/reportes", texto: "Reportes", icono: "reporte" },
-  { href: "/admin/cuenta", texto: "Mi cuenta", icono: "cuenta" },
+  { href: "/admin/cuenta", texto: "Ajustes", icono: "ajustes" },
 ];
 
 // Siempre se valida la sesión contra la base de datos (nada en caché)

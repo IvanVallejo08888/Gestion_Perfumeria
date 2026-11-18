@@ -1,6 +1,7 @@
 /**
  * Reportes del administrador:
- *  - Elegir local, año y (opcional) mes.
+ *  - Elegir local (o "Todos los locales"), año y (opcional) mes.
+ *  - Dashboard: indicadores y gráficas de un local o del consolidado.
  *  - Ver las estadísticas del local en pantalla.
  *  - Descargar Excel del AÑO o del MES elegido.
  *  - Ver los gastos del local en el periodo elegido y eliminarlos (anularlos) con un motivo.
@@ -11,7 +12,9 @@
 import { useState } from "react";
 import { ConfirmarAnulacionGasto, TablaGastos, TotalesGastos } from "@/components/compartidos/TablaGastos";
 import { VistaEstadisticas } from "@/components/compartidos/VistaEstadisticas";
+import { VistaDashboard } from "@/components/dashboard/VistaDashboard";
 import { Cargando, EncabezadoPagina, Mensaje, Tarjeta, Vacio } from "@/components/ui/Basicos";
+import { GrupoOpciones } from "@/components/ui/GrupoOpciones";
 import { Selector } from "@/components/ui/Campo";
 import { Icono } from "@/components/ui/Icono";
 import { useConsulta } from "@/hooks/useConsulta";
@@ -20,6 +23,8 @@ import type { Estadisticas, GastoFila, ListaGastos } from "@/tipos";
 
 const ANIO_ACTUAL = new Date().getFullYear();
 const ANIOS = Array.from({ length: 6 }, (_, i) => ANIO_ACTUAL - i);
+/** Valor del selector para ver el dashboard consolidado. */
+const TODOS = "TODOS";
 
 export default function ReportesAdmin() {
   const [localId, setLocalId] = useState("");
@@ -35,14 +40,18 @@ export default function ReportesAdmin() {
   });
   const locales = consultaLocales.datos?.locales ?? null;
 
-  const consultaDatos = useConsulta<Estadisticas>(localId ? `/api/admin/estadisticas?localId=${localId}&anio=${anio}` : null);
+  // Las estadísticas, los gastos y el Excel por local necesitan UN local; el dashboard también acepta todos
+  const todos = localId === TODOS;
+  const unLocal = localId && !todos ? localId : null;
+
+  const consultaDatos = useConsulta<Estadisticas>(unLocal ? `/api/admin/estadisticas?localId=${unLocal}&anio=${anio}` : null);
   const { datos, cargando } = consultaDatos;
   const consultaGastos = useConsulta<ListaGastos>(
-    localId
-      ? `/api/admin/gastos?localId=${localId}&anio=${anio}${mes ? `&mes=${mes}` : ""}${verEliminados ? "&estado=eliminados" : ""}`
+    unLocal
+      ? `/api/admin/gastos?localId=${unLocal}&anio=${anio}${mes ? `&mes=${mes}` : ""}${verEliminados ? "&estado=eliminados" : ""}`
       : null,
   );
-  const gastos = consultaGastos.datos;
+  const gastos = unLocal ? consultaGastos.datos : null;
   const error = consultaLocales.error || consultaDatos.error || consultaGastos.error;
 
   const urlExcel = (conMes: boolean) =>
@@ -74,6 +83,7 @@ export default function ReportesAdmin() {
                     {l.nombre}
                   </option>
                 ))}
+                <option value={TODOS}>Todos los locales (consolidado)</option>
               </Selector>
               <Selector etiqueta="Año" value={anio} onChange={(e) => setAnio(Number(e.target.value))}>
                 {ANIOS.map((a) => (
@@ -92,8 +102,8 @@ export default function ReportesAdmin() {
               </Selector>
             </div>
 
-            {/* Descargas: enlaces directos (el navegador descarga el archivo) */}
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+            {/* Descargas: enlaces directos (el navegador descarga el archivo). El Excel por local necesita un local. */}
+            <div className={unLocal ? "mt-5 flex flex-col gap-3 sm:flex-row" : "hidden"}>
               <a
                 href={urlExcel(false)}
                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-exito-700 px-5 text-lg font-bold text-white hover:bg-exito-800"
@@ -106,16 +116,43 @@ export default function ReportesAdmin() {
                 aria-disabled={!mes}
                 onClick={(e) => !mes && e.preventDefault()}
                 className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border-2 px-5 text-lg font-bold ${
-                  mes ? "border-exito-700 bg-white text-exito-800 hover:bg-exito-50" : "cursor-not-allowed border-gray-300 text-gray-500"
+                  mes ? "border-exito-700 bg-tarjeta text-exito-800 hover:bg-exito-50" : "cursor-not-allowed border-linea-fuerte text-texto-tenue"
                 }`}
               >
                 <Icono nombre="descargar" />
                 {mes ? `Descargar Excel de ${MESES[mes - 1]}` : "Elige un mes para el Excel mensual"}
               </a>
             </div>
+
+            {/* Consolidado: todos los locales en un solo archivo (usa el año y el mes elegidos arriba) */}
+            <div className="mt-6 border-t-2 border-linea pt-5">
+              <p className="mb-3 text-lg text-texto-suave">
+                <strong>Todos los locales:</strong> compara las ventas de cada local y ve la cartera completa en un solo archivo.
+              </p>
+              <a
+                href={`/api/admin/reportes/consolidado?anio=${anio}${mes ? `&mes=${mes}` : ""}`}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border-2 border-exito-700 bg-tarjeta px-5 text-lg font-bold text-exito-800 hover:bg-exito-50"
+              >
+                <Icono nombre="descargar" />
+                Descargar consolidado de {mes ? `${MESES[mes - 1]} ${anio}` : `todo ${anio}`}
+              </a>
+            </div>
           </Tarjeta>
 
-          {cargando || !datos ? <Cargando texto="Calculando estadísticas…" /> : <VistaEstadisticas datos={datos} mes={mes || undefined} />}
+          {localId && <VistaDashboard anio={anio} mes={mes || undefined} localId={unLocal ?? undefined} />}
+
+          {todos ? (
+            <div className="mt-10">
+              <Mensaje tono="info" titulo="Estás viendo todos los locales">
+                Las estadísticas mes a mes, los gastos y el Excel por local se ven eligiendo un local. El consolidado en Excel se descarga con el botón de arriba.
+              </Mensaje>
+            </div>
+          ) : (
+            <>
+              <h2 className="mt-10 mb-4 text-2xl font-bold">Estadísticas del año {anio}</h2>
+              {cargando || !datos ? <Cargando texto="Calculando estadísticas…" /> : <VistaEstadisticas datos={datos} mes={mes || undefined} />}
+            </>
+          )}
 
           {gastos && (
             <section className="mt-8 space-y-4">
@@ -124,24 +161,15 @@ export default function ReportesAdmin() {
                 {anio}
               </h2>
               <TotalesGastos datos={gastos} />
-              <div role="group" aria-label="Qué gastos ver" className="flex flex-wrap gap-2">
-                {[
-                  { valor: false, texto: "Gastos vigentes" },
-                  { valor: true, texto: "Eliminados" },
-                ].map((f) => (
-                  <button
-                    key={f.texto}
-                    type="button"
-                    onClick={() => setVerEliminados(f.valor)}
-                    aria-pressed={verEliminados === f.valor}
-                    className={`min-h-12 rounded-xl border-2 px-4 text-lg font-bold ${
-                      verEliminados === f.valor ? "border-marca-700 bg-marca-700 text-white" : "border-borde bg-white hover:bg-gray-50"
-                    }`}
-                  >
-                    {f.texto}
-                  </button>
-                ))}
-              </div>
+              <GrupoOpciones
+                etiqueta="Qué gastos ver"
+                opciones={[
+                  { valor: "vigentes", texto: "Gastos vigentes" },
+                  { valor: "eliminados", texto: "Eliminados" },
+                ]}
+                valor={verEliminados ? "eliminados" : "vigentes"}
+                onCambio={(v) => setVerEliminados(v === "eliminados")}
+              />
               <TablaGastos
                 gastos={gastos.gastos}
                 onEliminar={setEliminando}

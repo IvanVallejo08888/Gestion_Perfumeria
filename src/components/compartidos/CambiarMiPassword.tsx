@@ -12,7 +12,8 @@ import { ReglasPassword } from "@/components/ui/ReglasPassword";
 import { api } from "@/lib/http";
 import { passwordEsValida } from "@/lib/validaciones";
 
-export function CambiarMiPassword() {
+/** `comoSeccion`: dentro de Ajustes no muestra su propio encabezado de página (lo pone Ajustes). */
+export function CambiarMiPassword({ comoSeccion = false }: { comoSeccion?: boolean }) {
   const avisos = useAvisos();
   const [actual, setActual] = useState("");
   const [password, setPassword] = useState("");
@@ -43,8 +44,9 @@ export function CambiarMiPassword() {
 
   return (
     <>
-      <EncabezadoPagina titulo="Mi cuenta" descripcion="Cambia tu contraseña cuando lo necesites." />
+      {!comoSeccion && <EncabezadoPagina titulo="Mi cuenta" descripcion="Cambia tu contraseña cuando lo necesites." />}
       <Tarjeta className="max-w-2xl">
+        {comoSeccion && <h3 className="mb-4 text-xl font-bold text-texto">Cambiar contraseña</h3>}
         <form onSubmit={enviar} className="space-y-5" noValidate>
           {error && <Mensaje tono="peligro">{error}</Mensaje>}
           <CampoPassword etiqueta="Contraseña actual" autoComplete="current-password" value={actual} onChange={(e) => setActual(e.target.value)} obligatorio />

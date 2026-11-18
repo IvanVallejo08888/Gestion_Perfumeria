@@ -5,6 +5,16 @@
  */
 "use client";
 
+/** Error de la API con su código HTTP (p. ej. 404), para distinguirlo de un fallo de conexión. */
+export class ErrorApi extends Error {
+  constructor(
+    mensaje: string,
+    readonly estado: number,
+  ) {
+    super(mensaje);
+  }
+}
+
 export async function api<T = unknown>(url: string, opciones: RequestInit & { json?: unknown } = {}): Promise<T> {
   const { json, headers, ...resto } = opciones;
   const respuesta = await fetch(url, {
@@ -24,7 +34,7 @@ export async function api<T = unknown>(url: string, opciones: RequestInit & { js
 
   const datos = await respuesta.json().catch(() => ({}));
   if (!respuesta.ok) {
-    throw new Error((datos as { error?: string }).error ?? "No se pudo completar la acción.");
+    throw new ErrorApi((datos as { error?: string }).error ?? "No se pudo completar la acción.", respuesta.status);
   }
   return datos as T;
 }

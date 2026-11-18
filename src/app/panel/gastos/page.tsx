@@ -14,6 +14,7 @@ import { BotonesMedioPago } from "@/components/facturacion/MedioPago";
 import { Boton } from "@/components/ui/Boton";
 import { Campo, CampoDinero, Selector } from "@/components/ui/Campo";
 import { Cargando, EncabezadoPagina, Mensaje, Tarjeta } from "@/components/ui/Basicos";
+import { GrupoOpciones } from "@/components/ui/GrupoOpciones";
 import { useAvisos } from "@/components/ui/Avisos";
 import { useConsulta } from "@/hooks/useConsulta";
 import { anioMesColombia, hoyColombia, MESES } from "@/lib/formato";
@@ -24,6 +25,12 @@ import type { GastoFila, ListaGastos, MedioPagoGasto, NombreActivo } from "@/tip
 
 const HOY = anioMesColombia(new Date());
 const ANIOS = Array.from({ length: 6 }, (_, i) => HOY.anio - i);
+
+/** Filtro de la lista: los gastos vigentes o los eliminados (anulados). */
+const VISTAS_GASTOS = [
+  { valor: "vigentes", texto: "Gastos vigentes" },
+  { valor: "eliminados", texto: "Eliminados" },
+] as const;
 
 interface FormGasto {
   categoriaId: string;
@@ -85,23 +92,13 @@ export default function PaginaGastos() {
             ))}
           </Selector>
         </div>
-        <div role="group" aria-label="Qué gastos ver" className="mt-4 flex flex-wrap gap-2">
-          {[
-            { valor: false, texto: "Gastos vigentes" },
-            { valor: true, texto: "Eliminados" },
-          ].map((f) => (
-            <button
-              key={f.texto}
-              type="button"
-              onClick={() => setVerEliminados(f.valor)}
-              aria-pressed={verEliminados === f.valor}
-              className={`min-h-12 rounded-xl border-2 px-4 text-lg font-bold ${
-                verEliminados === f.valor ? "border-marca-700 bg-marca-700 text-white" : "border-borde bg-white hover:bg-gray-50"
-              }`}
-            >
-              {f.texto}
-            </button>
-          ))}
+        <div className="mt-4">
+          <GrupoOpciones
+            etiqueta="Qué gastos ver"
+            opciones={VISTAS_GASTOS}
+            valor={verEliminados ? "eliminados" : "vigentes"}
+            onCambio={(v) => setVerEliminados(v === "eliminados")}
+          />
         </div>
       </Tarjeta>
 

@@ -14,6 +14,7 @@ import { ConfirmarAnulacion } from "@/components/facturacion/ConfirmarAnulacion"
 import { DetalleFactura } from "@/components/facturacion/DetalleFactura";
 import { TarjetaFactura } from "@/components/facturacion/TarjetaFactura";
 import { Boton } from "@/components/ui/Boton";
+import { GrupoOpciones } from "@/components/ui/GrupoOpciones";
 import { Campo } from "@/components/ui/Campo";
 import { Cargando, EncabezadoPagina, Tarjeta, Vacio } from "@/components/ui/Basicos";
 import { useAvisos } from "@/components/ui/Avisos";
@@ -66,29 +67,23 @@ export default function PaginaHistorial() {
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
           />
-          <div role="group" aria-label="Filtrar facturas" className="flex flex-wrap gap-2">
-            {FILTROS.map((f) => (
-              <button
-                key={f.valor}
-                type="button"
-                onClick={() => setEstado(f.valor)}
-                aria-pressed={estado === f.valor}
-                className={`min-h-12 rounded-xl border-2 px-4 text-lg font-bold ${
-                  estado === f.valor ? "border-marca-700 bg-marca-700 text-white" : "border-borde bg-white hover:bg-gray-50"
-                }`}
-              >
-                {f.texto}
-              </button>
-            ))}
-          </div>
+          <GrupoOpciones etiqueta="Filtrar facturas" opciones={FILTROS} valor={estado} onCambio={setEstado} />
         </div>
       </Tarjeta>
 
       {!facturas ? (
         <Cargando />
       ) : facturas.length === 0 ? (
-        <Vacio icono="historial" titulo={estado === "ANULADA" ? "No hay ventas anuladas" : "No hay facturas para mostrar"}>
-          {estado === "ANULADA" ? "Las ventas que elimines aparecerán aquí." : "Las facturas que registres aparecerán aquí."}
+        // Estado vacío: qué pasó + cómo seguir (distinto si hay una búsqueda escrita o si es el filtro Anuladas)
+        <Vacio
+          icono="historial"
+          titulo={texto.trim() ? "No se encontraron facturas" : estado === "ANULADA" ? "No hay ventas anuladas" : "No hay facturas para mostrar"}
+        >
+          {texto.trim()
+            ? "Revisa el nombre, la identificación o el número, o prueba con el filtro «Todas»."
+            : estado === "ANULADA"
+              ? "Las ventas que elimines aparecerán aquí."
+              : "Las facturas que registres en «Facturación» aparecerán aquí."}
         </Vacio>
       ) : (
         <>

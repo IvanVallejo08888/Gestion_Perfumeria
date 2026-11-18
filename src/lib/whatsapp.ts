@@ -8,7 +8,7 @@ import { textoMedioPago } from "./pagos";
 import type { FacturaDetalle } from "@/tipos";
 
 /** Intl usa espacios especiales ("$ 150.000"); en un mensaje de texto deben ser normales. */
-const plano = (texto: string) => texto.replace(/[\u00a0\u202f]/g, " ");
+export const plano = (texto: string) => texto.replace(/[\u00a0\u202f]/g, " ");
 const dinero = (valor: number) => plano(pesos(valor));
 const fechaYHora = (valor: string) => plano(fechaHora(valor));
 

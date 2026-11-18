@@ -8,6 +8,7 @@
 
 import { useState, type FormEvent } from "react";
 import { Boton } from "@/components/ui/Boton";
+import { GrupoOpciones } from "@/components/ui/GrupoOpciones";
 import { Campo, CampoPassword, Selector } from "@/components/ui/Campo";
 import { Cargando, EncabezadoPagina, Insignia, Mensaje, Tarjeta, Vacio } from "@/components/ui/Basicos";
 import { Confirmar, Modal } from "@/components/ui/Modal";
@@ -94,21 +95,7 @@ export function GestionUsuarios({ estadoInicial }: { estadoInicial: string }) {
             onChange={(e) => setTexto(e.target.value)}
             type="search"
           />
-          <div role="group" aria-label="Filtrar por estado" className="flex flex-wrap gap-2">
-            {FILTROS.map((f) => (
-              <button
-                key={f.valor}
-                type="button"
-                onClick={() => setEstado(f.valor)}
-                aria-pressed={estado === f.valor}
-                className={`min-h-12 rounded-xl border-2 px-4 text-lg font-bold ${
-                  estado === f.valor ? "border-marca-700 bg-marca-700 text-white" : "border-borde bg-white hover:bg-gray-50"
-                }`}
-              >
-                {f.texto}
-              </button>
-            ))}
-          </div>
+          <GrupoOpciones etiqueta="Filtrar por estado" opciones={FILTROS} valor={estado} onCambio={setEstado} />
         </div>
       </Tarjeta>
 
@@ -384,7 +371,7 @@ function ConfirmarAccion({
           {mensaje}
         </>
       }
-      textoConfirmar={accion.tipo === "eliminar" ? "Sí, eliminar" : pausar ? "Sí, pausar" : "Sí, reactivar"}
+      textoConfirmar={accion.tipo === "eliminar" ? "Eliminar usuario" : pausar ? "Pausar usuario" : "Reactivar usuario"}
       peligro={accion.tipo === "eliminar" || pausar}
       cargando={cargando}
       onConfirmar={confirmar}

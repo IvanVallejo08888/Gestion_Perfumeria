@@ -13,6 +13,7 @@ const RUTAS = {
   local: "M3 9l2-5h14l2 5M3 9h18v11H3zM9 20v-6h6v6",
   usuarios: "M16 20v-2a4 4 0 0 0-8 0v2M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8 8v-2a3 3 0 0 0-2-2.8M18 4.3a3 3 0 0 1 0 5.4",
   cuenta: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-8 9a8 8 0 0 1 16 0",
+  ajustes: "M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4",
   salir: "M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3",
   menu: "M3 6h18M3 12h18M3 18h18",
   cerrar: "M6 6l12 12M18 6 6 18",

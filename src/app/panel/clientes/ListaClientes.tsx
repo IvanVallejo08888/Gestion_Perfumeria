@@ -103,9 +103,9 @@ export function ListaClientes() {
       </Tarjeta>
 
       {clienteAbierto && (
-        <div ref={refDetalle} className="mb-8 scroll-mt-4 rounded-2xl border-2 border-marca-700 bg-marca-50/40 p-3 sm:p-5">
+        <div ref={refDetalle} className="mb-8 scroll-mt-4 rounded-2xl border-2 border-marca-700 bg-superficie p-3 sm:p-5">
           {!clienteUrl && (
-            <p className="mb-3 text-lg font-bold text-marca-800" role="status">
+            <p className="mb-3 text-lg font-bold text-acento" role="status">
               Coincidencia exacta de cédula o teléfono:
             </p>
           )}
@@ -143,12 +143,12 @@ export function ListaClientes() {
                     }
                   }}
                   aria-current={clienteAbierto === c.id ? "true" : undefined}
-                  className={`block h-full rounded-2xl border-2 bg-white p-4 shadow-sm transition-colors hover:border-marca-700 hover:bg-marca-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-marca-200 ${
-                    clienteAbierto === c.id ? "border-marca-700" : "border-gray-200"
+                  className={`block h-full rounded-2xl border-2 bg-tarjeta p-4 shadow-sm transition-colors hover:border-marca-700 hover:bg-marca-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-marca-200 ${
+                    clienteAbierto === c.id ? "border-marca-700" : "border-linea"
                   }`}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-2">
-                    <h3 className="text-xl font-bold break-words text-marca-800 underline-offset-4">{c.nombre}</h3>
+                    <h3 className="text-xl font-bold break-words text-acento underline-offset-4">{c.nombre}</h3>
                     {c.saldoPendiente > 0 && <Insignia tono="alerta">Debe {pesos(c.saldoPendiente)}</Insignia>}
                   </div>
                   <p className="text-base text-texto-suave">

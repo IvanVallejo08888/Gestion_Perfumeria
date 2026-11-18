@@ -1,5 +1,5 @@
 /**
- * Servicio de créditos: consulta por identificación del cliente, abonos y fechas de cuotas.
+ * Servicio de créditos: búsqueda del cliente (ID, celular o nombre), abonos y fechas de cuotas.
  *
  * Al abonar:
  *  - El valor se aplica a las cuotas en orden (primero la más antigua).
@@ -9,27 +9,55 @@
  * Las ventas anuladas ("Eliminar venta") no aparecen aquí y no admiten abonos ni cambios de fecha.
  */
 import "server-only";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { abonos, clientes, cuotas, facturas } from "@/db/schema";
 import { ApiError, type VendedorSesion } from "@/lib/api";
+import { escaparLike, normalizarTelefono, normalizarTexto } from "@/lib/formato";
 import { obtenerFactura } from "./facturas";
 import { resolverPago, type DatosPago } from "./pagos";
 
-export async function listarCreditos(localId: string, identificacion?: string) {
+/**
+ * Condición de búsqueda del cliente: coincidencia parcial, sin distinguir mayúsculas ni tildes.
+ *  - Identificación o celular: se comparan solo los dígitos ("300 123" encuentra "3001234567").
+ *  - Nombre: cada palabra debe aparecer, en cualquier orden ("perez maria" encuentra "María Pérez").
+ * Se busca en la copia guardada en la factura Y en los datos ACTUALES del cliente (por clienteId):
+ * así sus créditos se siguen encontrando aunque la cédula, el nombre o el teléfono se corrijan
+ * después de la venta (la factura conserva los datos del día de la venta).
+ */
+function condicionBusquedaCliente(localId: string, texto: string): SQL | undefined {
+  const opciones: SQL[] = [ilike(facturas.clienteNombre, `%${escaparLike(texto)}%`)];
+  const delCliente: SQL[] = [];
+  const digitos = texto.replace(/\D/g, "");
+  if (digitos) {
+    const parecido = `%${digitos}%`;
+    opciones.push(ilike(facturas.clienteIdentificacion, parecido));
+    opciones.push(sql`regexp_replace(${facturas.clienteTelefono}, '\\D', '', 'g') like ${parecido}`);
+    delCliente.push(ilike(clientes.identificacion, parecido), ilike(clientes.telefonoDigitos, `%${normalizarTelefono(texto)}%`));
+  }
+  const palabras = normalizarTexto(texto).split(" ").filter(Boolean);
+  if (palabras.length) {
+    opciones.push(and(...palabras.map((p) => ilike(facturas.clienteNombreBusqueda, `%${escaparLike(p)}%`)))!);
+    delCliente.push(and(...palabras.map((p) => ilike(clientes.nombreBusqueda, `%${escaparLike(p)}%`)))!);
+  }
+  if (delCliente.length) {
+    opciones.push(
+      inArray(
+        facturas.clienteId,
+        db.select({ id: clientes.id }).from(clientes).where(and(eq(clientes.localId, localId), or(...delCliente))),
+      ),
+    );
+  }
+  return or(...opciones);
+}
+
+export async function listarCreditos(localId: string, busqueda?: string) {
   const condiciones = [eq(facturas.localId, localId), eq(facturas.tipo, "CREDITO"), eq(facturas.anulada, false)];
-  // Sin identificación: solo los créditos pendientes. Con identificación: todos los del cliente.
-  if (identificacion?.trim()) {
-    // Se busca al CLIENTE por su cédula actual y luego sus facturas por clienteId: así sus créditos
-    // se siguen encontrando aunque la cédula se haya corregido después de la venta
-    // (la factura conserva la cédula que tenía el día de la venta).
-    const cliente = await db.query.clientes.findFirst({
-      where: and(eq(clientes.localId, localId), eq(clientes.identificacion, identificacion.trim())),
-      columns: { id: true },
-    });
-    if (!cliente) return [];
-    condiciones.push(eq(facturas.clienteId, cliente.id));
-  } else condiciones.push(eq(facturas.estado, "PENDIENTE"));
+  // Sin búsqueda: solo los créditos pendientes. Con búsqueda: todos los créditos de los clientes que coinciden.
+  const texto = busqueda?.trim();
+  const condicionCliente = texto ? condicionBusquedaCliente(localId, texto) : undefined;
+  if (condicionCliente) condiciones.push(condicionCliente);
+  else condiciones.push(eq(facturas.estado, "PENDIENTE"));
 
   const lista = await db.query.facturas.findMany({
     where: and(...condiciones),

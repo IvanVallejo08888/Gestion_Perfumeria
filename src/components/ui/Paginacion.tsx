@@ -36,8 +36,8 @@ export function Paginacion({ pagina, totalPaginas, total, nombres, hrefDe, onIr,
       actual
         ? "border-marca-700 bg-marca-700 text-white"
         : desactivado
-          ? "cursor-not-allowed border-gray-300 text-gray-500"
-          : "border-marca-700 bg-white text-marca-800 hover:bg-marca-50"
+          ? "cursor-not-allowed border-linea-fuerte text-texto-tenue"
+          : "border-marca-700 bg-tarjeta text-acento hover:bg-marca-50"
     }`;
     if (desactivado) {
       return (

@@ -24,8 +24,8 @@ export function TarjetaFactura({
 }) {
   return (
     <article
-      className={`flex flex-col gap-3 rounded-2xl border-2 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between ${
-        f.anulada ? "border-peligro-700/50" : "border-gray-200"
+      className={`flex flex-col gap-3 rounded-2xl border-2 bg-tarjeta p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between ${
+        f.anulada ? "border-peligro-700/50" : "border-linea"
       }`}
     >
       <div className="min-w-0">
@@ -68,7 +68,7 @@ export function TarjetaFactura({
         )}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 sm:flex-col sm:items-end">
-        <p className={`text-2xl font-bold ${f.anulada ? "text-texto-suave line-through" : "text-marca-800"}`}>{pesos(f.total)}</p>
+        <p className={`text-2xl font-bold ${f.anulada ? "text-texto-suave line-through" : "text-acento"}`}>{pesos(f.total)}</p>
         <div className="flex flex-wrap gap-2 sm:justify-end">
           <Boton variante="secundario" icono="factura" onClick={onVer}>
             Ver detalles

@@ -1,7 +1,15 @@
-/** PUT — Editar producto · DELETE — Eliminar producto (si tiene ventas, solo se oculta). */
+/**
+ * GET — Producto para cargarlo en la factura ("Vender" desde el inventario).
+ * PUT — Editar producto (no cambia el stock) · DELETE — Eliminar producto (si tiene ventas, solo se oculta).
+ */
 import { comoVendedor, leerCuerpo, manejador, ok } from "@/lib/api";
 import { productoSchema } from "@/lib/validaciones";
-import { editarProducto, eliminarProducto } from "@/server/servicios/productos";
+import { editarProducto, eliminarProducto, obtenerProductoVenta } from "@/server/servicios/productos";
+
+export const GET = manejador<{ id: string }>("VENDEDOR", async ({ usuario, params }) => {
+  const { localId } = comoVendedor(usuario);
+  return ok({ producto: await obtenerProductoVenta(localId, params.id) });
+});
 
 export const PUT = manejador<{ id: string }>("VENDEDOR", async ({ req, usuario, params }) => {
   const { localId } = comoVendedor(usuario);

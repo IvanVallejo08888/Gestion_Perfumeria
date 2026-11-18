@@ -58,7 +58,7 @@ export function DatosCliente({ valor, onCambio, errores, sectores }: Props) {
 
   return (
     <fieldset className="grid gap-5 md:grid-cols-2">
-      <legend className="mb-3 text-2xl font-bold">1. Datos del cliente</legend>
+      <legend className="titulo-seccion mb-3 text-2xl font-bold">1. Datos del cliente</legend>
       <Campo
         etiqueta="Identificación del cliente"
         inputMode="numeric"

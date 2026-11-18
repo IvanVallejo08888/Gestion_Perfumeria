@@ -3,7 +3,7 @@
 Sistema web para gestionar locales: **facturación (contado y crédito), medios de pago, créditos y abonos, clientes, gastos, inventario, notificaciones de cobro y reportes en Excel**.
 Funciona en **celular, tablet y computador**, con letra grande y colores de alto contraste pensados para personas adultas.
 
-**Tecnologías:** Next.js 15 (App Router) · React 19 · TypeScript · PostgreSQL · Drizzle ORM · Tailwind CSS 4 · ExcelJS · jsPDF
+**Tecnologías:** Next.js 15 (App Router) · React 19 · TypeScript · PostgreSQL · Drizzle ORM · Tailwind CSS 4 · Recharts 3 · ExcelJS · jsPDF
 
 ---
 
@@ -60,14 +60,26 @@ npm run start
 | `npm run db:migrate` | Aplicar migraciones pendientes |
 | `npm run db:generate` | Crear una migración nueva tras editar `src/db/schema.ts` |
 | `npm run db:seed` | Crear el administrador (si no existe) |
+| `npm run db:seed-perfumes -- "Local Centro"` | Cargar perfumes de ejemplo en ese local (ver abajo) |
 | `npm run db:recalcular-busqueda` | Recalcular los textos de búsqueda de productos, historial y clientes (una vez, después de migrar) |
 | `npm run db:studio` | Ver la base de datos en el navegador |
+
+### Perfumes de ejemplo (para pruebas)
+
+`npm run db:seed-perfumes -- "Nombre del local"` carga en un local que ya exista:
+
+- 8 marcas (Dior, Chanel, Carolina Herrera, Paco Rabanne, Lattafa, Armaf, Rasasi y Afnan).
+- 30 perfumes con códigos `DEMO-01` a `DEMO-30`, que cubren Hombre, Mujer, Niño y Niña, los 5 tipos y los 5 tamaños.
+- Precios según el tipo: Original > 1.1 > Versión / Imitación > Esencia.
+- 3 perfumes agotados y 4 en stock bajo, para ver las alertas y las notificaciones.
+
+Se puede ejecutar varias veces sin duplicar: las marcas que ya existen y los códigos `DEMO-xx` que ya están en el local se dejan como están (no se pisan cambios hechos a mano). Si el nombre del local no existe, muestra la lista de locales. No toca al administrador.
 
 ## 4. Cómo funciona
 
 ### Roles
-- **Administrador (único):** inicia sesión con identificación `12345987600`. Crea locales, administra sus **sectores de la ciudad** y sus **categorías de gastos**, ve y gestiona usuarios (asignar local, editar, cambiar contraseña, pausar/reactivar, eliminar), ve las estadísticas y los gastos de cada local y descarga reportes Excel del año o del mes.
-- **Vendedor:** se registra (nombre, identificación, correo, teléfono, contraseña validada) y queda **en espera** hasta que el administrador le asigna un local. Luego trabaja solo sobre su local.
+- **Administrador (único):** inicia sesión con identificación `12345987600`. Crea locales, administra sus **sectores de la ciudad**, sus **marcas** de perfume y sus **categorías de gastos**, ve y gestiona usuarios (asignar local, editar, cambiar contraseña, pausar/reactivar, eliminar), ve las estadísticas y los gastos de cada local y descarga reportes Excel (del año o del mes) por local o el **consolidado de todos los locales**.
+- **Vendedor:** se registra (nombre, identificación, correo, teléfono, contraseña validada) y queda **en espera** hasta que el administrador le asigna un local. Luego trabaja solo sobre su local: factura, maneja el inventario (y puede agregar marcas nuevas desde el formulario de producto) y descarga el Excel de **su** local (nunca el de otro).
 
 ### Seguridad de sesión
 Cada petición se valida contra la base de datos: si el administrador **pausa, elimina o cambia la contraseña** de un usuario, su sesión se cierra al instante.
@@ -85,6 +97,26 @@ Al registrar, todo ocurre en una **transacción**: se descuenta el inventario, s
 
 ### Sectores
 En **Locales → Sectores de la ciudad** el administrador agrega sectores (uno a uno o pegando varios, uno por línea), los edita y los elimina. Si un sector ya se usó en facturas solo se desactiva. La factura guarda el nombre del sector, así el historial no cambia.
+
+### Marcas
+Cada local tiene sus propias marcas (Dior, Lattafa…). El administrador las maneja en **Locales → Editar → Marcas** igual que los sectores: agregar una o varias, renombrar, desactivar o eliminar. El nombre no se repite en el local aunque cambien las mayúsculas, y una marca que ya se usó en productos solo se desactiva.
+
+El vendedor elige la marca al crear o editar un perfume y, si no está, la agrega ahí mismo con **«Agregar marca»** (queda elegida). Si el administrador desactivó una marca, el vendedor no la puede volver a crear.
+
+### Inventario
+Cada perfume se clasifica con **marca**, **tipo** (Original, 1.1, Imitación, Versión, Esencia), **género** (Hombre/Mujer), **público** (Adulto/Infantil → Niño/Niña) y **tamaño** (2, 2.5, 3.4, 4 y 4.2 oz). Los productos creados antes de la clasificación aparecen como «Sin categoría» hasta que se editen.
+
+- **Buscar y filtrar:** pestañas Todos | Hombre | Mujer, con chips Adulto/Niño o Adulta/Niña, más filtros de marca, tipo, tamaño y estado de stock (disponible, bajo, agotado) y el buscador por nombre o código. Los filtros se combinan, se aplican en el servidor y quedan en la dirección (`/panel/inventario?genero=MUJER&tipo=ORIGINAL`), así se pueden guardar o compartir.
+- **En celular y tablet** cada perfume es una tarjeta con dos botones grandes; **en escritorio** (desde 1280 px) se ve una tabla con Marca, Nombre, Tipo, Género, Tamaño, Precio, Stock y Acciones.
+- **Agregar unidades:** cantidad y nota opcional (por ejemplo, la factura del proveedor).
+- **Vender:** abre **Facturación** con ese perfume ya cargado (`?producto=…`), en contado o en crédito. No hay otro flujo de venta. Si está agotado, el botón lo dice y no deja vender.
+- **Detalle:** datos del perfume, sus **últimos 20 movimientos**, y los botones Editar, Ajustar stock y Eliminar.
+- **Ajustar stock:** sumar o restar unidades por daño o conteo, con **motivo obligatorio**. Nunca deja el stock en negativo.
+- **Editar** un perfume no cambia su stock: las unidades solo cambian con movimientos. Al **eliminar**, si ya se vendió solo se oculta (el historial no cambia).
+
+**Trazabilidad:** cada cambio de stock queda en la tabla `movimientos_inventario` con el tipo (**Ingreso**, **Venta** o **Ajuste**), la cantidad, el stock que quedó, quién lo hizo (se guarda su nombre), la factura (en las ventas) y la nota. La factura registra sus movimientos de venta en la misma transacción que descuenta el stock; crear un perfume con unidades registra un ingreso «Stock inicial».
+
+Para cargar datos de prueba: `npm run db:seed-perfumes -- "Nombre del local"` (ver *Comandos útiles*).
 
 ### Gastos
 El vendedor los registra en **Gastos** (categoría, valor, medio de pago, fecha y descripción) y los consulta por mes y categoría. El administrador maneja las categorías en **Locales → Editar** y ve los gastos en **Reportes**. Cada local nuevo empieza con 7 categorías.
@@ -123,10 +155,45 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE INDEX IF NOT EXISTS clientes_nombre_trgm_idx ON clientes USING gin (nombre_busqueda gin_trgm_ops);
 ```
 
-y se **reinicia la app**. El índice GIN no está en `schema.ts` (solo en la migración 0002): no uses `npm run db:push`, que lo borraría; usa `npm run db:migrate`.
+y se **reinicia la app**. El índice GIN no está en `schema.ts` (solo en la migración 0004): no uses `npm run db:push`, que lo borraría; usa `npm run db:migrate`.
 
 ### Notificaciones
 Cobros vencidos, del día y de los próximos 3 días (según las fechas de las cuotas) + productos agotados o con stock bajo. El contador del menú se actualiza cada minuto y, si se activan, llegan avisos del navegador.
+
+### Dashboard de reportes
+Arriba de las estadísticas, en **Reportes** (vendedor: su local · administrador: un local o «Todos los locales»), con el año y el mes elegidos:
+
+- **Indicadores:** total vendido, recaudado, unidades vendidas, valor del inventario hoy, cartera pendiente y perfumes agotados.
+- **Gráficas:** top 10 perfumes (por unidades o por valor), ventas por Hombre / Niño / Mujer / Niña, por tipo, por marca (top 8 + «Otras») y por tamaño, contado y crédito mes a mes con el recaudo, y el inventario de hoy (stock por género y perfumes por reponer, con «Agregar unidades» para el vendedor).
+
+**Qué periodo usa cada cosa:** las ventas, el recaudo, las unidades y las gráficas de ventas usan el año o mes elegido; la gráfica mes a mes muestra siempre los 12 meses del año; el valor del inventario, la cartera, los agotados y la sección de inventario son **de hoy**.
+
+Las ventas por categoría salen de la copia guardada en cada factura (no del producto actual): si luego se reclasifica un perfume, las ventas pasadas no cambian. Las ventas anteriores a la clasificación aparecen como «Sin categoría». El «valor vendido» por categoría es la suma de los productos, sin descuentos ni costos adicionales.
+
+Cada gráfica escribe el nombre y el valor en sus barras, trae sus datos en una tabla para lectores de pantalla y muestra «Aún no hay ventas en este periodo» si no hay datos. En celular los indicadores van de 2 en 2 y una gráfica por fila; en escritorio, 3 indicadores y 2 gráficas por fila.
+
+Todo se calcula en la base de datos (`src/server/servicios/dashboard.ts`, `GET /api/dashboard`): al navegador solo llegan totales. El vendedor siempre ve su local; el administrador elige un local o el consolidado.
+
+### Reportes en Excel
+Se descargan desde **Reportes**, del año completo o de un mes.
+
+**Reporte por local** (administrador y vendedor):
+
+| Hoja | Contenido |
+|---|---|
+| Resumen | Ventas de contado, créditos, abonos, recibido en efectivo/transferencia, gastos y utilidad mes a mes |
+| Facturas | Todas las facturas del periodo, con totales |
+| Productos vendidos | Unidades y valor vendido por producto |
+| Ventas por categoría | Unidades y valor vendido por público, tipo, marca y tamaño (los mismos cortes del dashboard) |
+| Abonos | Cada abono recibido en el periodo |
+| Ventas por vendedor | Lo que vendió cada vendedor y su % del total |
+| Gastos | Cada gasto del periodo, con categoría y medio de pago |
+| Cartera | Créditos con saldo **hoy**: valor vencido, días de atraso y próxima cuota (rojo = más de 30 días, amarillo = algo vencido) |
+| Inventario | Stock **hoy** y valor del inventario (rojo = agotado, amarillo = stock bajo) |
+
+**Consolidado** (solo administrador): hoja *Comparativo locales*, con las cifras de cada local lado a lado y su % de las ventas, hoja *Ventas por categoría* de todos los locales, y hoja *Cartera*, con los créditos pendientes de todos los locales.
+
+> Las hojas *Cartera* e *Inventario* muestran el estado **al momento de descargar**, sin importar el periodo elegido.
 
 ## 5. Instalar como aplicación (PWA)
 
@@ -193,7 +260,7 @@ npm run db:recalcular-busqueda  # recalcula los textos de búsqueda
 
 Después, el administrador debe **agregar los sectores de cada local**: sin ellos no se pueden registrar facturas. Las ventas de contado existentes quedan como pagadas en efectivo, igual que los abonos existentes. Los créditos no tienen medio de pago propio.
 
-**Migración 0002 (anulaciones y clientes):** agrega las columnas de anulación a `facturas`, `cuotas`, `abonos` y `gastos` (todo lo existente queda **vigente**) y las columnas de búsqueda de `clientes`, que se llenan en la misma migración. `npm run db:recalcular-busqueda` las deja idénticas a las de la app. Haz un respaldo (por ejemplo, una *branch* en Neon) antes de migrar.
+**Migración 0004 (anulaciones y clientes):** agrega las columnas de anulación a `facturas`, `cuotas`, `abonos` y `gastos` (todo lo existente queda **vigente**) y las columnas de búsqueda de `clientes`, que se llenan en la misma migración. `npm run db:recalcular-busqueda` las deja idénticas a las de la app. Haz un respaldo (por ejemplo, una *branch* en Neon) antes de migrar.
 
 Para revertirla (primero vuelve a la versión anterior del código; las ventas anuladas volverían a contar, aunque su stock ya se devolvió):
 

@@ -77,6 +77,9 @@ export function comoVendedor(usuario: UsuarioSesion): VendedorSesion {
   return usuario as VendedorSesion;
 }
 
+/** Errores de red de "pg" y de PostgreSQL que significan "no se pudo llegar a la base de datos". */
+const CODIGOS_SIN_CONEXION = new Set(["ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "ECONNRESET", "EAI_AGAIN", "57P01", "57P03"]);
+
 function respuestaDeError(error: unknown) {
   if (error instanceof ApiError) {
     return NextResponse.json({ error: error.message }, { status: error.status });
@@ -88,6 +91,15 @@ function respuestaDeError(error: unknown) {
   const causa = (error as { cause?: { code?: string } })?.cause ?? (error as { code?: string });
   if (causa?.code === "23505") {
     return NextResponse.json({ error: "Ya existe un registro con esos datos." }, { status: 409 });
+  }
+  // La base de datos no responde (apagada, sin red o reiniciando). Antes salía "error inesperado"
+  // y en el inicio de sesión parecía que la cuenta estaba mal.
+  if (causa?.code && CODIGOS_SIN_CONEXION.has(causa.code)) {
+    console.error("[API] No hay conexión con la base de datos:", causa.code);
+    return NextResponse.json(
+      { error: "No hay conexión con la base de datos. Tus datos están bien: avisa al administrador para que revise el servidor." },
+      { status: 503 },
+    );
   }
   console.error("[API] Error inesperado:", error);
   return NextResponse.json(

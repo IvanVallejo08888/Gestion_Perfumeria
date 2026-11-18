@@ -95,7 +95,7 @@ export function ConfirmarAnulacion({
           <Cargando />
         ) : (
           <div className="space-y-4">
-            <dl className="grid gap-1 rounded-xl bg-gray-50 p-4">
+            <dl className="grid gap-1 rounded-xl bg-superficie p-4">
               <div>
                 <dt className="inline font-bold">Cliente: </dt>
                 <dd className="inline">{factura.clienteNombre}</dd>

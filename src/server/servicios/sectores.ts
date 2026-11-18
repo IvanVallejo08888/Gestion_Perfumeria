@@ -11,7 +11,7 @@ import { ApiError } from "@/lib/api";
 import { obtenerLocal } from "./locales";
 
 /** Quita espacios de más: "  Las   Cuadras " → "Las Cuadras". */
-const limpiar = (nombre: string) => nombre.trim().replace(/\s+/g, " ");
+export const limpiar = (nombre: string) => nombre.trim().replace(/\s+/g, " ");
 /** Clave para comparar nombres sin importar mayúsculas ni espacios de más. */
 const clave = (nombre: string) => limpiar(nombre).toLocaleLowerCase("es");
 

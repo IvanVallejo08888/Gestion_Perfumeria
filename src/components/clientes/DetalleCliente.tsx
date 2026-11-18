@@ -15,6 +15,7 @@ import { DetalleFactura } from "@/components/facturacion/DetalleFactura";
 import { TarjetaFactura } from "@/components/facturacion/TarjetaFactura";
 import { useAvisos } from "@/components/ui/Avisos";
 import { Cargando, Mensaje, Tarjeta, Vacio } from "@/components/ui/Basicos";
+import { GrupoOpciones } from "@/components/ui/GrupoOpciones";
 import { Boton } from "@/components/ui/Boton";
 import { Campo, Selector } from "@/components/ui/Campo";
 import { Icono } from "@/components/ui/Icono";
@@ -134,10 +135,10 @@ export function DetalleCliente({
         {tarjetas.map((t) => (
           <li
             key={t.titulo}
-            className={`rounded-2xl border-2 bg-white p-4 shadow-sm ${t.destacado ? "border-peligro-700" : "border-gray-200"}`}
+            className={`rounded-2xl border-2 bg-tarjeta p-4 shadow-sm ${t.destacado ? "border-peligro-700" : "border-linea"}`}
           >
             <p className="text-lg font-bold text-texto-suave">{t.titulo}</p>
-            <p className={`mt-1 text-2xl font-bold break-words ${t.destacado ? "text-peligro-700" : "text-marca-800"}`}>{t.valor}</p>
+            <p className={`mt-1 text-2xl font-bold break-words ${t.destacado ? "text-peligro-700" : "text-acento"}`}>{t.valor}</p>
             {t.detalle && <p className="mt-1 text-base text-texto-suave">{t.detalle}</p>}
           </li>
         ))}
@@ -178,24 +179,15 @@ function RecordFacturas({ clienteId }: { clienteId: string }) {
       <h3 id="record-titulo" className="text-2xl font-bold">
         Récord de compras
       </h3>
-      <div role="group" aria-label="Filtrar facturas del cliente" className="flex flex-wrap gap-2">
-        {FILTROS.map((f) => (
-          <button
-            key={f.valor}
-            type="button"
-            onClick={() => {
-              setEstado(f.valor);
-              setPagina(1);
-            }}
-            aria-pressed={estado === f.valor}
-            className={`min-h-12 rounded-xl border-2 px-4 text-lg font-bold ${
-              estado === f.valor ? "border-marca-700 bg-marca-700 text-white" : "border-borde bg-white hover:bg-gray-50"
-            }`}
-          >
-            {f.texto}
-          </button>
-        ))}
-      </div>
+      <GrupoOpciones
+        etiqueta="Filtrar facturas del cliente"
+        opciones={FILTROS}
+        valor={estado}
+        onCambio={(v) => {
+          setEstado(v);
+          setPagina(1);
+        }}
+      />
 
       {consulta.error ? (
         <Mensaje tono="peligro">{consulta.error}</Mensaje>

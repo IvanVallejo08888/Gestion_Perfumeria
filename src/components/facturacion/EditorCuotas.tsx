@@ -75,7 +75,7 @@ export function EditorCuotas({ config, onCambio, total, error }: Props) {
   };
 
   return (
-    <fieldset aria-labelledby={tituloId}>
+    <fieldset aria-labelledby={tituloId} className="min-w-0">
       <legend id={tituloId} className="mb-3 text-2xl font-bold">
         3. Cuotas del crédito
       </legend>
@@ -113,14 +113,14 @@ export function EditorCuotas({ config, onCambio, total, error }: Props) {
       </p>
 
       {error && (
-        <p role="alert" className="mt-3 text-lg font-bold text-peligro-700">
+        <p role="alert" className="mt-3 text-lg font-bold text-peligro-800">
           {error}
         </p>
       )}
 
       <ol className="mt-4 space-y-3">
         {config.fechas.map((f, i) => (
-          <li key={i} className="grid items-end gap-3 rounded-xl border-2 border-gray-200 bg-gray-50 p-4 md:grid-cols-[8rem_1fr_10rem]">
+          <li key={i} className="grid grid-cols-[minmax(0,1fr)] items-end gap-3 rounded-xl border-2 border-linea bg-superficie p-4 md:grid-cols-[8rem_minmax(0,1fr)_10rem]">
             <p className="text-lg font-bold">Cuota {i + 1}</p>
             <Campo
               etiqueta={`Fecha y hora de cobro de la cuota ${i + 1}`}

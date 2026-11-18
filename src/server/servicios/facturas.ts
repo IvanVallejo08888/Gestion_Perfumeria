@@ -6,19 +6,20 @@
  *   2. Descuenta el stock de cada producto (si no alcanza, se cancela toda la venta).
  *   3. Asigna el número consecutivo del local.
  *   4. Calcula el medio de pago (contado): efectivo + transferencia = total.
- *   5. Guarda la factura, sus productos y (si es crédito) sus cuotas.
+ *   5. Guarda la factura, sus productos, un movimiento VENTA por producto y (si es crédito) sus cuotas.
  * Si algo falla, no se guarda nada y el inventario queda intacto.
  *
  * Una venta NUNCA se borra: "Eliminar venta" la ANULA (anularFactura), devuelve los
  * productos al inventario y la deja en el historial con el motivo, quién y cuándo.
  */
 import "server-only";
-import { and, asc, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { abonos, clientes, cuotas, facturaItems, facturas, locales, productos, sectores } from "@/db/schema";
+import { abonos, clientes, cuotas, facturaItems, facturas, locales, marcas, productos, sectores } from "@/db/schema";
 import { ApiError, type VendedorSesion } from "@/lib/api";
 import { camposBusquedaCliente, escaparLike, normalizarTexto } from "@/lib/formato";
 import type { ClienteDatos, FacturaDetalle, FacturaResumen, MedioPago, ResultadoAnulacion } from "@/tipos";
+import { registrarMovimientos } from "./movimientos";
 import { resolverPago } from "./pagos";
 
 export interface DatosNuevaFactura {
@@ -67,7 +68,15 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
       .returning();
 
     /* 2. Descontar inventario (solo si hay stock suficiente) */
-    const lineas: { productoId: string; nombre: string; precio: number; cantidad: number }[] = [];
+    const lineas: {
+      productoId: string;
+      nombre: string;
+      precio: number;
+      cantidad: number;
+      /** Stock que quedó después de descontar (para el movimiento VENTA). */
+      stockResultante: number;
+      clasificacion: Pick<typeof productos.$inferSelect, "marcaId" | "tipo" | "genero" | "publico" | "tamano">;
+    }[] = [];
     for (const [productoId, cantidad] of cantidades) {
       const [actualizado] = await tx
         .update(productos)
@@ -80,7 +89,16 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
             sql`${productos.stock} >= ${cantidad}`,
           ),
         )
-        .returning({ nombre: productos.nombre, precio: productos.precio });
+        .returning({
+          nombre: productos.nombre,
+          precio: productos.precio,
+          stock: productos.stock,
+          marcaId: productos.marcaId,
+          tipo: productos.tipo,
+          genero: productos.genero,
+          publico: productos.publico,
+          tamano: productos.tamano,
+        });
 
       if (!actualizado) {
         const producto = await tx.query.productos.findFirst({
@@ -94,7 +112,8 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
             : `Stock insuficiente de "${producto.nombre}": solo quedan ${producto.stock} unidades.`,
         );
       }
-      lineas.push({ productoId, nombre: actualizado.nombre, precio: actualizado.precio, cantidad });
+      const { nombre, precio, stock, ...clasificacion } = actualizado;
+      lineas.push({ productoId, nombre, precio, cantidad, stockResultante: stock, clasificacion });
     }
 
     /* 3. Totales (el precio SIEMPRE se toma del inventario, nunca del navegador) */
@@ -146,14 +165,42 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
       })
       .returning({ id: facturas.id });
 
+    /* Copia de la clasificación de cada producto (con el NOMBRE de la marca), para que el historial no cambie */
+    const idsMarca = [...new Set(lineas.map((l) => l.clasificacion.marcaId).filter((id): id is string => id !== null))];
+    const nombresMarca = new Map(
+      idsMarca.length
+        ? (await tx.select({ id: marcas.id, nombre: marcas.nombre }).from(marcas).where(inArray(marcas.id, idsMarca))).map((m) => [m.id, m.nombre])
+        : [],
+    );
+
     await tx.insert(facturaItems).values(
-      lineas.map((l) => ({
+      lineas.map(({ clasificacion: c, stockResultante: _stock, ...l }) => ({
         facturaId: factura.id,
         productoId: l.productoId,
         nombreProducto: l.nombre,
         precioUnitario: l.precio,
         cantidad: l.cantidad,
         subtotal: l.precio * l.cantidad,
+        marcaNombre: c.marcaId ? (nombresMarca.get(c.marcaId) ?? null) : null,
+        tipo: c.tipo,
+        genero: c.genero,
+        publico: c.publico,
+        tamano: c.tamano,
+      })),
+    );
+
+    /* Trazabilidad: un movimiento VENTA por producto, en esta misma transacción */
+    await registrarMovimientos(
+      tx,
+      lineas.map((l) => ({
+        localId,
+        productoId: l.productoId,
+        tipo: "VENTA" as const,
+        cantidad: -l.cantidad,
+        stockResultante: l.stockResultante,
+        autor: vendedor,
+        facturaId: factura.id,
+        nota: `Factura #${local.numero}`,
       })),
     );
 
@@ -268,6 +315,11 @@ export async function obtenerFactura(localId: string, id: string): Promise<Factu
       precioUnitario: i.precioUnitario,
       cantidad: i.cantidad,
       subtotal: i.subtotal,
+      marcaNombre: i.marcaNombre,
+      tipo: i.tipo,
+      genero: i.genero,
+      publico: i.publico,
+      tamano: i.tamano,
     })),
     cuotas: f.cuotas.map((c) => ({
       id: c.id,
@@ -339,13 +391,14 @@ export function serializarResumen(f: {
  *     la segunda espera y luego ve que ya está anulada. Lo mismo con un abono simultáneo.
  *  2. Devuelve al stock la cantidad de cada producto y reactiva los que estaban ocultos.
  *     Si un producto ya no existe, se omite y se informa en el resultado.
+ *     Cada devolución deja un movimiento de inventario AJUSTE (trazabilidad) con el número y el motivo.
  *  3. Anula las cuotas y los abonos (no se borran: quedan como parte de la venta anulada).
  *  4. Marca la factura como anulada con quién, cuándo y el motivo.
  */
 export async function anularFactura(vendedor: VendedorSesion, facturaId: string, motivo: string): Promise<ResultadoAnulacion> {
   return db.transaction(async (tx) => {
     const [factura] = await tx
-      .select({ id: facturas.id, anulada: facturas.anulada })
+      .select({ id: facturas.id, numero: facturas.numero, anulada: facturas.anulada })
       .from(facturas)
       // Solo facturas del local del vendedor: una de otro local responde igual que una inexistente
       .where(and(eq(facturas.id, facturaId), eq(facturas.localId, vendedor.localId)))
@@ -368,16 +421,32 @@ export async function anularFactura(vendedor: VendedorSesion, facturaId: string,
     }
 
     const devueltos: ResultadoAnulacion["devueltos"] = [];
+    const movimientos: Parameters<typeof registrarMovimientos>[1] = [];
     for (const [productoId, linea] of porProducto) {
       const [producto] = await tx
         .update(productos)
         // Si el producto estaba oculto ("eliminado" con ventas), vuelve a quedar activo
         .set({ stock: sql`${productos.stock} + ${linea.cantidad}`, activo: true })
         .where(and(eq(productos.id, productoId), eq(productos.localId, vendedor.localId)))
-        .returning({ nombre: productos.nombre });
-      if (producto) devueltos.push({ nombre: producto.nombre, cantidad: linea.cantidad });
-      else omitidos.push(linea);
+        .returning({ nombre: productos.nombre, stock: productos.stock });
+      if (!producto) {
+        omitidos.push(linea);
+        continue;
+      }
+      devueltos.push({ nombre: producto.nombre, cantidad: linea.cantidad });
+      movimientos.push({
+        localId: vendedor.localId,
+        productoId,
+        tipo: "AJUSTE",
+        cantidad: linea.cantidad,
+        stockResultante: producto.stock,
+        autor: vendedor,
+        facturaId,
+        nota: `Venta eliminada (factura #${factura.numero}): ${motivo}`,
+      });
     }
+    /* Trazabilidad: el stock que regresa queda registrado, en esta misma transacción */
+    await registrarMovimientos(tx, movimientos);
 
     /* Cuotas y abonos del crédito: se marcan como anulados (no se borran) */
     await tx.update(cuotas).set({ anulada: true }).where(eq(cuotas.facturaId, facturaId));
