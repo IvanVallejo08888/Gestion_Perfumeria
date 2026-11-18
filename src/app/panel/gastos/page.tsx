@@ -2,20 +2,21 @@
  * Gastos del local (vendedor):
  *  - Registrar un gasto: categoría, valor, medio de pago, fecha y descripción opcional.
  *  - Ver los gastos del mes con filtro por mes y categoría, y sus totales.
- *  - Eliminar solo los gastos propios registrados hoy (con confirmación).
+ *  - "Eliminar gasto": cualquier gasto del local, con confirmación y motivo obligatorio.
+ *    El gasto no se borra: queda anulado y se ve en el filtro "Eliminados".
+ *  - Los totales del mes siempre son de los gastos vigentes (nunca suman los eliminados).
  */
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { TablaGastos, TotalesGastos } from "@/components/compartidos/TablaGastos";
+import { ConfirmarAnulacionGasto, TablaGastos, TotalesGastos } from "@/components/compartidos/TablaGastos";
 import { BotonesMedioPago } from "@/components/facturacion/MedioPago";
 import { Boton } from "@/components/ui/Boton";
 import { Campo, CampoDinero, Selector } from "@/components/ui/Campo";
 import { Cargando, EncabezadoPagina, Mensaje, Tarjeta } from "@/components/ui/Basicos";
-import { Confirmar } from "@/components/ui/Modal";
 import { useAvisos } from "@/components/ui/Avisos";
 import { useConsulta } from "@/hooks/useConsulta";
-import { anioMesColombia, hoyColombia, MESES, pesos } from "@/lib/formato";
+import { anioMesColombia, hoyColombia, MESES } from "@/lib/formato";
 import { api } from "@/lib/http";
 import { MEDIOS_PAGO_GASTO } from "@/lib/pagos";
 import { gastoSchema } from "@/lib/validaciones";
@@ -39,31 +40,17 @@ export default function PaginaGastos() {
   const [anio, setAnio] = useState(HOY.anio);
   const [mes, setMes] = useState(HOY.mes);
   const [categoriaFiltro, setCategoriaFiltro] = useState("");
+  const [verEliminados, setVerEliminados] = useState(false);
   const [eliminando, setEliminando] = useState<GastoFila | null>(null);
-  const [borrando, setBorrando] = useState(false);
 
   const consultaCategorias = useConsulta<{ categorias: NombreActivo[] }>("/api/gastos/categorias", { alError: avisos.error });
   const categorias = consultaCategorias.datos?.categorias ?? [];
 
   const params = new URLSearchParams({ anio: String(anio), mes: String(mes) });
   if (categoriaFiltro) params.set("categoriaId", categoriaFiltro);
+  if (verEliminados) params.set("estado", "eliminados");
   const consulta = useConsulta<ListaGastos>(`/api/gastos?${params}`, { alError: avisos.error });
   const datos = consulta.datos;
-
-  async function eliminar() {
-    if (!eliminando) return;
-    setBorrando(true);
-    try {
-      await api(`/api/gastos/${eliminando.id}`, { method: "DELETE" });
-      avisos.exito("Gasto eliminado.");
-      setEliminando(null);
-      consulta.recargar();
-    } catch (e) {
-      avisos.error((e as Error).message);
-    } finally {
-      setBorrando(false);
-    }
-  }
 
   return (
     <>
@@ -98,6 +85,24 @@ export default function PaginaGastos() {
             ))}
           </Selector>
         </div>
+        <div role="group" aria-label="Qué gastos ver" className="mt-4 flex flex-wrap gap-2">
+          {[
+            { valor: false, texto: "Gastos vigentes" },
+            { valor: true, texto: "Eliminados" },
+          ].map((f) => (
+            <button
+              key={f.texto}
+              type="button"
+              onClick={() => setVerEliminados(f.valor)}
+              aria-pressed={verEliminados === f.valor}
+              className={`min-h-12 rounded-xl border-2 px-4 text-lg font-bold ${
+                verEliminados === f.valor ? "border-marca-700 bg-marca-700 text-white" : "border-borde bg-white hover:bg-gray-50"
+              }`}
+            >
+              {f.texto}
+            </button>
+          ))}
+        </div>
       </Tarjeta>
 
       {consulta.error ? (
@@ -107,19 +112,24 @@ export default function PaginaGastos() {
       ) : (
         <div className="space-y-6">
           <TotalesGastos datos={datos} />
-          <TablaGastos gastos={datos.gastos} onEliminar={setEliminando} />
+          {verEliminados && <h3 className="text-xl font-bold">Gastos eliminados (no suman en los totales)</h3>}
+          <TablaGastos
+            gastos={datos.gastos}
+            onEliminar={setEliminando}
+            vacio={verEliminados ? "No hay gastos eliminados en este periodo." : "Prueba con otro mes o categoría."}
+          />
         </div>
       )}
 
-      <Confirmar
-        abierto={eliminando !== null}
-        titulo="Eliminar gasto"
-        mensaje={eliminando && `¿Seguro que quieres eliminar el gasto de ${eliminando.categoriaNombre} por ${pesos(eliminando.valor)}?`}
-        textoConfirmar="Sí, eliminar"
-        peligro
-        cargando={borrando}
-        onConfirmar={eliminar}
+      <ConfirmarAnulacionGasto
+        gasto={eliminando}
+        urlAnular={(id) => `/api/gastos/${id}/anular`}
         onCerrar={() => setEliminando(null)}
+        onAnulado={() => {
+          setEliminando(null);
+          // Recarga la lista y los totales del mes al instante
+          consulta.recargar();
+        }}
       />
     </>
   );

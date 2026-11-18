@@ -158,10 +158,25 @@ export const clientes = pgTable(
     telefono: text("telefono").notNull(),
     direccion: text("direccion").notNull(),
     sector: text("sector").notNull(),
+    /*
+     * Columnas para el buscador de clientes (se recalculan en cada inserción y edición):
+     *  - nombreBusqueda: nombre con normalizarTexto ("José Núñez" → "jose nunez").
+     *  - nombreCompacto: el mismo nombre sin espacios ("josenunez").
+     *  - telefonoDigitos: solo los dígitos del teléfono, sin el 57 si tiene 12 dígitos.
+     * El índice GIN de similitud (pg_trgm) se crea a mano en la migración 0002,
+     * porque solo se puede crear si el servidor permite la extensión.
+     */
+    nombreBusqueda: text("nombre_busqueda").notNull().default(""),
+    nombreCompacto: text("nombre_compacto").notNull().default(""),
+    telefonoDigitos: text("telefono_digitos").notNull().default(""),
     creadoEn: creadoEn(),
     actualizadoEn: actualizadoEn(),
   },
-  (t) => [uniqueIndex("clientes_local_ident_uq").on(t.localId, t.identificacion)],
+  (t) => [
+    uniqueIndex("clientes_local_ident_uq").on(t.localId, t.identificacion),
+    index("clientes_local_nombre_busqueda_idx").on(t.localId, t.nombreBusqueda),
+    index("clientes_local_telefono_idx").on(t.localId, t.telefonoDigitos),
+  ],
 );
 
 export const facturas = pgTable(
@@ -203,9 +218,21 @@ export const facturas = pgTable(
     notas: text("notas"),
     creadoEn: creadoEn(),
     completadaEn: timestamp("completada_en", { withTimezone: true }),
+    /*
+     * Anulación ("Eliminar venta"): la factura NO se borra, solo se marca.
+     * Una factura anulada no cuenta en estadísticas, reportes, créditos ni notificaciones.
+     */
+    anulada: boolean("anulada").notNull().default(false),
+    anuladaEn: timestamp("anulada_en", { withTimezone: true }),
+    anuladaPorId: uuid("anulada_por_id").references(() => usuarios.id, { onDelete: "set null" }),
+    /** Copia del nombre de quien anuló (se conserva aunque el usuario se elimine). */
+    anuladaPorNombre: text("anulada_por_nombre"),
+    motivoAnulacion: text("motivo_anulacion"),
   },
   (t) => [
     uniqueIndex("facturas_local_numero_uq").on(t.localId, t.numero),
+    index("facturas_local_anulada_idx").on(t.localId, t.anulada),
+    index("facturas_cliente_idx").on(t.clienteId),
     index("facturas_local_fecha_idx").on(t.localId, t.creadoEn),
     index("facturas_local_estado_idx").on(t.localId, t.estado),
     index("facturas_cliente_ident_idx").on(t.clienteIdentificacion),
@@ -237,6 +264,8 @@ export const cuotas = pgTable(
     valorPagado: integer("valor_pagado").notNull().default(0),
     estado: estadoCuotaEnum("estado").notNull().default("PENDIENTE"),
     pagadaEn: timestamp("pagada_en", { withTimezone: true }),
+    /** Se marca al anular la factura: la cuota se conserva, pero ya no se cobra. */
+    anulada: boolean("anulada").notNull().default(false),
   },
   (t) => [index("cuotas_estado_fecha_idx").on(t.estado, t.fechaVencimiento)],
 );
@@ -255,6 +284,8 @@ export const abonos = pgTable(
     valorTransferencia: integer("valor_transferencia").notNull().default(0),
     nota: text("nota"),
     creadoEn: creadoEn(),
+    /** Se marca al anular la factura: el abono se conserva, pero ya no cuenta como recaudo. */
+    anulado: boolean("anulado").notNull().default(false),
   },
   (t) => [index("abonos_factura_idx").on(t.facturaId)],
 );
@@ -277,8 +308,17 @@ export const gastos = pgTable(
     /** Día del gasto (sin hora), en formato AAAA-MM-DD. */
     fecha: date("fecha", { mode: "string" }).notNull(),
     creadoEn: creadoEn(),
+    /*
+     * Anulación ("Eliminar gasto"): el gasto NO se borra, solo se marca.
+     * Un gasto anulado no cuenta en totales, estadísticas, utilidad ni Excel.
+     */
+    anulado: boolean("anulado").notNull().default(false),
+    anuladoEn: timestamp("anulado_en", { withTimezone: true }),
+    anuladoPorId: uuid("anulado_por_id").references(() => usuarios.id, { onDelete: "set null" }),
+    anuladoPorNombre: text("anulado_por_nombre"),
+    motivoAnulacion: text("motivo_anulacion"),
   },
-  (t) => [index("gastos_local_fecha_idx").on(t.localId, t.fecha)],
+  (t) => [index("gastos_local_fecha_idx").on(t.localId, t.fecha), index("gastos_local_anulado_idx").on(t.localId, t.anulado)],
 );
 
 /* ------------------------------ Relaciones ------------------------------ */

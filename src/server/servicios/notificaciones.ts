@@ -6,7 +6,7 @@
 import "server-only";
 import { and, asc, eq, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { cuotas, facturas, productos } from "@/db/schema";
+import { clientes, cuotas, facturas, productos } from "@/db/schema";
 import { fecha, pesos, ZONA_HORARIA } from "@/lib/formato";
 import type { Notificacion } from "@/tipos";
 
@@ -28,15 +28,21 @@ export async function listarNotificaciones(localId: string): Promise<Notificacio
       pendiente: sql<number>`${cuotas.valor} - ${cuotas.valorPagado}`,
       facturaNumero: facturas.numero,
       clienteNombre: facturas.clienteNombre,
-      clienteIdentificacion: facturas.clienteIdentificacion,
+      // Cédula ACTUAL del cliente (no la copia de la factura): el enlace "Ver créditos"
+      // sigue funcionando aunque la cédula se haya corregido después de la venta
+      clienteIdentificacion: clientes.identificacion,
       clienteTelefono: facturas.clienteTelefono,
       totalCuotas: sql<number>`(select count(*)::int from cuotas c2 where c2.factura_id = ${facturas.id})`,
     })
     .from(cuotas)
     .innerJoin(facturas, eq(cuotas.facturaId, facturas.id))
+    .innerJoin(clientes, eq(facturas.clienteId, clientes.id))
     .where(
       and(
         eq(facturas.localId, localId),
+        // Las ventas anuladas (y sus cuotas) nunca generan avisos de cobro
+        eq(facturas.anulada, false),
+        eq(cuotas.anulada, false),
         eq(facturas.estado, "PENDIENTE"),
         eq(cuotas.estado, "PENDIENTE"),
         lte(cuotas.fechaVencimiento, limite),

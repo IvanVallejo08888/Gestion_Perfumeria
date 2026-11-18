@@ -4,10 +4,13 @@
  * - Abonar al crédito (se aplica a las cuotas en orden).
  * - Cuando el saldo llega a 0: pasa de "Pendiente" a "Completado" y aparece en el historial de ventas completadas.
  * - Ver y cambiar las fechas de cobro de las cuotas pendientes.
+ * - "Eliminar venta": anula el crédito (con motivo), devuelve los productos y anula sus abonos.
+ *   Los créditos anulados ya no aparecen aquí (se ven en Historial → Anuladas).
  */
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { ConfirmarAnulacion } from "@/components/facturacion/ConfirmarAnulacion";
 import { DetalleFactura } from "@/components/facturacion/DetalleFactura";
 import { SelectorMedioPago } from "@/components/facturacion/MedioPago";
 import { Boton } from "@/components/ui/Boton";
@@ -45,6 +48,7 @@ export function GestionCreditos({ identificacionInicial }: { identificacionInici
   const [abonando, setAbonando] = useState<string | null>(null);
   const [cuotasDe, setCuotasDe] = useState<string | null>(null);
   const [detalleId, setDetalleId] = useState<string | null>(null);
+  const [anularId, setAnularId] = useState<string | null>(null);
 
   const consulta = useConsulta<{ creditos: Credito[] }>(
     `/api/creditos${buscada ? `?identificacion=${encodeURIComponent(buscada)}` : ""}`,
@@ -162,6 +166,14 @@ export function GestionCreditos({ identificacionInicial }: { identificacionInici
                     <Boton variante="secundario" icono="factura" onClick={() => setDetalleId(c.id)}>
                       Ver factura
                     </Boton>
+                    <Boton
+                      variante="peligro"
+                      icono="basura"
+                      onClick={() => setAnularId(c.id)}
+                      aria-label={`Eliminar venta de ${c.clienteNombre}, factura ${numeroFactura(c.numero)}, por ${pesos(c.total)}`}
+                    >
+                      Eliminar venta
+                    </Boton>
                   </div>
                 </Tarjeta>
               </li>
@@ -185,6 +197,14 @@ export function GestionCreditos({ identificacionInicial }: { identificacionInici
       )}
       {cuotasDe && <ModalCuotas facturaId={cuotasDe} onCerrar={() => setCuotasDe(null)} onCambio={cargar} />}
       <DetalleFactura facturaId={detalleId} onCerrar={() => setDetalleId(null)} />
+      <ConfirmarAnulacion
+        facturaId={anularId}
+        onCerrar={() => setAnularId(null)}
+        onAnulada={() => {
+          setAnularId(null);
+          cargar();
+        }}
+      />
     </>
   );
 }

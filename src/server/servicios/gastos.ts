@@ -1,6 +1,8 @@
 /**
  * Gastos empresariales de cada local y sus categorías.
- *  - El vendedor registra gastos y solo puede eliminar los suyos registrados hoy.
+ *  - El vendedor registra gastos y puede eliminar (anular) cualquier gasto de SU local, con un motivo.
+ *  - El administrador puede eliminar (anular) gastos de cualquier local desde Reportes.
+ *  - Un gasto eliminado no se borra: queda con el motivo, quién y cuándo, y no suma en ningún total.
  *  - El administrador define las categorías y consulta los gastos de cada local.
  *  - Cada gasto guarda una copia del nombre de la categoría y del usuario:
  *    el historial no cambia si luego se renombran o se eliminan.
@@ -83,27 +85,9 @@ export async function crearGasto(vendedor: VendedorSesion, datos: DatosGasto) {
   });
 }
 
-/** Solo quien registró el gasto puede eliminarlo, y solo el mismo día en que lo registró. */
-const eliminable = (g: { usuarioId: string | null; creadoEn: Date }, usuarioId?: string) =>
-  !!usuarioId && g.usuarioId === usuarioId && hoyColombia(g.creadoEn) === hoyColombia();
-
-export async function listarGastos(
-  localId: string,
-  filtros: { anio: number; mes?: number; categoriaId?: string },
-  /** Vendedor que consulta: sirve para saber qué gastos puede eliminar. */
-  usuarioId?: string,
-): Promise<ListaGastos> {
-  const { desde, hasta } = rangoDias(filtros.anio, filtros.mes);
-  const condiciones: SQL[] = [eq(gastos.localId, localId), gte(gastos.fecha, desde), lt(gastos.fecha, hasta)];
-  if (filtros.categoriaId) condiciones.push(eq(gastos.categoriaId, filtros.categoriaId));
-
-  const filas = await db
-    .select()
-    .from(gastos)
-    .where(and(...condiciones))
-    .orderBy(desc(gastos.fecha), desc(gastos.creadoEn));
-
-  const lista: GastoFila[] = filas.map((g) => ({
+/** Convierte una fila de la tabla en el formato que recibe la pantalla. */
+function aFila(g: typeof gastos.$inferSelect): GastoFila {
+  return {
     id: g.id,
     categoriaNombre: g.categoriaNombre,
     descripcion: g.descripcion,
@@ -111,28 +95,83 @@ export async function listarGastos(
     medioPago: g.medioPago,
     fecha: g.fecha,
     usuarioNombre: g.usuarioNombre,
-    puedeEliminar: eliminable(g, usuarioId),
-  }));
-
-  const sumar = (medio?: MedioPagoGasto) =>
-    lista.filter((g) => !medio || g.medioPago === medio).reduce((acc, g) => acc + g.valor, 0);
-
-  return { gastos: lista, total: sumar(), totalEfectivo: sumar("EFECTIVO"), totalTransferencia: sumar("TRANSFERENCIA") };
+    anulado: g.anulado,
+    anuladoEn: g.anuladoEn?.toISOString() ?? null,
+    anuladoPorNombre: g.anuladoPorNombre,
+    motivoAnulacion: g.motivoAnulacion,
+  };
 }
 
-export async function eliminarGasto(vendedor: VendedorSesion, id: string) {
-  const gasto = await db.query.gastos.findFirst({ where: and(eq(gastos.id, id), eq(gastos.localId, vendedor.localId)) });
+/**
+ * Gastos de un local en un periodo.
+ *  - Por defecto devuelve los gastos vigentes; con estado "eliminados", solo los anulados.
+ *  - Los totales (del mes y por medio de pago) SIEMPRE se calculan en SQL con los gastos
+ *    vigentes: un gasto eliminado nunca suma, aunque se esté viendo el filtro "Eliminados".
+ */
+export async function listarGastos(
+  localId: string,
+  filtros: { anio: number; mes?: number; categoriaId?: string; estado?: "eliminados" },
+): Promise<ListaGastos> {
+  const { desde, hasta } = rangoDias(filtros.anio, filtros.mes);
+  const base: SQL[] = [eq(gastos.localId, localId), gte(gastos.fecha, desde), lt(gastos.fecha, hasta)];
+  if (filtros.categoriaId) base.push(eq(gastos.categoriaId, filtros.categoriaId));
+  const verEliminados = filtros.estado === "eliminados";
+
+  const [filas, [totales]] = await Promise.all([
+    db
+      .select()
+      .from(gastos)
+      .where(and(...base, eq(gastos.anulado, verEliminados)))
+      .orderBy(verEliminados ? desc(gastos.anuladoEn) : desc(gastos.fecha), desc(gastos.creadoEn)),
+    db
+      .select({
+        total: sql<number>`coalesce(sum(${gastos.valor}), 0)::int`,
+        totalEfectivo: sql<number>`coalesce(sum(${gastos.valor}) filter (where ${gastos.medioPago} = 'EFECTIVO'), 0)::int`,
+        totalTransferencia: sql<number>`coalesce(sum(${gastos.valor}) filter (where ${gastos.medioPago} = 'TRANSFERENCIA'), 0)::int`,
+      })
+      .from(gastos)
+      .where(and(...base, eq(gastos.anulado, false))),
+  ]);
+
+  return { gastos: filas.map(aFila), ...totales };
+}
+
+/**
+ * "Eliminar gasto": lo ANULA (no lo borra) para que quede registro de quién, cuándo y por qué.
+ *  - localId: el local del vendedor (solo puede anular gastos de su local).
+ *    El administrador envía null y puede anular gastos de cualquier local.
+ *  - La actualización solo aplica si el gasto sigue vigente: si dos personas lo eliminan
+ *    a la vez, solo una lo logra y la otra recibe "Este gasto ya fue eliminado".
+ */
+export async function anularGasto(
+  usuario: { id: string; nombre: string },
+  gastoId: string,
+  motivo: string,
+  localId: string | null,
+): Promise<GastoFila> {
+  const delLocal = localId ? eq(gastos.localId, localId) : undefined;
+  const gasto = await db.query.gastos.findFirst({ where: and(eq(gastos.id, gastoId), delLocal) });
   if (!gasto) throw new ApiError(404, "El gasto no existe.");
-  if (!eliminable(gasto, vendedor.id)) throw new ApiError(403, "Solo puedes eliminar tus propios gastos registrados hoy.");
-  await db.delete(gastos).where(eq(gastos.id, id));
+  if (gasto.anulado) throw new ApiError(409, "Este gasto ya fue eliminado.");
+
+  const [anulado] = await db
+    .update(gastos)
+    .set({ anulado: true, anuladoEn: new Date(), anuladoPorId: usuario.id, anuladoPorNombre: usuario.nombre, motivoAnulacion: motivo })
+    .where(and(eq(gastos.id, gastoId), eq(gastos.anulado, false), delLocal))
+    .returning();
+  if (!anulado) throw new ApiError(409, "Este gasto ya fue eliminado.");
+  return aFila(anulado);
 }
 
-/** Gastos de un periodo para el Excel, del más antiguo al más reciente. */
-export async function gastosDelPeriodo(localId: string, anio: number, mes?: number) {
+/**
+ * Gastos de un periodo para el Excel, del más antiguo al más reciente.
+ * Por defecto solo los vigentes; con eliminados = true, solo los anulados (hoja "Gastos eliminados").
+ */
+export async function gastosDelPeriodo(localId: string, anio: number, mes?: number, eliminados = false) {
   const { desde, hasta } = rangoDias(anio, mes);
   return db
     .select()
     .from(gastos)
-    .where(and(eq(gastos.localId, localId), gte(gastos.fecha, desde), lt(gastos.fecha, hasta)))
+    .where(and(eq(gastos.localId, localId), eq(gastos.anulado, eliminados), gte(gastos.fecha, desde), lt(gastos.fecha, hasta)))
     .orderBy(asc(gastos.fecha), asc(gastos.creadoEn));
 }

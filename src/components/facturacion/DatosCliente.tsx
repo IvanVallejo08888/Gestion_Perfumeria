@@ -33,7 +33,7 @@ export function DatosCliente({ valor, onCambio, errores, sectores }: Props) {
     if (ident.length < 5) return;
     setEstadoBusqueda("buscando");
     try {
-      const { cliente } = await api<{ cliente: ClienteDatos | null }>(`/api/clientes/${encodeURIComponent(ident)}`);
+      const { cliente } = await api<{ cliente: ClienteDatos | null }>(`/api/clientes/buscar-identificacion?identificacion=${encodeURIComponent(ident)}`);
       if (cliente) {
         // Si su sector ya no está en la lista, el selector queda vacío para que el vendedor elija uno
         const sectorVigente = sectores?.some((s) => s.nombre === cliente.sector);

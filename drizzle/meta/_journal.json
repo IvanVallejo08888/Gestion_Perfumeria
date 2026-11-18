@@ -15,6 +15,13 @@
       "when": 1793997535348,
       "tag": "0001_sectores_gastos_pagos",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795041314638,
+      "tag": "0002_anulaciones_clientes",
+      "breakpoints": true
     }
   ]
 }

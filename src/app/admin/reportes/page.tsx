@@ -3,19 +3,20 @@
  *  - Elegir local, año y (opcional) mes.
  *  - Ver las estadísticas del local en pantalla.
  *  - Descargar Excel del AÑO o del MES elegido.
- *  - Ver los gastos del local en el periodo elegido.
+ *  - Ver los gastos del local en el periodo elegido y eliminarlos (anularlos) con un motivo.
+ *    Al eliminar uno se recargan los gastos y las estadísticas (cambia la utilidad).
  */
 "use client";
 
 import { useState } from "react";
-import { TablaGastos, TotalesGastos } from "@/components/compartidos/TablaGastos";
+import { ConfirmarAnulacionGasto, TablaGastos, TotalesGastos } from "@/components/compartidos/TablaGastos";
 import { VistaEstadisticas } from "@/components/compartidos/VistaEstadisticas";
 import { Cargando, EncabezadoPagina, Mensaje, Tarjeta, Vacio } from "@/components/ui/Basicos";
 import { Selector } from "@/components/ui/Campo";
 import { Icono } from "@/components/ui/Icono";
 import { useConsulta } from "@/hooks/useConsulta";
 import { MESES } from "@/lib/formato";
-import type { Estadisticas, ListaGastos } from "@/tipos";
+import type { Estadisticas, GastoFila, ListaGastos } from "@/tipos";
 
 const ANIO_ACTUAL = new Date().getFullYear();
 const ANIOS = Array.from({ length: 6 }, (_, i) => ANIO_ACTUAL - i);
@@ -24,6 +25,8 @@ export default function ReportesAdmin() {
   const [localId, setLocalId] = useState("");
   const [anio, setAnio] = useState(ANIO_ACTUAL);
   const [mes, setMes] = useState(0); // 0 = todo el año
+  const [verEliminados, setVerEliminados] = useState(false);
+  const [eliminando, setEliminando] = useState<GastoFila | null>(null);
 
   const consultaLocales = useConsulta<{ locales: { id: string; nombre: string }[] }>("/api/admin/locales", {
     alCargar: (d) => {
@@ -34,7 +37,11 @@ export default function ReportesAdmin() {
 
   const consultaDatos = useConsulta<Estadisticas>(localId ? `/api/admin/estadisticas?localId=${localId}&anio=${anio}` : null);
   const { datos, cargando } = consultaDatos;
-  const consultaGastos = useConsulta<ListaGastos>(localId ? `/api/admin/gastos?localId=${localId}&anio=${anio}${mes ? `&mes=${mes}` : ""}` : null);
+  const consultaGastos = useConsulta<ListaGastos>(
+    localId
+      ? `/api/admin/gastos?localId=${localId}&anio=${anio}${mes ? `&mes=${mes}` : ""}${verEliminados ? "&estado=eliminados" : ""}`
+      : null,
+  );
   const gastos = consultaGastos.datos;
   const error = consultaLocales.error || consultaDatos.error || consultaGastos.error;
 
@@ -117,9 +124,41 @@ export default function ReportesAdmin() {
                 {anio}
               </h2>
               <TotalesGastos datos={gastos} />
-              <TablaGastos gastos={gastos.gastos} />
+              <div role="group" aria-label="Qué gastos ver" className="flex flex-wrap gap-2">
+                {[
+                  { valor: false, texto: "Gastos vigentes" },
+                  { valor: true, texto: "Eliminados" },
+                ].map((f) => (
+                  <button
+                    key={f.texto}
+                    type="button"
+                    onClick={() => setVerEliminados(f.valor)}
+                    aria-pressed={verEliminados === f.valor}
+                    className={`min-h-12 rounded-xl border-2 px-4 text-lg font-bold ${
+                      verEliminados === f.valor ? "border-marca-700 bg-marca-700 text-white" : "border-borde bg-white hover:bg-gray-50"
+                    }`}
+                  >
+                    {f.texto}
+                  </button>
+                ))}
+              </div>
+              <TablaGastos
+                gastos={gastos.gastos}
+                onEliminar={setEliminando}
+                vacio={verEliminados ? "No hay gastos eliminados en este periodo." : "No hay gastos en este periodo."}
+              />
             </section>
           )}
+          <ConfirmarAnulacionGasto
+            gasto={eliminando}
+            urlAnular={(id) => `/api/admin/gastos/${id}/anular`}
+            onCerrar={() => setEliminando(null)}
+            onAnulado={() => {
+              setEliminando(null);
+              consultaGastos.recargar();
+              consultaDatos.recargar();
+            }}
+          />
         </>
       )}
     </>

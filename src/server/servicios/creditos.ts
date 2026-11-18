@@ -5,20 +5,31 @@
  *  - El valor se aplica a las cuotas en orden (primero la más antigua).
  *  - Cuando el saldo llega a 0, el crédito pasa de PENDIENTE a COMPLETADA
  *    y aparece en el historial de ventas completadas.
+ *
+ * Las ventas anuladas ("Eliminar venta") no aparecen aquí y no admiten abonos ni cambios de fecha.
  */
 import "server-only";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { abonos, cuotas, facturas } from "@/db/schema";
+import { abonos, clientes, cuotas, facturas } from "@/db/schema";
 import { ApiError, type VendedorSesion } from "@/lib/api";
 import { obtenerFactura } from "./facturas";
 import { resolverPago, type DatosPago } from "./pagos";
 
 export async function listarCreditos(localId: string, identificacion?: string) {
-  const condiciones = [eq(facturas.localId, localId), eq(facturas.tipo, "CREDITO")];
+  const condiciones = [eq(facturas.localId, localId), eq(facturas.tipo, "CREDITO"), eq(facturas.anulada, false)];
   // Sin identificación: solo los créditos pendientes. Con identificación: todos los del cliente.
-  if (identificacion?.trim()) condiciones.push(eq(facturas.clienteIdentificacion, identificacion.trim()));
-  else condiciones.push(eq(facturas.estado, "PENDIENTE"));
+  if (identificacion?.trim()) {
+    // Se busca al CLIENTE por su cédula actual y luego sus facturas por clienteId: así sus créditos
+    // se siguen encontrando aunque la cédula se haya corregido después de la venta
+    // (la factura conserva la cédula que tenía el día de la venta).
+    const cliente = await db.query.clientes.findFirst({
+      where: and(eq(clientes.localId, localId), eq(clientes.identificacion, identificacion.trim())),
+      columns: { id: true },
+    });
+    if (!cliente) return [];
+    condiciones.push(eq(facturas.clienteId, cliente.id));
+  } else condiciones.push(eq(facturas.estado, "PENDIENTE"));
 
   const lista = await db.query.facturas.findMany({
     where: and(...condiciones),
@@ -67,6 +78,8 @@ export async function registrarAbono(vendedor: VendedorSesion, facturaId: string
       .for("update");
 
     if (!factura || factura.tipo !== "CREDITO") throw new ApiError(404, "El crédito no existe.");
+    // La anulación también bloquea esta fila: si llega primero, el abono se rechaza aquí
+    if (factura.anulada) throw new ApiError(400, "Esta venta fue eliminada: no se pueden registrar abonos.");
     if (factura.estado === "COMPLETADA") throw new ApiError(400, "Este crédito ya está pagado en su totalidad.");
     if (valor > factura.saldo) {
       throw new ApiError(400, `El abono no puede ser mayor que el saldo pendiente (${factura.saldo.toLocaleString("es-CO")}).`);
@@ -113,9 +126,10 @@ export async function registrarAbono(vendedor: VendedorSesion, facturaId: string
 export async function cambiarFechaCuota(localId: string, cuotaId: string, fechaVencimiento: Date) {
   const cuota = await db.query.cuotas.findFirst({
     where: eq(cuotas.id, cuotaId),
-    with: { factura: { columns: { localId: true } } },
+    with: { factura: { columns: { localId: true, anulada: true } } },
   });
   if (!cuota || cuota.factura.localId !== localId) throw new ApiError(404, "La cuota no existe.");
+  if (cuota.factura.anulada) throw new ApiError(400, "Esta venta fue eliminada: ya no se pueden cambiar sus fechas de cobro.");
   if (cuota.estado === "PAGADA") throw new ApiError(400, "No se puede cambiar la fecha de una cuota ya pagada.");
   await db.update(cuotas).set({ fechaVencimiento }).where(eq(cuotas.id, cuotaId));
 }

@@ -235,6 +235,31 @@ export const filtroGastosSchema = z.object({
   anio: z.coerce.number().int().min(2000).max(2100),
   mes: z.coerce.number().int().min(1).max(12).optional(),
   categoriaId: z.uuid("Categoría no válida.").optional(),
+  /** "eliminados" muestra solo los gastos anulados; si no se envía, solo los vigentes. */
+  estado: z.enum(["eliminados"]).optional(),
+});
+
+/* -------------------------------- Anulaciones ------------------------------- */
+
+/** Motivo para eliminar (anular) una venta o un gasto: obligatorio, de 5 a 200 caracteres. */
+export const motivoAnulacionSchema = z.object({
+  motivo: z
+    .string({ error: "Escribe el motivo de la eliminación." })
+    .trim()
+    .min(5, "El motivo debe tener al menos 5 caracteres.")
+    .max(200, "El motivo no puede tener más de 200 caracteres."),
+});
+
+/** Filtros de la lista de clientes. */
+export const filtroClientesSchema = z.object({
+  q: z.string().trim().max(100, "La búsqueda es demasiado larga.").optional(),
+  pagina: z.coerce.number().int().min(1).max(100_000).optional().default(1),
+});
+
+/** Filtros del récord de facturas de un cliente. */
+export const filtroFacturasClienteSchema = z.object({
+  pagina: z.coerce.number().int().min(1).max(100_000).optional().default(1),
+  estado: z.enum(["COMPLETADA", "PENDIENTE", "ANULADA"], { error: "Estado no válido." }).optional(),
 });
 
 /** Identificador recibido en la dirección de un endpoint. */

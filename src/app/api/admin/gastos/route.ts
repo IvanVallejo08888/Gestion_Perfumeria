@@ -1,4 +1,4 @@
-/** GET /api/admin/gastos?localId=&anio=&mes= — Gastos de cualquier local (vista del administrador). */
+/** GET /api/admin/gastos?localId=&anio=&mes=&estado= — Gastos de cualquier local (vista del administrador). */
 import { z } from "zod";
 import { manejador, ok } from "@/lib/api";
 import { filtroGastosSchema, parametros } from "@/lib/validaciones";

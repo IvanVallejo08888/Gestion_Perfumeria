@@ -1,6 +1,6 @@
 # Gestión de Perfumerías
 
-Sistema web para gestionar locales: **facturación (contado y crédito), medios de pago, créditos y abonos, gastos, inventario, notificaciones de cobro y reportes en Excel**.
+Sistema web para gestionar locales: **facturación (contado y crédito), medios de pago, créditos y abonos, clientes, gastos, inventario, notificaciones de cobro y reportes en Excel**.
 Funciona en **celular, tablet y computador**, con letra grande y colores de alto contraste pensados para personas adultas.
 
 **Tecnologías:** Next.js 15 (App Router) · React 19 · TypeScript · PostgreSQL · Drizzle ORM · Tailwind CSS 4 · ExcelJS · jsPDF
@@ -55,12 +55,12 @@ npm run start
 | `npm run dev` | Servidor de desarrollo |
 | `npm run build` / `npm start` | Compilar y ejecutar en producción |
 | `npm run typecheck` | Revisar errores de TypeScript |
-| `npm test` | Pruebas unitarias (búsqueda, medios de pago, mensaje de WhatsApp) |
+| `npm test` | Pruebas unitarias (búsqueda de productos y clientes, teléfonos, paginación, medios de pago, mensaje de WhatsApp) |
 | `npm run iconos` | Regenerar los íconos de la PWA desde `src/app/icon.svg` |
 | `npm run db:migrate` | Aplicar migraciones pendientes |
 | `npm run db:generate` | Crear una migración nueva tras editar `src/db/schema.ts` |
 | `npm run db:seed` | Crear el administrador (si no existe) |
-| `npm run db:recalcular-busqueda` | Recalcular los textos de búsqueda de productos e historial (una vez, después de migrar) |
+| `npm run db:recalcular-busqueda` | Recalcular los textos de búsqueda de productos, historial y clientes (una vez, después de migrar) |
 | `npm run db:studio` | Ver la base de datos en el navegador |
 
 ## 4. Cómo funciona
@@ -87,12 +87,43 @@ Al registrar, todo ocurre en una **transacción**: se descuenta el inventario, s
 En **Locales → Sectores de la ciudad** el administrador agrega sectores (uno a uno o pegando varios, uno por línea), los edita y los elimina. Si un sector ya se usó en facturas solo se desactiva. La factura guarda el nombre del sector, así el historial no cambia.
 
 ### Gastos
-El vendedor los registra en **Gastos** (categoría, valor, medio de pago, fecha y descripción), los consulta por mes y categoría, y puede eliminar solo los suyos registrados ese día. El administrador maneja las categorías en **Locales → Editar** y ve los gastos en **Reportes**. Cada local nuevo empieza con 7 categorías.
+El vendedor los registra en **Gastos** (categoría, valor, medio de pago, fecha y descripción) y los consulta por mes y categoría. El administrador maneja las categorías en **Locales → Editar** y ve los gastos en **Reportes**. Cada local nuevo empieza con 7 categorías.
 
-Las estadísticas y el Excel muestran lo recibido en efectivo y en transferencia, los gastos y la **utilidad (recibido − gastos)**. El Excel incluye la hoja «Gastos».
+**Eliminar gasto:** cada gasto tiene el botón rojo «Eliminar gasto», que pide un **motivo** (de 5 a 200 caracteres). El gasto **no se borra**: queda anulado con el motivo, quién y cuándo, y se ve en el filtro **«Eliminados»**. Un vendedor puede eliminar cualquier gasto de **su** local; el administrador, de cualquier local desde **Reportes**. Los gastos eliminados no cuentan en el total del mes, en los totales por medio de pago, en las estadísticas, en la utilidad ni en el Excel.
+
+Las estadísticas y el Excel muestran lo recibido en efectivo y en transferencia, los gastos y la **utilidad (recibido − gastos)**. El Excel incluye las hojas «Gastos» y «Gastos eliminados».
 
 ### Créditos
 Búsqueda por identificación, abonos con medio de pago (se aplican a las cuotas en orden) y cambio de fechas de cobro. Al llegar el saldo a 0 pasa de **Pendiente** a **Completado** y aparece en el historial de ventas completadas.
+
+La búsqueda por identificación encuentra al **cliente** por su cédula actual y luego sus créditos (por `clienteId`): sigue funcionando aunque la cédula se corrija después de la venta.
+
+### Eliminar venta (anulación)
+En **Historial de ventas** y en **Créditos y abonos**, cada venta tiene el botón rojo «Eliminar venta». La confirmación muestra el cliente, el número, el total, los productos que volverán al inventario y, si es un crédito con abonos, cuánto se anulará. Pide un **motivo** obligatorio.
+
+La factura **no se borra**: queda **anulada** con el motivo, quién y cuándo. En una sola transacción:
+- se devuelve al inventario la cantidad de cada producto (si el producto estaba oculto, se reactiva; si ya no existe, se avisa);
+- si es un crédito, sus cuotas y abonos quedan anulados (no se borran).
+
+Una venta anulada **no cuenta** en estadísticas, reportes, Excel, productos más vendidos, notificaciones de cobro, créditos pendientes, autocompletado de clientes ni en los totales del cliente. Se ve en el filtro **«Anuladas»** del historial (no en «Todas») y en la hoja «Ventas anuladas» del Excel. Su detalle se puede ver, pero no se puede compartir ni volver a anular.
+
+> Los abonos de un crédito anulado dejan de contar como dinero recibido en el mes en que entraron. Si ese dinero sí quedó en caja, regístralo aparte.
+
+### Clientes
+En **Clientes** se ven los clientes del local, 10 por página, ordenados por la última compra. La página y la búsqueda quedan en la dirección (`?pagina=2&q=...`), así el botón Atrás del celular funciona.
+
+El buscador acepta nombre, cédula o teléfono y es tolerante: sin tildes ni mayúsculas («jose nunez»), con o sin espacios («carlosruiz», «car rui»), en cualquier orden («ruiz carlos»), números con espacios, puntos, guiones o +57 («315-987-6543», «1.085.999.888») y errores de escritura pequeños («carlso ruis»). Si la cédula o el teléfono coinciden exactamente con un solo cliente, su detalle se abre solo.
+
+El detalle muestra el resumen (compras de contado y a crédito, total comprado y pagado, saldo, créditos pendientes, primera y última compra, producto favorito y ventas anuladas aparte) y el récord de **todas** sus facturas, con filtros por estado. «Editar datos» corrige nombre, cédula, teléfono, dirección y sector: la cédula no puede repetirse en el local, y las facturas antiguas **no** cambian (son el registro de cada venta).
+
+**Errores de escritura (pg_trgm):** la migración intenta crear la extensión `pg_trgm` de PostgreSQL. Si el usuario de la base no tiene permiso, la migración **no falla**: la app funciona igual, pero sin la tolerancia a errores de escritura (la búsqueda sin tildes, espacios, orden y números sigue funcionando). Para activarla luego, un administrador de la base ejecuta:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX IF NOT EXISTS clientes_nombre_trgm_idx ON clientes USING gin (nombre_busqueda gin_trgm_ops);
+```
+
+y se **reinicia la app**. El índice GIN no está en `schema.ts` (solo en la migración 0002): no uses `npm run db:push`, que lo borraría; usa `npm run db:migrate`.
 
 ### Notificaciones
 Cobros vencidos, del día y de los próximos 3 días (según las fechas de las cuotas) + productos agotados o con stock bajo. El contador del menú se actualiza cada minuto y, si se activan, llegan avisos del navegador.
@@ -144,7 +175,8 @@ src/
 │   ├── layout/          Marco con menú y control de tamaño de letra
 │   ├── facturacion/     Formulario, buscador, cuotas, vista de factura
 │   ├── pwa/             Registro del service worker y botón de instalar
-│   └── compartidos/     Estadísticas y cambio de contraseña
+│   ├── clientes/        Detalle y récord del cliente
+│   └── compartidos/     Estadísticas, gastos y cambio de contraseña
 ├── db/                  Esquema, conexión y seed
 ├── lib/                 Sesión, validaciones (Zod), formatos, helpers de API
 ├── server/servicios/    Lógica de negocio (facturas, créditos, reportes…)
@@ -160,6 +192,21 @@ npm run db:recalcular-busqueda  # recalcula los textos de búsqueda
 ```
 
 Después, el administrador debe **agregar los sectores de cada local**: sin ellos no se pueden registrar facturas. Las ventas de contado existentes quedan como pagadas en efectivo, igual que los abonos existentes. Los créditos no tienen medio de pago propio.
+
+**Migración 0002 (anulaciones y clientes):** agrega las columnas de anulación a `facturas`, `cuotas`, `abonos` y `gastos` (todo lo existente queda **vigente**) y las columnas de búsqueda de `clientes`, que se llenan en la misma migración. `npm run db:recalcular-busqueda` las deja idénticas a las de la app. Haz un respaldo (por ejemplo, una *branch* en Neon) antes de migrar.
+
+Para revertirla (primero vuelve a la versión anterior del código; las ventas anuladas volverían a contar, aunque su stock ya se devolvió):
+
+```sql
+DROP INDEX IF EXISTS clientes_nombre_trgm_idx, clientes_local_nombre_busqueda_idx, clientes_local_telefono_idx,
+  facturas_local_anulada_idx, facturas_cliente_idx, gastos_local_anulado_idx;
+ALTER TABLE facturas DROP COLUMN anulada, DROP COLUMN anulada_en, DROP COLUMN anulada_por_id, DROP COLUMN anulada_por_nombre, DROP COLUMN motivo_anulacion;
+ALTER TABLE gastos DROP COLUMN anulado, DROP COLUMN anulado_en, DROP COLUMN anulado_por_id, DROP COLUMN anulado_por_nombre, DROP COLUMN motivo_anulacion;
+ALTER TABLE cuotas DROP COLUMN anulada;
+ALTER TABLE abonos DROP COLUMN anulado;
+ALTER TABLE clientes DROP COLUMN nombre_busqueda, DROP COLUMN nombre_compacto, DROP COLUMN telefono_digitos;
+DELETE FROM drizzle.__drizzle_migrations WHERE id = (SELECT max(id) FROM drizzle.__drizzle_migrations);
+```
 
 **Para agregar una función nueva:** tabla en `src/db/schema.ts` → `npm run db:generate` → lógica en `src/server/servicios/` → endpoint en `src/app/api/` → pantalla en `src/app/panel/` o `src/app/admin/`.
 

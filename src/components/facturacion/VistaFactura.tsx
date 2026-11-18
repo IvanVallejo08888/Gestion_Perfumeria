@@ -15,6 +15,7 @@ import { fecha, fechaHora, numeroFactura, pesos } from "@/lib/formato";
 import { textoMedioPago } from "@/lib/pagos";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
 import type { FacturaDetalle } from "@/tipos";
+import { Mensaje } from "../ui/Basicos";
 import { Boton } from "../ui/Boton";
 import { useAvisos } from "../ui/Avisos";
 
@@ -89,29 +90,45 @@ export function VistaFactura({ factura }: { factura: FacturaDetalle }) {
 
   return (
     <div>
-      {/* Botones de acción grandes */}
-      <div className="mb-3 grid gap-3 sm:grid-cols-2">
-        <Boton variante="exito" icono="mensaje" onClick={enviarWhatsApp}>
-          Enviar por WhatsApp al cliente
-        </Boton>
-        <Boton icono="compartir" cargando={ocupado === "imagen"} disabled={!!ocupado} onClick={() => ejecutar("imagen")}>
-          Compartir imagen
-        </Boton>
-      </div>
-      <p className="mb-3 text-base text-texto-suave">
-        WhatsApp no permite adjuntar la imagen automáticamente desde un enlace: el mensaje lleva el detalle en texto. Si quieres enviar la imagen, usa «Compartir imagen».
-      </p>
-      <div className="mb-5 grid gap-3 sm:grid-cols-3">
-        <Boton icono="compartir" variante="secundario" cargando={ocupado === "pdf"} disabled={!!ocupado} onClick={() => ejecutar("pdf")}>
-          Compartir PDF
-        </Boton>
-        <Boton icono="descargar" variante="secundario" cargando={ocupado === "pdf-descarga"} disabled={!!ocupado} onClick={() => ejecutar("pdf-descarga")}>
-          Descargar PDF
-        </Boton>
-        <Boton icono="imprimir" variante="secundario" disabled={!!ocupado} onClick={() => window.print()}>
-          Imprimir
-        </Boton>
-      </div>
+      {factura.anulada ? (
+        /* Venta anulada: se puede ver, pero no compartir (el cliente no debe recibir una factura que ya no vale) */
+        <div className="mb-5">
+          <Mensaje tono="peligro" titulo="Venta eliminada (anulada)">
+            <p>Motivo: {factura.motivoAnulacion}</p>
+            <p>
+              Eliminada por {factura.anuladaPorNombre ?? "—"}
+              {factura.anuladaEn ? ` el ${fechaHora(factura.anuladaEn)}` : ""}.
+            </p>
+            <p>Esta factura no se puede enviar ni compartir.</p>
+          </Mensaje>
+        </div>
+      ) : (
+        <>
+          {/* Botones de acción grandes */}
+          <div className="mb-3 grid gap-3 sm:grid-cols-2">
+            <Boton variante="exito" icono="mensaje" onClick={enviarWhatsApp}>
+              Enviar por WhatsApp al cliente
+            </Boton>
+            <Boton icono="compartir" cargando={ocupado === "imagen"} disabled={!!ocupado} onClick={() => ejecutar("imagen")}>
+              Compartir imagen
+            </Boton>
+          </div>
+          <p className="mb-3 text-base text-texto-suave">
+            WhatsApp no permite adjuntar la imagen automáticamente desde un enlace: el mensaje lleva el detalle en texto. Si quieres enviar la imagen, usa «Compartir imagen».
+          </p>
+          <div className="mb-5 grid gap-3 sm:grid-cols-3">
+            <Boton icono="compartir" variante="secundario" cargando={ocupado === "pdf"} disabled={!!ocupado} onClick={() => ejecutar("pdf")}>
+              Compartir PDF
+            </Boton>
+            <Boton icono="descargar" variante="secundario" cargando={ocupado === "pdf-descarga"} disabled={!!ocupado} onClick={() => ejecutar("pdf-descarga")}>
+              Descargar PDF
+            </Boton>
+            <Boton icono="imprimir" variante="secundario" disabled={!!ocupado} onClick={() => window.print()}>
+              Imprimir
+            </Boton>
+          </div>
+        </>
+      )}
 
       {/* ---------------- Factura (esto es lo que se convierte en imagen/PDF) ---------------- */}
       <div className="overflow-x-auto rounded-xl border-2 border-gray-200 bg-gray-100 p-2 sm:p-4">

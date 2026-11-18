@@ -8,14 +8,17 @@
  *   4. Calcula el medio de pago (contado): efectivo + transferencia = total.
  *   5. Guarda la factura, sus productos y (si es crédito) sus cuotas.
  * Si algo falla, no se guarda nada y el inventario queda intacto.
+ *
+ * Una venta NUNCA se borra: "Eliminar venta" la ANULA (anularFactura), devuelve los
+ * productos al inventario y la deja en el historial con el motivo, quién y cuándo.
  */
 import "server-only";
 import { and, asc, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { abonos, clientes, cuotas, facturaItems, facturas, locales, productos, sectores } from "@/db/schema";
 import { ApiError, type VendedorSesion } from "@/lib/api";
-import { escaparLike, normalizarTexto } from "@/lib/formato";
-import type { ClienteDatos, FacturaDetalle, FacturaResumen, MedioPago } from "@/tipos";
+import { camposBusquedaCliente, escaparLike, normalizarTexto } from "@/lib/formato";
+import type { ClienteDatos, FacturaDetalle, FacturaResumen, MedioPago, ResultadoAnulacion } from "@/tipos";
 import { resolverPago } from "./pagos";
 
 export interface DatosNuevaFactura {
@@ -45,10 +48,11 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
     });
     if (!sector) throw new ApiError(400, "El sector elegido no existe o está desactivado en este local.");
 
-    /* 1. Cliente: se crea o se actualizan sus datos */
+    /* 1. Cliente: se crea o se actualizan sus datos (con sus columnas de búsqueda al día) */
+    const busqueda = camposBusquedaCliente(datos.cliente.nombre, datos.cliente.telefono);
     const [cliente] = await tx
       .insert(clientes)
-      .values({ localId, ...datos.cliente })
+      .values({ localId, ...datos.cliente, ...busqueda })
       .onConflictDoUpdate({
         target: [clientes.localId, clientes.identificacion],
         set: {
@@ -56,6 +60,7 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
           telefono: datos.cliente.telefono,
           direccion: datos.cliente.direccion,
           sector: datos.cliente.sector,
+          ...busqueda,
           actualizadoEn: new Date(),
         },
       })
@@ -181,6 +186,8 @@ export async function listarFacturas(
   const pagina = Math.max(1, filtros.pagina ?? 1);
   const condiciones: SQL[] = [eq(facturas.localId, localId)];
 
+  // "ANULADA" muestra solo las ventas eliminadas; cualquier otro filtro (también "Todas") las excluye
+  condiciones.push(eq(facturas.anulada, filtros.estado === "ANULADA"));
   if (filtros.estado === "PENDIENTE" || filtros.estado === "COMPLETADA") condiciones.push(eq(facturas.estado, filtros.estado));
   if (filtros.tipo === "NORMAL" || filtros.tipo === "CREDITO") condiciones.push(eq(facturas.tipo, filtros.tipo));
   if (filtros.texto?.trim()) {
@@ -195,25 +202,13 @@ export async function listarFacturas(
   }
 
   const filas = await db
-    .select({
-      id: facturas.id,
-      numero: facturas.numero,
-      tipo: facturas.tipo,
-      estado: facturas.estado,
-      clienteNombre: facturas.clienteNombre,
-      clienteIdentificacion: facturas.clienteIdentificacion,
-      total: facturas.total,
-      saldo: facturas.saldo,
-      medioPago: facturas.medioPago,
-      valorEfectivo: facturas.valorEfectivo,
-      valorTransferencia: facturas.valorTransferencia,
-      creadoEn: facturas.creadoEn,
-      completadaEn: facturas.completadaEn,
-    })
+    .select(COLUMNAS_RESUMEN)
     .from(facturas)
     .where(and(...condiciones))
-    // Las ventas completadas se ordenan por la fecha en que se completaron
-    .orderBy(desc(sql`coalesce(${facturas.completadaEn}, ${facturas.creadoEn})`))
+    // Las anuladas se ordenan por la fecha de anulación; las completadas, por la fecha en que se completaron
+    .orderBy(
+      desc(filtros.estado === "ANULADA" ? facturas.anuladaEn : sql`coalesce(${facturas.completadaEn}, ${facturas.creadoEn})`),
+    )
     .limit(POR_PAGINA + 1)
     .offset((pagina - 1) * POR_PAGINA);
 
@@ -222,6 +217,27 @@ export async function listarFacturas(
     hayMas: filas.length > POR_PAGINA,
   };
 }
+
+/** Columnas que necesita un FacturaResumen (se reutilizan en el historial y en el récord del cliente). */
+export const COLUMNAS_RESUMEN = {
+  id: facturas.id,
+  numero: facturas.numero,
+  tipo: facturas.tipo,
+  estado: facturas.estado,
+  clienteNombre: facturas.clienteNombre,
+  clienteIdentificacion: facturas.clienteIdentificacion,
+  total: facturas.total,
+  saldo: facturas.saldo,
+  medioPago: facturas.medioPago,
+  valorEfectivo: facturas.valorEfectivo,
+  valorTransferencia: facturas.valorTransferencia,
+  creadoEn: facturas.creadoEn,
+  completadaEn: facturas.completadaEn,
+  anulada: facturas.anulada,
+  anuladaEn: facturas.anuladaEn,
+  anuladaPorNombre: facturas.anuladaPorNombre,
+  motivoAnulacion: facturas.motivoAnulacion,
+};
 
 export async function obtenerFactura(localId: string, id: string): Promise<FacturaDetalle> {
   const f = await db.query.facturas.findFirst({
@@ -274,7 +290,7 @@ export async function obtenerFactura(localId: string, id: string): Promise<Factu
   };
 }
 
-function serializarResumen(f: {
+export function serializarResumen(f: {
   id: string;
   numero: number;
   tipo: "NORMAL" | "CREDITO";
@@ -288,6 +304,10 @@ function serializarResumen(f: {
   valorTransferencia: number;
   creadoEn: Date;
   completadaEn: Date | null;
+  anulada: boolean;
+  anuladaEn: Date | null;
+  anuladaPorNombre: string | null;
+  motivoAnulacion: string | null;
 }): FacturaResumen {
   return {
     id: f.id,
@@ -303,5 +323,81 @@ function serializarResumen(f: {
     valorTransferencia: f.valorTransferencia,
     creadoEn: f.creadoEn.toISOString(),
     completadaEn: f.completadaEn?.toISOString() ?? null,
+    anulada: f.anulada,
+    anuladaEn: f.anuladaEn?.toISOString() ?? null,
+    anuladaPorNombre: f.anuladaPorNombre,
+    motivoAnulacion: f.motivoAnulacion,
   };
+}
+
+/* ------------------------------- Anulación ------------------------------- */
+
+/**
+ * "Eliminar venta": anula la factura y devuelve los productos al inventario.
+ * Todo ocurre en UNA transacción (si algo falla, no cambia nada):
+ *  1. Bloquea la factura (SELECT ... FOR UPDATE): si dos personas la anulan a la vez,
+ *     la segunda espera y luego ve que ya está anulada. Lo mismo con un abono simultáneo.
+ *  2. Devuelve al stock la cantidad de cada producto y reactiva los que estaban ocultos.
+ *     Si un producto ya no existe, se omite y se informa en el resultado.
+ *  3. Anula las cuotas y los abonos (no se borran: quedan como parte de la venta anulada).
+ *  4. Marca la factura como anulada con quién, cuándo y el motivo.
+ */
+export async function anularFactura(vendedor: VendedorSesion, facturaId: string, motivo: string): Promise<ResultadoAnulacion> {
+  return db.transaction(async (tx) => {
+    const [factura] = await tx
+      .select({ id: facturas.id, anulada: facturas.anulada })
+      .from(facturas)
+      // Solo facturas del local del vendedor: una de otro local responde igual que una inexistente
+      .where(and(eq(facturas.id, facturaId), eq(facturas.localId, vendedor.localId)))
+      .for("update");
+    if (!factura) throw new ApiError(404, "La venta no existe.");
+    if (factura.anulada) throw new ApiError(409, "Esta venta ya fue eliminada.");
+
+    /* Cantidades por producto (si el mismo producto aparece en dos líneas, se suman) */
+    const items = await tx.select().from(facturaItems).where(eq(facturaItems.facturaId, facturaId));
+    const porProducto = new Map<string, { nombre: string; cantidad: number }>();
+    const omitidos: ResultadoAnulacion["omitidos"] = [];
+    for (const item of items) {
+      // El producto se borró del inventario: no hay a dónde devolverlo
+      if (!item.productoId) {
+        omitidos.push({ nombre: item.nombreProducto, cantidad: item.cantidad });
+        continue;
+      }
+      const previo = porProducto.get(item.productoId);
+      porProducto.set(item.productoId, { nombre: item.nombreProducto, cantidad: (previo?.cantidad ?? 0) + item.cantidad });
+    }
+
+    const devueltos: ResultadoAnulacion["devueltos"] = [];
+    for (const [productoId, linea] of porProducto) {
+      const [producto] = await tx
+        .update(productos)
+        // Si el producto estaba oculto ("eliminado" con ventas), vuelve a quedar activo
+        .set({ stock: sql`${productos.stock} + ${linea.cantidad}`, activo: true })
+        .where(and(eq(productos.id, productoId), eq(productos.localId, vendedor.localId)))
+        .returning({ nombre: productos.nombre });
+      if (producto) devueltos.push({ nombre: producto.nombre, cantidad: linea.cantidad });
+      else omitidos.push(linea);
+    }
+
+    /* Cuotas y abonos del crédito: se marcan como anulados (no se borran) */
+    await tx.update(cuotas).set({ anulada: true }).where(eq(cuotas.facturaId, facturaId));
+    const abonosAnulados = await tx
+      .update(abonos)
+      .set({ anulado: true })
+      .where(and(eq(abonos.facturaId, facturaId), eq(abonos.anulado, false)))
+      .returning({ valor: abonos.valor });
+
+    await tx
+      .update(facturas)
+      .set({
+        anulada: true,
+        anuladaEn: new Date(),
+        anuladaPorId: vendedor.id,
+        anuladaPorNombre: vendedor.nombre,
+        motivoAnulacion: motivo,
+      })
+      .where(eq(facturas.id, facturaId));
+
+    return { devueltos, omitidos, abonosAnulados: abonosAnulados.reduce((acc, a) => acc + a.valor, 0) };
+  });
 }

@@ -1,7 +1,10 @@
 /**
  * Generación de reportes en Excel (.xlsx) por local:
- *  - Reporte ANUAL: hoja "Resumen por mes", hoja "Facturas", hoja "Productos vendidos", hoja "Abonos" y hoja "Gastos".
+ *  - Reporte ANUAL: hoja "Resumen por mes", hoja "Facturas", hoja "Productos vendidos", hoja "Abonos", hoja "Gastos",
+ *    hoja "Ventas anuladas" y hoja "Gastos eliminados".
  *  - Reporte MENSUAL: las mismas hojas, solo con los datos del mes elegido.
+ *  - Lo anulado NO aparece en esas hojas ni en sus totales. Va aparte, en las hojas
+ *    "Ventas anuladas" y "Gastos eliminados" (por la fecha de la venta o del gasto).
  */
 import "server-only";
 import ExcelJS from "exceljs";
@@ -32,9 +35,10 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
   const local = await obtenerLocal(localId);
   const { inicio, fin } = rangoPeriodo(anio, mes);
   const periodo = mes ? `${MESES[mes - 1]} ${anio}` : `Año ${anio}`;
-  const enPeriodo = and(eq(facturas.localId, localId), gte(facturas.creadoEn, inicio), lt(facturas.creadoEn, fin));
+  const delPeriodo = and(eq(facturas.localId, localId), gte(facturas.creadoEn, inicio), lt(facturas.creadoEn, fin));
+  const enPeriodo = and(delPeriodo, eq(facturas.anulada, false));
 
-  const [estadisticas, listaFacturas, productosVendidos, listaAbonos, listaGastos] = await Promise.all([
+  const [estadisticas, listaFacturas, productosVendidos, listaAbonos, listaGastos, ventasAnuladas, gastosEliminados] = await Promise.all([
     obtenerEstadisticas(localId, anio),
     db.select().from(facturas).where(enPeriodo).orderBy(asc(facturas.creadoEn)),
     db
@@ -62,9 +66,19 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
       })
       .from(abonos)
       .innerJoin(facturas, eq(abonos.facturaId, facturas.id))
-      .where(and(eq(facturas.localId, localId), gte(abonos.creadoEn, inicio), lt(abonos.creadoEn, fin)))
+      .where(
+        and(
+          eq(facturas.localId, localId),
+          eq(facturas.anulada, false),
+          eq(abonos.anulado, false),
+          gte(abonos.creadoEn, inicio),
+          lt(abonos.creadoEn, fin),
+        ),
+      )
       .orderBy(asc(abonos.creadoEn)),
     gastosDelPeriodo(localId, anio, mes),
+    db.select().from(facturas).where(and(delPeriodo, eq(facturas.anulada, true))).orderBy(asc(facturas.creadoEn)),
+    gastosDelPeriodo(localId, anio, mes, true),
   ]);
 
   const libro = new ExcelJS.Workbook();
@@ -202,6 +216,58 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
     })),
   );
   estilizarEncabezado(hojaGastos);
+
+  /* ---------- Hoja 6: Ventas anuladas (no suman en ninguna otra hoja) ---------- */
+  const hojaAnuladas = libro.addWorksheet("Ventas anuladas");
+  hojaAnuladas.columns = [
+    { header: "N° factura", key: "numero", width: 12 },
+    { header: "Fecha de la venta", key: "fecha", width: 22 },
+    { header: "Tipo", key: "tipo", width: 12 },
+    { header: "Identificación", key: "identificacion", width: 16 },
+    { header: "Cliente", key: "cliente", width: 28 },
+    { header: "Total", key: "total", width: 15, style: { numFmt: FORMATO_PESOS } },
+    { header: "Motivo", key: "motivo", width: 40 },
+    { header: "Anulada por", key: "anuladaPor", width: 24 },
+    { header: "Fecha de anulación", key: "anuladaEn", width: 22 },
+  ];
+  hojaAnuladas.addRows(
+    ventasAnuladas.map((f) => ({
+      numero: numeroFactura(f.numero),
+      fecha: fechaHora(f.creadoEn),
+      tipo: f.tipo === "NORMAL" ? "Contado" : "Crédito",
+      identificacion: f.clienteIdentificacion,
+      cliente: f.clienteNombre,
+      total: f.total,
+      motivo: f.motivoAnulacion ?? "",
+      anuladaPor: f.anuladaPorNombre ?? "",
+      anuladaEn: f.anuladaEn ? fechaHora(f.anuladaEn) : "",
+    })),
+  );
+  estilizarEncabezado(hojaAnuladas);
+
+  /* ---------- Hoja 7: Gastos eliminados (no suman en los gastos ni en la utilidad) ---------- */
+  const hojaGastosEliminados = libro.addWorksheet("Gastos eliminados");
+  hojaGastosEliminados.columns = [
+    { header: "Fecha", key: "fecha", width: 14 },
+    { header: "Categoría", key: "categoria", width: 26 },
+    { header: "Valor", key: "valor", width: 16, style: { numFmt: FORMATO_PESOS } },
+    { header: "Medio de pago", key: "medioPago", width: 16 },
+    { header: "Motivo", key: "motivo", width: 40 },
+    { header: "Eliminado por", key: "eliminadoPor", width: 24 },
+    { header: "Fecha de eliminación", key: "eliminadoEn", width: 22 },
+  ];
+  hojaGastosEliminados.addRows(
+    gastosEliminados.map((g) => ({
+      fecha: fechaDia(g.fecha),
+      categoria: g.categoriaNombre,
+      valor: g.valor,
+      medioPago: textoMedioPago(g.medioPago),
+      motivo: g.motivoAnulacion ?? "",
+      eliminadoPor: g.anuladoPorNombre ?? "",
+      eliminadoEn: g.anuladoEn ? fechaHora(g.anuladoEn) : "",
+    })),
+  );
+  estilizarEncabezado(hojaGastosEliminados);
 
   const buffer = await libro.xlsx.writeBuffer();
   const nombreSeguro = local.nombre.replace(/[^\p{L}\p{N}]+/gu, "_");

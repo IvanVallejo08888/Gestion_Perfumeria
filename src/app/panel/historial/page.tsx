@@ -3,25 +3,29 @@
  * - Por defecto muestra las VENTAS COMPLETADAS (facturas normales y créditos ya pagados).
  * - Cada factura se identifica con el NOMBRE DEL CLIENTE.
  * - "Ver detalles" abre la factura completa, lista para compartir otra vez.
+ * - "Eliminar venta" anula la factura (con motivo) y devuelve los productos al inventario.
+ * - El filtro "Anuladas" muestra las ventas eliminadas, con el motivo, quién y cuándo.
+ *   Las anuladas no aparecen en los demás filtros (tampoco en "Todas").
  */
 "use client";
 
 import { useState } from "react";
+import { ConfirmarAnulacion } from "@/components/facturacion/ConfirmarAnulacion";
 import { DetalleFactura } from "@/components/facturacion/DetalleFactura";
+import { TarjetaFactura } from "@/components/facturacion/TarjetaFactura";
 import { Boton } from "@/components/ui/Boton";
 import { Campo } from "@/components/ui/Campo";
-import { Cargando, EncabezadoPagina, Insignia, Tarjeta, Vacio } from "@/components/ui/Basicos";
+import { Cargando, EncabezadoPagina, Tarjeta, Vacio } from "@/components/ui/Basicos";
 import { useAvisos } from "@/components/ui/Avisos";
 import { useConsultaPaginada } from "@/hooks/useConsultaPaginada";
 import { useValorDiferido } from "@/hooks/useValorDiferido";
-import { fechaHora, numeroFactura, pesos } from "@/lib/formato";
-import { textoMedioPago } from "@/lib/pagos";
 import type { FacturaResumen } from "@/tipos";
 
 const FILTROS = [
   { valor: "COMPLETADA", texto: "Ventas completadas" },
   { valor: "PENDIENTE", texto: "Créditos pendientes" },
   { valor: "", texto: "Todas" },
+  { valor: "ANULADA", texto: "Anuladas" },
 ];
 
 export default function PaginaHistorial() {
@@ -29,6 +33,7 @@ export default function PaginaHistorial() {
   const [estado, setEstado] = useState("COMPLETADA");
   const [texto, setTexto] = useState("");
   const [detalleId, setDetalleId] = useState<string | null>(null);
+  const [anularId, setAnularId] = useState<string | null>(null);
   const textoBuscado = useValorDiferido(texto.trim(), 300);
 
   const params = new URLSearchParams();
@@ -40,6 +45,7 @@ export default function PaginaHistorial() {
     hayMas,
     cargandoMas,
     cargarMas,
+    recargar,
   } = useConsultaPaginada(
     `/api/facturas?${params}`,
     (r: { facturas: FacturaResumen[]; hayMas: boolean }) => ({ items: r.facturas, hayMas: r.hayMas }),
@@ -81,46 +87,15 @@ export default function PaginaHistorial() {
       {!facturas ? (
         <Cargando />
       ) : facturas.length === 0 ? (
-        <Vacio icono="historial" titulo="No hay facturas para mostrar">
-          Las facturas que registres aparecerán aquí.
+        <Vacio icono="historial" titulo={estado === "ANULADA" ? "No hay ventas anuladas" : "No hay facturas para mostrar"}>
+          {estado === "ANULADA" ? "Las ventas que elimines aparecerán aquí." : "Las facturas que registres aparecerán aquí."}
         </Vacio>
       ) : (
         <>
           <ul className="space-y-3">
             {facturas.map((f) => (
               <li key={f.id}>
-                <article className="flex flex-col gap-3 rounded-2xl border-2 border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    {/* El nombre de la factura es el nombre del cliente */}
-                    <h2 className="text-xl font-bold">{f.clienteNombre}</h2>
-                    <p className="text-base text-texto-suave">
-                      Factura N° {numeroFactura(f.numero)} · C.C. {f.clienteIdentificacion}
-                    </p>
-                    <p className="text-base text-texto-suave">
-                      {f.estado === "COMPLETADA" && f.tipo === "CREDITO" && f.completadaEn
-                        ? `Crédito pagado el ${fechaHora(f.completadaEn)}`
-                        : fechaHora(f.creadoEn)}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <Insignia tono={f.tipo === "NORMAL" ? "marca" : "info"}>{f.tipo === "NORMAL" ? "Contado" : "Crédito"}</Insignia>
-                      <Insignia tono={f.estado === "COMPLETADA" ? "exito" : "alerta"}>
-                        {f.estado === "COMPLETADA" ? "Completada" : `Pendiente: ${pesos(f.saldo)}`}
-                      </Insignia>
-                      {f.medioPago && <Insignia tono="neutro">{textoMedioPago(f.medioPago)}</Insignia>}
-                    </div>
-                    {f.medioPago === "MIXTO" && (
-                      <p className="mt-1 text-base text-texto-suave">
-                        Efectivo {pesos(f.valorEfectivo)} + transferencia {pesos(f.valorTransferencia)}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between gap-4 sm:flex-col sm:items-end">
-                    <p className="text-2xl font-bold text-marca-800">{pesos(f.total)}</p>
-                    <Boton variante="secundario" icono="factura" onClick={() => setDetalleId(f.id)}>
-                      Ver detalles
-                    </Boton>
-                  </div>
-                </article>
+                <TarjetaFactura factura={f} onVer={() => setDetalleId(f.id)} onEliminar={() => setAnularId(f.id)} />
               </li>
             ))}
           </ul>
@@ -135,6 +110,14 @@ export default function PaginaHistorial() {
       )}
 
       <DetalleFactura facturaId={detalleId} onCerrar={() => setDetalleId(null)} />
+      <ConfirmarAnulacion
+        facturaId={anularId}
+        onCerrar={() => setAnularId(null)}
+        onAnulada={() => {
+          setAnularId(null);
+          recargar();
+        }}
+      />
     </>
   );
 }

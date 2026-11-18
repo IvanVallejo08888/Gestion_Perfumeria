@@ -7,6 +7,7 @@ const MENU: ItemMenu[] = [
   { href: "/panel/facturacion", texto: "Facturación", icono: "factura" },
   { href: "/panel/historial", texto: "Historial de ventas", icono: "historial" },
   { href: "/panel/creditos", texto: "Créditos y abonos", icono: "credito" },
+  { href: "/panel/clientes", texto: "Clientes", icono: "usuarios" },
   { href: "/panel/gastos", texto: "Gastos", icono: "dinero" },
   { href: "/panel/notificaciones", texto: "Notificaciones", icono: "campana", conContador: true },
   { href: "/panel/inventario", texto: "Inventario", icono: "inventario" },
