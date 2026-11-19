@@ -8,6 +8,7 @@
  *    Un bloque con `roles` solo se muestra a esos roles.
  * Formato del texto: **negrita** entre dos asteriscos dobles; `tramos()` lo separa para dibujarlo.
  */
+import { ETIQUETA_TAMANO, TAMANOS } from "./clasificacion";
 
 export type RolManual = "ADMIN" | "VENDEDOR";
 
@@ -372,11 +373,11 @@ export const MANUAL: SeccionManual[] = [
         tipo: "numerada",
         items: [
           "Toca **Agregar producto**.",
-          "Escribe el **Nombre del producto** y el **Precio de venta**. El **Código** es opcional (sirve el código de barras).",
+          "Escribe el **Nombre del perfume**. Debajo va el **Código**, que es opcional (sirve el código de barras).",
           "Elige la **Marca**. Si no está en la lista, toca **Agregar marca**, escribe el nombre y toca **Guardar marca**.",
-          "Elige el **Tipo**, el **Género**, el **Público** y el **Tamaño** (opciones en la tabla de abajo).",
-          "Escribe las **Unidades iniciales**.",
-          "En **Avisar cuando queden** escribe desde cuántas unidades quieres el aviso de stock bajo. El sistema propone 3.",
+          "Elige el **Tipo**, el **Género**, el **Público** y el **Tamaño** (en ml, con su equivalente en oz; opciones en la tabla de abajo).",
+          "Escribe el **Precio de venta** y las **Unidades iniciales**.",
+          "En **Avisar cuando queden** escribe desde cuántas unidades quieres el aviso de stock bajo. El sistema propone 0, es decir, avisa cuando se agota.",
           "Toca **Guardar**.",
         ],
       },
@@ -387,7 +388,8 @@ export const MANUAL: SeccionManual[] = [
           ["Tipo", "Original, 1.1, Imitación, Versión, Esencia"],
           ["Género", "Hombre, Mujer"],
           ["Público", "Adulto, Infantil (Hombre + Infantil aparece como Niño; Mujer + Infantil, como Niña)"],
-          ["Tamaño", "2 oz (60 ml), 2.5 oz (75 ml), 3.4 oz (100 ml), 4 oz (120 ml), 4.2 oz (125 ml)"],
+          // Sale de la lista de tamaños: si se agrega uno, el manual queda al día solo
+          ["Tamaño", TAMANOS.map((t) => ETIQUETA_TAMANO[t]).join(", ")],
         ],
       },
       { tipo: "subtitulo", texto: "Llegó mercancía" },

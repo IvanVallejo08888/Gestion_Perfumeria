@@ -1,5 +1,6 @@
 /**
  * Crear o editar un perfume con su clasificación (marca, tipo, género, público y tamaño).
+ * Orden del formulario: nombre → código → marca → variante (tipo, género, público, tamaño, precio y stock).
  *  - "Agregar marca" ahí mismo: la marca nueva queda elegida.
  *  - Al crear, las unidades iniciales quedan como INGRESO "Stock inicial".
  *  - Al editar, el stock NO se cambia aquí: se usa «Agregar unidades» o «Ajustar stock»
@@ -14,7 +15,7 @@ import { Boton } from "@/components/ui/Boton";
 import { Campo, CampoDinero, Selector } from "@/components/ui/Campo";
 import { Modal } from "@/components/ui/Modal";
 import { useConsulta } from "@/hooks/useConsulta";
-import { ETIQUETA_GENERO, ETIQUETA_PUBLICO, ETIQUETA_TAMANO, ETIQUETA_TIPO, GENEROS, opcionesDe, PUBLICOS, TAMANOS, TIPOS_PRODUCTO } from "@/lib/clasificacion";
+import { ETIQUETA_GENERO, ETIQUETA_PUBLICO, ETIQUETA_TAMANO, ETIQUETA_TIPO, GENEROS, GRUPOS_TAMANO, opcionesDe, PUBLICOS, TIPOS_PRODUCTO } from "@/lib/clasificacion";
 import { api } from "@/lib/http";
 import type { Genero, NombreActivo, Producto, Publico, Tamano, TipoProducto } from "@/tipos";
 
@@ -36,7 +37,8 @@ const FORM_VACIO: FormProducto = {
   codigo: "",
   precio: 0,
   stock: 0,
-  stockMinimo: 3,
+  // Por defecto avisa cuando se agota (0 unidades); se puede subir si se quiere el aviso antes
+  stockMinimo: 0,
   marcaId: "",
   tipo: null,
   genero: null,
@@ -102,9 +104,8 @@ export function ModalProducto({ producto, onCerrar, onListo }: Props) {
     <Modal abierto onCerrar={onCerrar} titulo={producto ? "Editar producto" : "Agregar producto"}>
       <form onSubmit={guardar} className="space-y-5" noValidate>
         {error && <Mensaje tono="peligro">{error}</Mensaje>}
-        <Campo etiqueta="Nombre del producto" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} obligatorio autoFocus />
+        <Campo etiqueta="Nombre del perfume" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} obligatorio autoFocus />
         <Campo etiqueta="Código (opcional)" value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} ayuda="Por ejemplo, el código de barras." />
-        <CampoDinero etiqueta="Precio de venta" valor={form.precio} onCambio={(v) => setForm({ ...form, precio: v })} obligatorio />
 
         <SelectorMarca
           marcas={marcas}
@@ -129,12 +130,17 @@ export function ModalProducto({ producto, onCerrar, onListo }: Props) {
           obligatorio
         >
           <option value="">Elige el tamaño</option>
-          {TAMANOS.map((t) => (
-            <option key={t} value={t}>
-              {ETIQUETA_TAMANO[t]}
-            </option>
+          {GRUPOS_TAMANO.map((g) => (
+            <optgroup key={g.titulo} label={g.titulo}>
+              {g.tamanos.map((t) => (
+                <option key={t} value={t}>
+                  {ETIQUETA_TAMANO[t]}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </Selector>
+        <CampoDinero etiqueta="Precio de venta" valor={form.precio} onCambio={(v) => setForm({ ...form, precio: v })} obligatorio />
 
         <div className="grid gap-5 sm:grid-cols-2">
           {producto ? (

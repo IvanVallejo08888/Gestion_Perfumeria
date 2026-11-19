@@ -136,7 +136,7 @@ export const productoSchema = z.object({
   codigo: z.string().trim().max(40).optional().default(""),
   precio: dineroSchema("El precio").refine((v) => v > 0, "El precio debe ser mayor que cero."),
   stock: z.coerce.number().int("El stock debe ser un número entero.").min(0, "El stock no puede ser negativo."),
-  stockMinimo: z.coerce.number().int().min(0).default(3),
+  stockMinimo: z.coerce.number().int().min(0).default(0),
   marcaId: z.uuid("Elige la marca."),
   tipo: z.enum(TIPOS_PRODUCTO, { error: "Elige el tipo (Original, 1.1, Imitación, Versión o Esencia)." }),
   genero: z.enum(GENEROS, { error: "Elige si es para hombre o para mujer." }),

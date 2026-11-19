@@ -139,7 +139,8 @@ export function ListaProductos({ productos, onAgregarUnidades, onDetalle }: Prop
           <tbody>
             {productos.map((p) => {
               const publico = publicoDe(p);
-              const [oz, ml] = p.tamano ? ETIQUETA_TAMANO[p.tamano].split(" (") : [];
+              // "100 ml (3.4 oz)" → ml arriba y "(3.4 oz)" debajo, más pequeño
+              const [ml, oz] = p.tamano ? ETIQUETA_TAMANO[p.tamano].split(" (") : [];
               return (
                 <tr key={p.id} className="border-b border-linea align-top last:border-b-0">
                   <td className="px-2 py-3">{p.marcaNombre ?? <span className="text-texto-suave">—</span>}</td>
@@ -155,10 +156,10 @@ export function ListaProductos({ productos, onAgregarUnidades, onDetalle }: Prop
                   <td className="px-2 py-3">{p.tipo ? ETIQUETA_TIPO[p.tipo] : "—"}</td>
                   <td className="px-2 py-3">{publico ?? "—"}</td>
                   <td className="px-2 py-3 whitespace-nowrap">
-                    {oz ? (
+                    {ml ? (
                       <>
-                        {oz}
-                        <span className="block text-sm text-texto-suave">({ml}</span>
+                        {ml}
+                        <span className="block text-sm text-texto-suave">({oz}</span>
                       </>
                     ) : (
                       "—"
