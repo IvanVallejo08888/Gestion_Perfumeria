@@ -17,7 +17,9 @@ export type EstadoUsuario = "PENDIENTE" | "ACTIVO" | "PAUSADO";
 export type TipoFactura = "NORMAL" | "CREDITO";
 export type EstadoFactura = "PENDIENTE" | "COMPLETADA";
 export type MedioPago = "EFECTIVO" | "TRANSFERENCIA" | "MIXTO";
-export type MedioPagoGasto = "EFECTIVO" | "TRANSFERENCIA";
+/** CREDITO = gasto a crédito: no sale de la caja ese día, crea una deuda que se paga en cuotas. */
+export type MedioPagoGasto = "EFECTIVO" | "TRANSFERENCIA" | "CREDITO";
+export type { EstadoDeuda } from "@/lib/deudas";
 /** Cómo se pagó una compra de mercancía. CREDITO = cuenta por pagar al proveedor. */
 export type MedioPagoCompra = "EFECTIVO" | "TRANSFERENCIA" | "CREDITO";
 export type EstadoCuentaPagar = "PENDIENTE" | "SALDADA";
@@ -166,6 +168,19 @@ export interface GastoFila {
   anuladoEn: string | null;
   anuladoPorNombre: string | null;
   motivoAnulacion: string | null;
+  /** Solo en gastos a crédito: la deuda que nació con este gasto. */
+  deuda: GastoDeudaInfo | null;
+}
+
+/** Datos de la deuda que se muestran junto a un gasto a crédito (y en la confirmación de anularlo). */
+export interface GastoDeudaInfo {
+  id: string;
+  acreedor: string;
+  estado: import("@/lib/deudas").EstadoDeuda;
+  saldo: number;
+  /** Pagos vigentes (no anulados): si hay, el gasto no se puede anular hasta anularlos. */
+  pagosVigentes: number;
+  valorPagos: number;
 }
 
 export interface ListaGastos {
@@ -175,19 +190,26 @@ export interface ListaGastos {
   total: number;
   totalEfectivo: number;
   totalTransferencia: number;
-  /** Total de gastos personales (no se restan de la utilidad). */
+  /** Total de gastos personales (no se restan de la utilidad). Incluye los pagos de deudas personales. */
   totalPersonales: number;
+  /** Parte de "total" que son pagos de deudas hechos en el periodo (esos pagos no aparecen en la lista de gastos). */
+  totalPagosDeudas: number;
 }
 
 export interface Notificacion {
   id: string;
-  tipo: "COBRO" | "STOCK";
+  tipo: "COBRO" | "STOCK" | "DEUDA";
   nivel: "VENCIDA" | "HOY" | "PROXIMA" | "STOCK_AGOTADO" | "STOCK_BAJO";
   titulo: string;
   descripcion: string;
   fecha: string | null;
   /** Para cobros: identificación del cliente (abre directamente su crédito). */
   clienteIdentificacion?: string;
+  /** Para pagos de deudas: la deuda (el botón «Ir a pagar» abre directamente su ventana de pago). */
+  deudaId?: string;
+  /** Para pagos de deudas: a quién se le debe y cuánto falta de la cuota (para el aviso del navegador). */
+  acreedor?: string;
+  valor?: number;
 }
 
 export interface MesEstadistica {
@@ -203,8 +225,12 @@ export interface MesEstadistica {
   /** Dinero recibido por medio de pago (contado + abonos). */
   recibidoEfectivo: number;
   recibidoTransferencia: number;
-  /** Gastos del negocio (sin los personales). */
+  /** Gastos del negocio (sin los personales) = gastos de contado + pagos de deudas del mes. */
   gastos: number;
+  /** Parte de "gastos" que son pagos de deudas del negocio. */
+  pagosDeudas: number;
+  /** Informativo: valor de las deudas adquiridas (gastos a crédito) en el mes. NO se resta de la utilidad. */
+  deudasAdquiridas: number;
   /** Gastos personales de la dueña: se informan aparte y no se restan. */
   gastosPersonales: number;
   /** Recibido − gastos del negocio. */
@@ -218,6 +244,96 @@ export interface Estadisticas {
   totales: Omit<MesEstadistica, "mes" | "nombre">;
   topProductos: { nombre: string; cantidad: number; total: number }[];
   creditosPendientes: { cantidad: number; saldo: number };
+  /** Deudas del negocio por pagar HOY (saldo total), sin importar el periodo elegido. */
+  deudasPorPagar: { cantidad: number; saldo: number };
+}
+
+/* --------------------------------- Deudas --------------------------------- */
+
+export interface DeudaCuotaFila {
+  id: string;
+  numero: number;
+  fechaVencimiento: string;
+  valor: number;
+  valorPagado: number;
+  estado: "PENDIENTE" | "PAGADA";
+  pagadaEn: string | null;
+}
+
+export interface DeudaPagoFila {
+  id: string;
+  fecha: string;
+  valor: number;
+  medioPago: MedioPago;
+  valorEfectivo: number;
+  valorTransferencia: number;
+  nota: string | null;
+  usuarioNombre: string;
+  anulado: boolean;
+  anuladoEn: string | null;
+  anuladoPorNombre: string | null;
+  motivoAnulacion: string | null;
+}
+
+/** Deuda en la lista de la pestaña «Deudas». */
+export interface DeudaResumen {
+  id: string;
+  gastoId: string;
+  acreedor: string;
+  descripcion: string | null;
+  categoriaNombre: string;
+  personal: boolean;
+  /** Día en que se adquirió la deuda (fecha del gasto), "AAAA-MM-DD". */
+  fecha: string;
+  valorTotal: number;
+  pagado: number;
+  saldo: number;
+  estado: import("@/lib/deudas").EstadoDeuda;
+  totalCuotas: number;
+  cuotasPagadas: number;
+  /** Próxima cuota pendiente (null si ya no hay). */
+  proximaCuota: { numero: number; fechaVencimiento: string; pendiente: number } | null;
+  pagadaEn: string | null;
+  resumenMedioPago: MedioPago | null;
+}
+
+export interface DeudaDetalle extends DeudaResumen {
+  cuotas: DeudaCuotaFila[];
+  /** Todos los pagos (también los anulados, marcados). */
+  pagos: DeudaPagoFila[];
+  /** Suma de los pagos vigentes por medio. */
+  totalEfectivo: number;
+  totalTransferencia: number;
+  creadoPorNombre: string;
+  creadoEn: string;
+  anuladaEn: string | null;
+  anuladaPorNombre: string | null;
+  motivoAnulacion: string | null;
+}
+
+export interface ListaDeudas {
+  deudas: DeudaResumen[];
+  /** Resumen de las deudas PENDIENTES del local (no depende del filtro). */
+  resumen: {
+    totalAdeudado: number;
+    cantidadPendientes: number;
+    cuotasVencidas: number;
+    proximoPago: { deudaId: string; acreedor: string; fechaVencimiento: string; valor: number } | null;
+  };
+}
+
+/* ------------------------------- Caja del día ------------------------------- */
+
+export type { MovimientoCaja, ResumenCaja, TipoMovimientoCaja } from "@/lib/caja";
+
+export interface CajaDia {
+  /** "AAAA-MM-DD" */
+  fecha: string;
+  resumen: import("@/lib/caja").ResumenCaja;
+  movimientos: import("@/lib/caja").MovimientoCaja[];
+  /** Informativo: pagos a proveedores por compras de mercancía (NO se restan del saldo). */
+  pagosProveedores: { dia: string; hora: string | null; descripcion: string; efectivo: number; transferencia: number }[];
+  totalPagosProveedores: number;
 }
 
 /* --------------------------------- Clientes -------------------------------- */

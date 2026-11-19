@@ -30,7 +30,12 @@ interface Resumen {
   clientes: number;
   clientesConFacturas: number;
   productos: number;
+  /** Gastos de contado (los gastos a crédito se cuentan con sus deudas). */
   gastos: number;
+  /** Deudas del negocio (gastos a crédito): todas, las pendientes y su saldo. */
+  deudas: number;
+  deudasPendientes: number;
+  saldoDeudas: number;
   primeraVenta: string | null;
   ultimaVenta: string | null;
 }
@@ -134,7 +139,9 @@ function ResumenLocal({ r }: { r: Resumen }) {
     { titulo: "Abonos", valor: r.abonos },
     { titulo: "Clientes", valor: r.clientes },
     { titulo: "Productos", valor: r.productos },
-    { titulo: "Gastos", valor: r.gastos },
+    { titulo: "Gastos de contado", valor: r.gastos },
+    { titulo: "Deudas pendientes", valor: r.deudasPendientes },
+    { titulo: "Deudas pagadas o anuladas", valor: r.deudas - r.deudasPendientes },
   ];
   return (
     <section aria-labelledby="titulo-resumen">
@@ -260,7 +267,7 @@ function LimpiezaPeriodo({ localId, localNombre, onBorrar }: { localId: string; 
           <h3 className="text-xl font-bold">Vista previa · {describirPeriodo(anio, mesesElegidos)}</h3>
           {!hayAlgoQueBorrar(previaVigente) ? (
             <Mensaje tono="info" titulo="No hay nada que borrar en ese periodo">
-              No hay ventas de contado ni gastos en esos meses.
+              No hay ventas de contado ni gastos de contado en esos meses.
             </Mensaje>
           ) : (
             <>
@@ -277,6 +284,10 @@ function LimpiezaPeriodo({ localId, localNombre, onBorrar }: { localId: string; 
                 <ul className="mt-1 list-disc pl-6">
                   <li>
                     {previaVigente.conservados.creditos} créditos y {previaVigente.conservados.abonos} abonos de ese periodo
+                  </li>
+                  <li>
+                    {previaVigente.conservados.deudas ?? 0} deudas (con sus gastos a crédito) y {previaVigente.conservados.pagosDeuda ?? 0} pagos de deudas de
+                    ese periodo
                   </li>
                   <li>Todos los clientes y todo el inventario</li>
                 </ul>
@@ -304,7 +315,7 @@ function LimpiezaPeriodo({ localId, localNombre, onBorrar }: { localId: string; 
 function ZonaPeligro({ r, onBorrar }: { r: Resumen; onBorrar: (s: SolicitudUI) => void }) {
   const clientesSinFacturas = r.clientes - r.clientesConFacturas;
   const creditos = r.creditosPendientes + r.creditosCompletados;
-  const todo = r.ventasContado + creditos + r.gastos + r.clientes + r.productos;
+  const todo = r.ventasContado + creditos + r.gastos + r.deudas + r.clientes + r.productos;
 
   const tarjetas: { alcance: AlcanceLimpieza; titulo: string; descripcion: string; cantidad: number; nombre: string; boton: string; extra?: string }[] = [
     {
@@ -324,7 +335,25 @@ function ZonaPeligro({ r, onBorrar }: { r: Resumen; onBorrar: (s: SolicitudUI) =
       boton: "Borrar todos los créditos",
       extra: r.creditosPendientes ? `${r.creditosPendientes} créditos todavía tienen saldo pendiente.` : undefined,
     },
-    { alcance: "GASTOS", titulo: "Borrar todos los gastos", descripcion: "Todos los gastos del local, también los eliminados.", cantidad: r.gastos, nombre: "gastos", boton: "Borrar todos los gastos" },
+    {
+      alcance: "GASTOS",
+      titulo: "Borrar todos los gastos",
+      descripcion: "Todos los gastos de contado del local, también los eliminados. Los gastos a crédito y sus deudas se conservan (se borran con «Borrar todas las deudas»).",
+      cantidad: r.gastos,
+      nombre: "gastos de contado",
+      boton: "Borrar todos los gastos",
+    },
+    {
+      alcance: "DEUDAS",
+      titulo: "Borrar todas las deudas",
+      descripcion: "Deudas del negocio (gastos a crédito) con sus cuotas, sus pagos y su gasto de origen. Se pierde el registro de lo que falta por pagar.",
+      cantidad: r.deudas,
+      nombre: "deudas",
+      boton: "Borrar todas las deudas",
+      extra: r.deudasPendientes
+        ? `${r.deudasPendientes} ${r.deudasPendientes === 1 ? "deuda todavía tiene" : "deudas todavía tienen"} saldo pendiente: ${pesos(r.saldoDeudas)} que se perderían.`
+        : undefined,
+    },
     {
       alcance: "CLIENTES",
       titulo: "Borrar los clientes",
@@ -348,7 +377,7 @@ function ZonaPeligro({ r, onBorrar }: { r: Resumen; onBorrar: (s: SolicitudUI) =
       alcance: "TODO",
       titulo: "Borrar TODO el local",
       descripcion:
-        "Ventas, créditos (con cuotas y abonos), gastos, clientes e inventario. NO borra el local, sus usuarios, sectores, marcas, categorías, proveedores ni compras a proveedores.",
+        "Ventas, créditos (con cuotas y abonos), deudas (con cuotas y pagos), gastos, clientes e inventario. NO borra el local, sus usuarios, sectores, marcas, categorías, proveedores ni compras a proveedores.",
       cantidad: todo,
       nombre: "registros",
       boton: "Borrar TODO el local",

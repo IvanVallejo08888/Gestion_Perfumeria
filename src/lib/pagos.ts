@@ -11,12 +11,24 @@ export const MEDIOS_PAGO: { valor: MedioPago; texto: string }[] = [
   { valor: "MIXTO", texto: "Mixto" },
 ];
 
-/** Los gastos no se dividen: se pagan en efectivo o por transferencia. */
-export const MEDIOS_PAGO_GASTO = MEDIOS_PAGO.filter((m) => m.valor !== "MIXTO") as { valor: MedioPagoGasto; texto: string }[];
+/**
+ * Medios de pago de un gasto. Los de contado no se dividen (efectivo o transferencia).
+ * Crédito = gasto a crédito: no sale de la caja ese día; se paga en cuotas (ver src/lib/deudas.ts).
+ */
+export const MEDIOS_PAGO_GASTO: { valor: MedioPagoGasto; texto: string }[] = [
+  { valor: "EFECTIVO", texto: "Efectivo" },
+  { valor: "TRANSFERENCIA", texto: "Transferencia" },
+  { valor: "CREDITO", texto: "Crédito" },
+];
 
 /** "EFECTIVO" → "Efectivo". */
 export function textoMedioPago(medio: MedioPago): string {
   return MEDIOS_PAGO.find((m) => m.valor === medio)?.texto ?? medio;
+}
+
+/** Texto del medio de un gasto: "CREDITO" → "Crédito". */
+export function textoMedioPagoGasto(medio: MedioPagoGasto): string {
+  return MEDIOS_PAGO_GASTO.find((m) => m.valor === medio)?.texto ?? medio;
 }
 
 export interface RepartoPago {

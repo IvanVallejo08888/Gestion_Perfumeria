@@ -1,24 +1,26 @@
 /**
  * Notificaciones del local:
- *  - COBROS: cuotas vencidas, que vencen hoy o en los próximos días.
+ *  - COBROS: cuotas de clientes vencidas, que vencen hoy o en los próximos días.
+ *  - DEUDAS: cuotas de las deudas del negocio (gastos a crédito) vencidas, de hoy o próximas.
+ *    Las deudas pagadas o anuladas nunca avisan.
  *  - INVENTARIO: productos agotados o con stock bajo.
  */
 import "server-only";
 import { and, asc, eq, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { clientes, cuotas, facturas, productos } from "@/db/schema";
-import { fecha, pesos, ZONA_HORARIA } from "@/lib/formato";
+import { clientes, cuotas, deudaCuotas, deudas, facturas, productos } from "@/db/schema";
+import { DIAS_AVISO_PAGO, nivelRecordatorio } from "@/lib/deudas";
+import { fecha, fechaHora, pesos } from "@/lib/formato";
 import type { Notificacion } from "@/tipos";
 
 /** Días de anticipación para avisar de un cobro próximo. */
 export const DIAS_AVISO_COBRO = 3;
 
-const diaColombia = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: ZONA_HORARIA }); // AAAA-MM-DD
+const UN_DIA = 24 * 60 * 60 * 1000;
 
 export async function listarNotificaciones(localId: string): Promise<Notificacion[]> {
   const ahora = new Date();
-  const limite = new Date(ahora.getTime() + DIAS_AVISO_COBRO * 24 * 60 * 60 * 1000);
-  const hoy = diaColombia(ahora);
+  const limite = new Date(ahora.getTime() + DIAS_AVISO_COBRO * UN_DIA);
 
   const cobros = await db
     .select({
@@ -51,8 +53,7 @@ export async function listarNotificaciones(localId: string): Promise<Notificacio
     .orderBy(asc(cuotas.fechaVencimiento));
 
   const notificacionesCobro: Notificacion[] = cobros.map((c) => {
-    const dia = diaColombia(c.fechaVencimiento);
-    const nivel = dia < hoy || (dia === hoy && c.fechaVencimiento < ahora) ? "VENCIDA" : dia === hoy ? "HOY" : "PROXIMA";
+    const nivel = nivelRecordatorio(c.fechaVencimiento, ahora);
     const encabezado = nivel === "VENCIDA" ? "Cobro vencido" : nivel === "HOY" ? "Cobrar hoy" : "Cobro próximo";
     return {
       id: `cuota-${c.id}`,
@@ -62,6 +63,46 @@ export async function listarNotificaciones(localId: string): Promise<Notificacio
       descripcion: `Cuota ${c.numero} de ${c.totalCuotas} · ${pesos(c.pendiente)} · Factura ${c.facturaNumero} · Tel. ${c.clienteTelefono}`,
       fecha: c.fechaVencimiento.toISOString(),
       clienteIdentificacion: c.clienteIdentificacion,
+    };
+  });
+
+  // Pagos de deudas del negocio: solo deudas PENDIENTES y cuotas PENDIENTES (nunca pagadas ni anuladas)
+  const limitePagos = new Date(ahora.getTime() + DIAS_AVISO_PAGO * UN_DIA);
+  const pagos = await db
+    .select({
+      id: deudaCuotas.id,
+      deudaId: deudas.id,
+      numero: deudaCuotas.numero,
+      fechaVencimiento: deudaCuotas.fechaVencimiento,
+      pendiente: sql<number>`(${deudaCuotas.valor} - ${deudaCuotas.valorPagado})::int`,
+      acreedor: deudas.acreedor,
+      totalCuotas: sql<number>`(select count(*)::int from deuda_cuotas c2 where c2.deuda_id = ${deudas.id})`,
+    })
+    .from(deudaCuotas)
+    .innerJoin(deudas, eq(deudaCuotas.deudaId, deudas.id))
+    .where(
+      and(
+        eq(deudas.localId, localId),
+        eq(deudas.estado, "PENDIENTE"),
+        eq(deudaCuotas.estado, "PENDIENTE"),
+        lte(deudaCuotas.fechaVencimiento, limitePagos),
+      ),
+    )
+    .orderBy(asc(deudaCuotas.fechaVencimiento));
+
+  const notificacionesDeuda: Notificacion[] = pagos.map((p) => {
+    const nivel = nivelRecordatorio(p.fechaVencimiento, ahora);
+    const encabezado = nivel === "VENCIDA" ? "Pago vencido" : nivel === "HOY" ? "Pagar hoy" : "Pago próximo";
+    return {
+      id: `deuda-cuota-${p.id}`,
+      tipo: "DEUDA",
+      nivel,
+      titulo: `${encabezado}: ${p.acreedor}`,
+      descripcion: `Cuota ${p.numero} de ${p.totalCuotas} · ${pesos(p.pendiente)} · vence el ${fechaHora(p.fechaVencimiento)}`,
+      fecha: p.fechaVencimiento.toISOString(),
+      deudaId: p.deudaId,
+      acreedor: p.acreedor,
+      valor: p.pendiente,
     };
   });
 
@@ -81,17 +122,57 @@ export async function listarNotificaciones(localId: string): Promise<Notificacio
     fecha: null,
   }));
 
-  return [...notificacionesCobro, ...notificacionesStock];
+  return [...notificacionesCobro, ...notificacionesDeuda, ...notificacionesStock];
 }
 
-/** Resumen para el contador de la campana (se consulta cada minuto). */
+/** Aviso del navegador (y del service worker): uno por tipo, con su propia etiqueta para que no se tapen. */
+export interface AvisoNavegador {
+  /** Distinto para cobros y deudas: un aviso de deuda no reemplaza al de cobro. */
+  etiqueta: "cobro" | "deuda";
+  titulo: string;
+  cuerpo: string;
+  /** Dónde lleva al tocar el aviso. */
+  url: string;
+}
+
+const esUrgente = (n: Notificacion) => n.nivel === "VENCIDA" || n.nivel === "HOY";
+
+/** Resumen para el contador de la campana (se consulta cada minuto). Urgentes = cobros y pagos vencidos o de hoy. */
 export async function contarNotificaciones(localId: string) {
   const lista = await listarNotificaciones(localId);
-  const cobrosUrgentes = lista.filter((n) => n.nivel === "VENCIDA" || n.nivel === "HOY");
+  const urgentes = lista.filter(esUrgente);
+  const cobro = urgentes.find((n) => n.tipo === "COBRO");
+  const deuda = urgentes.find((n) => n.tipo === "DEUDA");
+
+  const avisos: AvisoNavegador[] = [];
+  if (cobro) {
+    avisos.push({
+      etiqueta: "cobro",
+      titulo: "Recordatorio de cobro",
+      cuerpo: `${cobro.titulo} (${fecha(cobro.fecha!)})`,
+      url: "/panel/notificaciones",
+    });
+  }
+  if (deuda) {
+    // "Hoy debes pagar $ 300.000 a Distribuidora Aromas" / "Pago vencido: debes $ … a … desde el …"
+    const valor = pesos(deuda.valor ?? 0);
+    const acreedor = deuda.acreedor ?? "";
+    avisos.push({
+      etiqueta: "deuda",
+      titulo: "Recordatorio de pago",
+      cuerpo:
+        deuda.nivel === "HOY"
+          ? `Hoy debes pagar ${valor} a ${acreedor}`
+          : `Pago vencido: debes ${valor} a ${acreedor} desde el ${fecha(deuda.fecha!)}`,
+      url: `/panel/gastos?pestana=deudas&pagar=${deuda.deudaId}`,
+    });
+  }
+
   return {
     total: lista.length,
-    urgentes: cobrosUrgentes.length,
-    // Texto para la notificación del navegador
-    mensaje: cobrosUrgentes[0] ? `${cobrosUrgentes[0].titulo} (${fecha(cobrosUrgentes[0].fecha!)})` : null,
+    urgentes: urgentes.length,
+    // Se conserva por compatibilidad (pestañas abiertas con la versión anterior): el primer aviso
+    mensaje: avisos[0]?.cuerpo ?? null,
+    avisos,
   };
 }

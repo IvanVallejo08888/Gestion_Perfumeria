@@ -119,14 +119,19 @@ async function redPrimeroSinGuardar(request) {
   }
 }
 
-/* ---------- Toque en una notificación: abre o enfoca /panel/notificaciones ---------- */
+/*
+ * ---------- Toque en una notificación ----------
+ * Abre la dirección que trae el aviso (por ejemplo, la ventana de pago de una deuda) o, si no trae,
+ * /panel/notificaciones. Solo se aceptan direcciones de la propia app (nunca de otro sitio).
+ */
 self.addEventListener("notificationclick", (evento) => {
   evento.notification.close();
-  evento.waitUntil(abrirNotificaciones());
+  evento.waitUntil(abrirNotificaciones(evento.notification.data?.url));
 });
 
-async function abrirNotificaciones() {
-  const destino = new URL(DESTINO_NOTIFICACION, self.location.origin).href;
+async function abrirNotificaciones(url) {
+  let destino = new URL(DESTINO_NOTIFICACION, self.location.origin).href;
+  if (typeof url === "string" && url.startsWith("/panel/")) destino = new URL(url, self.location.origin).href;
   const ventanas = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
 
   const yaAbierta = ventanas.find((ventana) => ventana.url === destino);

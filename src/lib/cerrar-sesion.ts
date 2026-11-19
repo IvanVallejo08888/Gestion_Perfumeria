@@ -8,6 +8,8 @@ import { api } from "./http";
 
 /** Etiqueta de los avisos de cobro: cada aviso reemplaza al anterior en vez de acumularse. */
 export const ETIQUETA_COBRO = "recordatorio-cobro";
+/** Etiqueta de los avisos de pago de deudas (distinta: un aviso de deuda no reemplaza al de cobro). */
+export const ETIQUETA_DEUDA = "recordatorio-deuda";
 
 export async function cerrarSesion() {
   borrarBorradorFactura();
@@ -19,6 +21,9 @@ export async function cerrarSesion() {
 async function cerrarNotificaciones() {
   if (!("serviceWorker" in navigator)) return;
   const registro = await navigator.serviceWorker.getRegistration();
-  const avisos = await registro?.getNotifications({ tag: ETIQUETA_COBRO });
-  avisos?.forEach((aviso) => aviso.close());
+  // Al cerrar sesión se quitan los avisos de cobros y de deudas (el dispositivo puede ser compartido)
+  for (const tag of [ETIQUETA_COBRO, ETIQUETA_DEUDA]) {
+    const avisos = await registro?.getNotifications({ tag });
+    avisos?.forEach((aviso) => aviso.close());
+  }
 }

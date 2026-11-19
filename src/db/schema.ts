@@ -51,8 +51,15 @@ export const estadoCuotaEnum = pgEnum("estado_cuota", ["PENDIENTE", "PAGADA"]);
 /** Cómo se recibió el dinero de una factura o de un abono. MIXTO = parte efectivo, parte transferencia. */
 export const medioPagoEnum = pgEnum("medio_pago", ["EFECTIVO", "TRANSFERENCIA", "MIXTO"]);
 
-/** Cómo se pagó un gasto (los gastos no se dividen entre dos medios). */
-export const medioPagoGastoEnum = pgEnum("medio_pago_gasto", ["EFECTIVO", "TRANSFERENCIA"]);
+/**
+ * Cómo se pagó un gasto (los gastos de contado no se dividen entre dos medios).
+ * CREDITO = el gasto NO sale de la caja ese día: crea una deuda (tabla "deudas") que se paga en cuotas;
+ * el dinero sale de la caja con cada pago (tabla "deuda_pagos"). Un gasto CREDITO nunca suma como gasto.
+ */
+export const medioPagoGastoEnum = pgEnum("medio_pago_gasto", ["EFECTIVO", "TRANSFERENCIA", "CREDITO"]);
+
+/** PENDIENTE = tiene saldo · PAGADA = saldo en 0 · ANULADA = se anuló su gasto de origen. */
+export const estadoDeudaEnum = pgEnum("estado_deuda", ["PENDIENTE", "PAGADA", "ANULADA"]);
 
 /* Clasificación de perfumes (las listas y sus etiquetas están en src/lib/clasificacion.ts) */
 export const tipoProductoEnum = pgEnum("tipo_producto", TIPOS_PRODUCTO);
@@ -509,6 +516,96 @@ export const abonosProveedor = pgTable(
 );
 
 /**
+ * Deuda del negocio (gasto a crédito): a quién se le debe, cuánto y cuánto falta.
+ *  - Nace con un gasto de medio CREDITO (gastoId, uno a uno), en la misma transacción.
+ *  - El saldo baja con cada pago (deuda_pagos); en 0 pasa a PAGADA y se guarda resumenMedioPago.
+ *  - Si se anula su gasto de origen (sin pagos vigentes), pasa a ANULADA.
+ *  - La categoría y si es personal se leen del gasto de origen (que es un snapshot y no se borra
+ *    mientras exista la deuda: la FK es RESTRICT).
+ */
+export const deudas = pgTable(
+  "deudas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    localId: uuid("local_id")
+      .notNull()
+      .references(() => locales.id, { onDelete: "cascade" }),
+    gastoId: uuid("gasto_id")
+      .notNull()
+      .references(() => gastos.id, { onDelete: "restrict" }),
+    /** A quién se le debe ("Distribuidora Aromas"). */
+    acreedor: text("acreedor").notNull(),
+    descripcion: text("descripcion"),
+    valorTotal: integer("valor_total").notNull(),
+    saldo: integer("saldo").notNull(),
+    estado: estadoDeudaEnum("estado").notNull().default("PENDIENTE"),
+    pagadaEn: timestamp("pagada_en", { withTimezone: true }),
+    /** Cómo se pagó en total (se calcula al quedar PAGADA): todo efectivo, todo transferencia o mixto. */
+    resumenMedioPago: medioPagoEnum("resumen_medio_pago"),
+    creadoPorId: uuid("creado_por_id").references(() => usuarios.id, { onDelete: "set null" }),
+    creadoPorNombre: text("creado_por_nombre").notNull(),
+    creadoEn: creadoEn(),
+    anuladaEn: timestamp("anulada_en", { withTimezone: true }),
+    anuladaPorId: uuid("anulada_por_id").references(() => usuarios.id, { onDelete: "set null" }),
+    anuladaPorNombre: text("anulada_por_nombre"),
+    motivoAnulacion: text("motivo_anulacion"),
+  },
+  (t) => [uniqueIndex("deudas_gasto_uq").on(t.gastoId), index("deudas_local_estado_idx").on(t.localId, t.estado)],
+);
+
+/** Plan de pagos de una deuda: fecha y valor de cada cuota (las fechas son los recordatorios de pago). */
+export const deudaCuotas = pgTable(
+  "deuda_cuotas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    deudaId: uuid("deuda_id")
+      .notNull()
+      .references(() => deudas.id, { onDelete: "cascade" }),
+    numero: integer("numero").notNull(),
+    fechaVencimiento: timestamp("fecha_vencimiento", { withTimezone: true }).notNull(),
+    valor: integer("valor").notNull(),
+    valorPagado: integer("valor_pagado").notNull().default(0),
+    estado: estadoCuotaEnum("estado").notNull().default("PENDIENTE"),
+    pagadaEn: timestamp("pagada_en", { withTimezone: true }),
+  },
+  (t) => [index("deuda_cuotas_deuda_idx").on(t.deudaId), index("deuda_cuotas_estado_fecha_idx").on(t.estado, t.fechaVencimiento)],
+);
+
+/**
+ * Pagos (abonos) a una deuda. Cada pago SALE de la caja del día "fecha", con su medio.
+ * Un pago anulado se conserva (con motivo) pero no cuenta en caja, gastos ni utilidad.
+ */
+export const deudaPagos = pgTable(
+  "deuda_pagos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    deudaId: uuid("deuda_id")
+      .notNull()
+      .references(() => deudas.id, { onDelete: "cascade" }),
+    /** Copia del local de la deuda: permite calcular la caja del día sin unir tablas. */
+    localId: uuid("local_id")
+      .notNull()
+      .references(() => locales.id, { onDelete: "cascade" }),
+    /** Fecha y hora del pago (por defecto, ahora; puede ser anterior para un pago olvidado). */
+    fecha: timestamp("fecha", { withTimezone: true }).notNull().defaultNow(),
+    valor: integer("valor").notNull(),
+    medioPago: medioPagoEnum("medio_pago").notNull(),
+    valorEfectivo: integer("valor_efectivo").notNull().default(0),
+    valorTransferencia: integer("valor_transferencia").notNull().default(0),
+    nota: text("nota"),
+    usuarioId: uuid("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
+    usuarioNombre: text("usuario_nombre").notNull(),
+    creadoEn: creadoEn(),
+    anulado: boolean("anulado").notNull().default(false),
+    anuladoEn: timestamp("anulado_en", { withTimezone: true }),
+    anuladoPorId: uuid("anulado_por_id").references(() => usuarios.id, { onDelete: "set null" }),
+    anuladoPorNombre: text("anulado_por_nombre"),
+    motivoAnulacion: text("motivo_anulacion"),
+  },
+  (t) => [index("deuda_pagos_deuda_idx").on(t.deudaId), index("deuda_pagos_local_fecha_idx").on(t.localId, t.fecha)],
+);
+
+/**
  * Registro de auditoría de la "Limpieza del sistema": quién borró qué, cuándo y cuánto.
  * Se escribe en la MISMA transacción que el borrado (o se guardan los dos, o ninguno).
  * La app NO tiene forma de borrar este historial. Si luego se elimina el local o el administrador,
@@ -536,6 +633,20 @@ export const limpiezas = pgTable(
   },
   (t) => [index("limpiezas_local_fecha_idx").on(t.localId, t.creadoEn)],
 );
+
+/**
+ * Límite de intentos (protección contra ataques de fuerza bruta y registros masivos).
+ * Cada fila es un contador: "login:id:<identificación>", "login:ip:<ip>", "registro:ip:<ip>"...
+ * Se guarda en la base de datos (y no en memoria) para que funcione con varios servidores.
+ */
+export const limiteIntentos = pgTable("limite_intentos", {
+  clave: text("clave").primaryKey(),
+  intentos: integer("intentos").notNull().default(0),
+  /** Inicio de la ventana de tiempo en la que se cuentan los intentos. */
+  desde: timestamp("desde", { withTimezone: true }).notNull().defaultNow(),
+  /** Mientras esta fecha no pase, la acción está bloqueada para esa clave. */
+  bloqueadoHasta: timestamp("bloqueado_hasta", { withTimezone: true }),
+});
 
 /* ------------------------------ Relaciones ------------------------------ */
 /* Permiten consultas anidadas con db.query.<tabla>.findMany({ with: {...} }) */
@@ -567,6 +678,21 @@ export const categoriasGastoRelations = relations(categoriasGasto, ({ one }) => 
 export const gastosRelations = relations(gastos, ({ one }) => ({
   local: one(locales, { fields: [gastos.localId], references: [locales.id] }),
   categoria: one(categoriasGasto, { fields: [gastos.categoriaId], references: [categoriasGasto.id] }),
+}));
+
+export const deudasRelations = relations(deudas, ({ one, many }) => ({
+  local: one(locales, { fields: [deudas.localId], references: [locales.id] }),
+  gasto: one(gastos, { fields: [deudas.gastoId], references: [gastos.id] }),
+  cuotas: many(deudaCuotas),
+  pagos: many(deudaPagos),
+}));
+
+export const deudaCuotasRelations = relations(deudaCuotas, ({ one }) => ({
+  deuda: one(deudas, { fields: [deudaCuotas.deudaId], references: [deudas.id] }),
+}));
+
+export const deudaPagosRelations = relations(deudaPagos, ({ one }) => ({
+  deuda: one(deudas, { fields: [deudaPagos.deudaId], references: [deudas.id] }),
 }));
 
 export const usuariosRelations = relations(usuarios, ({ one }) => ({
@@ -626,3 +752,6 @@ export type MovimientoInventarioFila = typeof movimientosInventario.$inferSelect
 export type ProveedorFila = typeof proveedores.$inferSelect;
 export type CompraMercancia = typeof comprasMercancia.$inferSelect;
 export type AbonoProveedor = typeof abonosProveedor.$inferSelect;
+export type DeudaFilaBD = typeof deudas.$inferSelect;
+export type DeudaCuotaBD = typeof deudaCuotas.$inferSelect;
+export type DeudaPagoBD = typeof deudaPagos.$inferSelect;
