@@ -7,7 +7,10 @@
  *  - Total recaudado = contado + abonos (el dinero que realmente entró).
  *  - Recibido en efectivo / transferencia = ese mismo dinero, separado por medio de pago.
  *  - Gastos: se agrupan por el día del gasto (no por el día en que se registró).
- *  - Gastos personales (de la dueña): se informan aparte y NO se restan.
+ *  - Regla de las deudas (gastos a crédito): gastos del mes = gastos de CONTADO + PAGOS de deudas hechos
+ *    en el mes (por la fecha del pago). El valor total de una deuda nunca se suma como gasto: se informa
+ *    aparte como "deudas adquiridas" (por el día del gasto) y el saldo de hoy como "deudas por pagar".
+ *  - Gastos personales (de la dueña): se informan aparte y NO se restan (tampoco los pagos de sus deudas).
  *  - Utilidad = total recaudado − gastos del negocio.
  *
  * Nada de lo anulado cuenta: ni las ventas eliminadas (con sus ítems y abonos) ni los gastos eliminados.
@@ -18,6 +21,7 @@ import { db } from "@/db";
 import { abonos, facturaItems, facturas, gastos } from "@/db/schema";
 import { anioMesColombia, MESES, rangoDias, rangoPeriodo } from "@/lib/formato";
 import { calcularUtilidad } from "@/lib/gastos";
+import { deudasPorPagarHoy, pagosDeudasEnRango } from "./deudas";
 import type { Estadisticas, MesEstadistica } from "@/tipos";
 import { obtenerLocal } from "./locales";
 
@@ -33,7 +37,7 @@ export async function obtenerEstadisticas(localId: string, anio: number): Promis
 
   const dias = rangoDias(anio);
 
-  const [listaFacturas, listaAbonos, listaGastos, topProductos, [pendientes]] = await Promise.all([
+  const [listaFacturas, listaAbonos, listaGastos, topProductos, [pendientes], listaPagosDeudas, deudasPorPagar] = await Promise.all([
     db
       .select({
         tipo: facturas.tipo,
@@ -63,7 +67,7 @@ export async function obtenerEstadisticas(localId: string, anio: number): Promis
         ),
       ),
     db
-      .select({ valor: gastos.valor, fecha: gastos.fecha, personal: gastos.personal })
+      .select({ valor: gastos.valor, fecha: gastos.fecha, personal: gastos.personal, medioPago: gastos.medioPago })
       .from(gastos)
       .where(
         and(eq(gastos.localId, localId), eq(gastos.anulado, false), gte(gastos.fecha, dias.desde), lt(gastos.fecha, dias.hasta)),
@@ -91,6 +95,8 @@ export async function obtenerEstadisticas(localId: string, anio: number): Promis
           eq(facturas.estado, "PENDIENTE"),
         ),
       ),
+    pagosDeudasEnRango(localId, inicio, fin),
+    deudasPorPagarHoy(localId),
   ]);
 
   // 12 meses vacíos que se van llenando
@@ -107,6 +113,8 @@ export async function obtenerEstadisticas(localId: string, anio: number): Promis
     recibidoEfectivo: 0,
     recibidoTransferencia: 0,
     gastos: 0,
+    pagosDeudas: 0,
+    deudasAdquiridas: 0,
     gastosPersonales: 0,
     utilidad: 0,
   }));
@@ -132,8 +140,22 @@ export async function obtenerEstadisticas(localId: string, anio: number): Promis
   // La fecha del gasto es "AAAA-MM-DD": el mes se lee directamente del texto
   for (const g of listaGastos) {
     const m = meses[Number(g.fecha.slice(5, 7)) - 1];
+    // Gasto a crédito: ese día no salió dinero. Solo se informa como deuda adquirida.
+    if (g.medioPago === "CREDITO") {
+      if (!g.personal) m.deudasAdquiridas += g.valor;
+      continue;
+    }
     if (g.personal) m.gastosPersonales += g.valor;
     else m.gastos += g.valor;
+  }
+  // Pagos de deudas: el dinero salió el día del pago (hora de Colombia)
+  for (const p of listaPagosDeudas) {
+    const m = meses[anioMesColombia(p.fecha).mes - 1];
+    if (p.personal) m.gastosPersonales += p.valor;
+    else {
+      m.gastos += p.valor;
+      m.pagosDeudas += p.valor;
+    }
   }
   for (const m of meses) {
     m.totalVentas = m.ventasContado + m.ventasCredito;
@@ -158,10 +180,13 @@ export async function obtenerEstadisticas(localId: string, anio: number): Promis
       recibidoEfectivo: sumar("recibidoEfectivo"),
       recibidoTransferencia: sumar("recibidoTransferencia"),
       gastos: sumar("gastos"),
+      pagosDeudas: sumar("pagosDeudas"),
+      deudasAdquiridas: sumar("deudasAdquiridas"),
       gastosPersonales: sumar("gastosPersonales"),
       utilidad: sumar("utilidad"),
     },
     topProductos,
     creditosPendientes: pendientes ?? { cantidad: 0, saldo: 0 },
+    deudasPorPagar,
   };
 }

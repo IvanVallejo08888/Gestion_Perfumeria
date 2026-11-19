@@ -14,9 +14,10 @@ import { and, asc, desc, eq, gte, lt, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { categoriasGasto, gastos } from "@/db/schema";
 import { ApiError, type VendedorSesion } from "@/lib/api";
-import { hoyColombia, rangoDias } from "@/lib/formato";
-import { NOMBRE_CATEGORIA_PERSONAL } from "@/lib/gastos";
-import type { GastoFila, ListaGastos, MedioPagoGasto } from "@/tipos";
+import { hoyColombia, rangoDias, rangoPeriodo } from "@/lib/formato";
+import { NOMBRE_CATEGORIA_PERSONAL, totalesGastos } from "@/lib/gastos";
+import type { GastoDeudaInfo, GastoFila, ListaGastos, MedioPagoGasto } from "@/tipos";
+import { anularDeudaDeGasto, crearDeudaEnTx, deudasDeGastos, pagosDeudasEnRango } from "./deudas";
 import { obtenerLocal } from "./locales";
 import { clasificarNombres, ordenarPorNombre } from "./sectores";
 
@@ -84,9 +85,20 @@ export interface DatosGasto {
   medioPago: MedioPagoGasto;
   fecha: string;
   descripcion?: string;
+  /** Solo en CREDITO: a quién se le debe. */
+  acreedor?: string;
+  /** Solo en CREDITO: plan de pagos (fecha y valor de cada cuota). */
+  cuotas?: { fechaVencimiento: string; valor: number }[];
 }
 
-export async function crearGasto(vendedor: VendedorSesion, datos: DatosGasto) {
+/**
+ * Registra un gasto.
+ *  - De contado (efectivo o transferencia): sale de la caja el día del gasto.
+ *  - A crédito: en UNA transacción se crean el gasto (medio CREDITO), la deuda y sus cuotas.
+ *    Ese día no sale dinero; sale con cada pago a la deuda.
+ * Devuelve el id de la deuda cuando el gasto es a crédito.
+ */
+export async function crearGasto(vendedor: VendedorSesion, datos: DatosGasto): Promise<{ deudaId: string | null }> {
   if (datos.fecha > hoyColombia()) throw new ApiError(400, "La fecha del gasto no puede ser futura.");
 
   const categoria = await db.query.categoriasGasto.findFirst({
@@ -98,7 +110,7 @@ export async function crearGasto(vendedor: VendedorSesion, datos: DatosGasto) {
   });
   if (!categoria) throw new ApiError(400, "La categoría elegida no existe o está desactivada en este local.");
 
-  await db.insert(gastos).values({
+  const fila = {
     localId: vendedor.localId,
     usuarioId: vendedor.id,
     usuarioNombre: vendedor.nombre,
@@ -109,11 +121,26 @@ export async function crearGasto(vendedor: VendedorSesion, datos: DatosGasto) {
     valor: datos.valor,
     medioPago: datos.medioPago,
     fecha: datos.fecha,
+  };
+
+  if (datos.medioPago !== "CREDITO") {
+    await db.insert(gastos).values(fila);
+    return { deudaId: null };
+  }
+
+  return db.transaction(async (tx) => {
+    const [gasto] = await tx.insert(gastos).values(fila).returning({ id: gastos.id, valor: gastos.valor });
+    const deudaId = await crearDeudaEnTx(tx, vendedor, gasto, {
+      acreedor: datos.acreedor ?? "",
+      descripcion: datos.descripcion,
+      cuotas: datos.cuotas ?? [],
+    });
+    return { deudaId };
   });
 }
 
 /** Convierte una fila de la tabla en el formato que recibe la pantalla. */
-function aFila(g: typeof gastos.$inferSelect): GastoFila {
+function aFila(g: typeof gastos.$inferSelect, deuda: GastoDeudaInfo | null = null): GastoFila {
   return {
     id: g.id,
     categoriaNombre: g.categoriaNombre,
@@ -127,43 +154,43 @@ function aFila(g: typeof gastos.$inferSelect): GastoFila {
     anuladoEn: g.anuladoEn?.toISOString() ?? null,
     anuladoPorNombre: g.anuladoPorNombre,
     motivoAnulacion: g.motivoAnulacion,
+    deuda,
   };
 }
 
 /**
  * Gastos de un local en un periodo.
  *  - Por defecto devuelve los gastos vigentes; con estado "eliminados", solo los anulados.
- *  - Los totales (del mes y por medio de pago) SIEMPRE se calculan en SQL con los gastos
- *    vigentes: un gasto eliminado nunca suma, aunque se esté viendo el filtro "Eliminados".
+ *  - Los totales SIEMPRE son de lo vigente (un gasto eliminado o un pago anulado nunca suman) y siguen
+ *    la regla contable de las deudas (totalesGastos en src/lib/gastos.ts):
+ *    total = gastos de contado + pagos de deudas hechos en el periodo; un gasto a crédito no suma.
+ *  - El filtro de categoría también filtra los pagos de deudas (por la categoría de su gasto de origen).
  */
 export async function listarGastos(
   localId: string,
   filtros: { anio: number; mes?: number; categoriaId?: string; estado?: "eliminados" },
 ): Promise<ListaGastos> {
   const { desde, hasta } = rangoDias(filtros.anio, filtros.mes);
+  const { inicio, fin } = rangoPeriodo(filtros.anio, filtros.mes);
   const base: SQL[] = [eq(gastos.localId, localId), gte(gastos.fecha, desde), lt(gastos.fecha, hasta)];
   if (filtros.categoriaId) base.push(eq(gastos.categoriaId, filtros.categoriaId));
   const verEliminados = filtros.estado === "eliminados";
 
-  const [filas, [totales]] = await Promise.all([
+  const [filas, vigentes, pagos] = await Promise.all([
     db
       .select()
       .from(gastos)
       .where(and(...base, eq(gastos.anulado, verEliminados)))
       .orderBy(verEliminados ? desc(gastos.anuladoEn) : desc(gastos.fecha), desc(gastos.creadoEn)),
     db
-      .select({
-        // Los gastos personales (de la dueña) van aparte: no entran en el total del negocio
-        total: sql<number>`coalesce(sum(${gastos.valor}) filter (where not ${gastos.personal}), 0)::int`,
-        totalEfectivo: sql<number>`coalesce(sum(${gastos.valor}) filter (where not ${gastos.personal} and ${gastos.medioPago} = 'EFECTIVO'), 0)::int`,
-        totalTransferencia: sql<number>`coalesce(sum(${gastos.valor}) filter (where not ${gastos.personal} and ${gastos.medioPago} = 'TRANSFERENCIA'), 0)::int`,
-        totalPersonales: sql<number>`coalesce(sum(${gastos.valor}) filter (where ${gastos.personal}), 0)::int`,
-      })
+      .select({ valor: gastos.valor, personal: gastos.personal, medioPago: gastos.medioPago })
       .from(gastos)
       .where(and(...base, eq(gastos.anulado, false))),
+    pagosDeudasEnRango(localId, inicio, fin, { categoriaId: filtros.categoriaId }),
   ]);
 
-  return { gastos: filas.map(aFila), ...totales };
+  const deudasPorGasto = await deudasDeGastos(filas.filter((g) => g.medioPago === "CREDITO").map((g) => g.id));
+  return { gastos: filas.map((g) => aFila(g, deudasPorGasto.get(g.id) ?? null)), ...totalesGastos(vigentes, pagos) };
 }
 
 /**
@@ -172,6 +199,8 @@ export async function listarGastos(
  *    El administrador envía null y puede anular gastos de cualquier local.
  *  - La actualización solo aplica si el gasto sigue vigente: si dos personas lo eliminan
  *    a la vez, solo una lo logra y la otra recibe "Este gasto ya fue eliminado".
+ *  - Gasto a crédito: en la MISMA transacción se anula su deuda, pero solo si no tiene pagos vigentes
+ *    (si tiene, se rechaza y se pide anular antes cada pago; ver anularDeudaDeGasto).
  */
 export async function anularGasto(
   usuario: { id: string; nombre: string },
@@ -184,13 +213,19 @@ export async function anularGasto(
   if (!gasto) throw new ApiError(404, "El gasto no existe.");
   if (gasto.anulado) throw new ApiError(409, "Este gasto ya fue eliminado.");
 
-  const [anulado] = await db
-    .update(gastos)
-    .set({ anulado: true, anuladoEn: new Date(), anuladoPorId: usuario.id, anuladoPorNombre: usuario.nombre, motivoAnulacion: motivo })
-    .where(and(eq(gastos.id, gastoId), eq(gastos.anulado, false), delLocal))
-    .returning();
-  if (!anulado) throw new ApiError(409, "Este gasto ya fue eliminado.");
-  return aFila(anulado);
+  const anulado = await db.transaction(async (tx) => {
+    // Primero la deuda (la bloquea): un pago que llegue al mismo tiempo espera y luego ve la deuda anulada
+    if (gasto.medioPago === "CREDITO") await anularDeudaDeGasto(tx, gastoId, usuario, motivo);
+    const [fila] = await tx
+      .update(gastos)
+      .set({ anulado: true, anuladoEn: new Date(), anuladoPorId: usuario.id, anuladoPorNombre: usuario.nombre, motivoAnulacion: motivo })
+      .where(and(eq(gastos.id, gastoId), eq(gastos.anulado, false), delLocal))
+      .returning();
+    if (!fila) throw new ApiError(409, "Este gasto ya fue eliminado.");
+    return fila;
+  });
+  const deuda = (await deudasDeGastos([gastoId])).get(gastoId) ?? null;
+  return aFila(anulado, deuda);
 }
 
 /**

@@ -1,6 +1,8 @@
 /**
  * Notificaciones del local:
  *  - Recordatorios de cobro según las fechas de las cuotas (vencidos, hoy y próximos 3 días).
+ *  - Pagos de deudas del negocio (gastos a crédito): vencidos, de hoy y próximos 3 días,
+ *    con «Ir a pagar», que abre directamente la ventana de pago de esa deuda.
  *  - Productos agotados o con poco stock.
  * Se actualizan solas cada minuto.
  */
@@ -23,19 +25,23 @@ const NIVEL: Record<Notificacion["nivel"], { texto: string; tono: "peligro" | "a
   STOCK_BAJO: { texto: "Stock bajo", tono: "alerta" },
 };
 
+/** En las deudas el nivel se dice como un pago («Vencido», «Pagar hoy», «Próximo»). */
+const NIVEL_DEUDA: Partial<Record<Notificacion["nivel"], string>> = { VENCIDA: "Vencido", HOY: "Pagar hoy", PROXIMA: "Próximo" };
+
 export default function PaginaNotificaciones() {
   const { datos, error, recargar: cargar } = useConsulta<{ notificaciones: Notificacion[] }>("/api/notificaciones");
   const lista = datos?.notificaciones ?? null;
   useIntervalo(cargar, 60_000);
 
   const cobros = lista?.filter((n) => n.tipo === "COBRO") ?? [];
+  const deudas = lista?.filter((n) => n.tipo === "DEUDA") ?? [];
   const stock = lista?.filter((n) => n.tipo === "STOCK") ?? [];
 
   return (
     <>
       <EncabezadoPagina
         titulo="Notificaciones"
-        descripcion="Recordatorios de cobro y avisos de inventario."
+        descripcion="Recordatorios de cobro, pagos de deudas y avisos de inventario."
         acciones={
           <Boton variante="secundario" icono="historial" onClick={cargar}>
             Actualizar
@@ -53,14 +59,14 @@ export default function PaginaNotificaciones() {
         <Cargando />
       ) : lista.length === 0 ? (
         <Vacio icono="campana" titulo="No tienes notificaciones">
-          Aquí verás los cobros pendientes y los productos que se están agotando.
+          Aquí verás los cobros pendientes, los pagos de tus deudas y los productos que se están agotando.
         </Vacio>
       ) : (
         <div className="space-y-8">
           <section aria-labelledby="titulo-cobros">
             <h2 id="titulo-cobros" className="mb-3 flex items-center gap-2 text-2xl font-bold">
               <Icono nombre="dinero" className="size-7 text-acento" />
-              Cobros ({cobros.length})
+              Cobros a clientes ({cobros.length})
             </h2>
             {cobros.length === 0 ? (
               <p className="text-lg text-texto-suave">No hay cobros para los próximos días.</p>
@@ -88,6 +94,48 @@ export default function PaginaNotificaciones() {
                         >
                           <Icono nombre="dinero" />
                           Ir a cobrar
+                        </Link>
+                      )}
+                    </article>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section aria-labelledby="titulo-deudas">
+            <h2 id="titulo-deudas" className="mb-3 flex items-center gap-2 text-2xl font-bold">
+              <Icono nombre="credito" className="size-7 text-info-700" />
+              Pagos de deudas ({deudas.length})
+            </h2>
+            {deudas.length === 0 ? (
+              <p className="text-lg text-texto-suave">No hay pagos de deudas para los próximos días.</p>
+            ) : (
+              <ul className="space-y-3">
+                {deudas.map((n) => (
+                  <li key={n.id}>
+                    {/* Las deudas llevan una franja de color propia (a la izquierda) para distinguirlas de los cobros */}
+                    <article
+                      className={`flex flex-col gap-3 rounded-2xl border-2 border-l-[10px] bg-tarjeta p-4 sm:flex-row sm:items-center sm:justify-between ${
+                        n.nivel === "VENCIDA" ? "border-peligro-700" : n.nivel === "HOY" ? "border-alerta-700" : "border-info-700"
+                      }`}
+                    >
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Insignia tono="info">Pago de deuda</Insignia>
+                          <Insignia tono={NIVEL[n.nivel].tono}>{NIVEL_DEUDA[n.nivel] ?? NIVEL[n.nivel].texto}</Insignia>
+                          {n.fecha && <span className="text-lg font-bold">{fechaHora(n.fecha)}</span>}
+                        </div>
+                        <h3 className="mt-1 text-xl font-bold">{n.titulo}</h3>
+                        <p className="text-lg text-texto-suave">{n.descripcion}</p>
+                      </div>
+                      {n.deudaId && (
+                        <Link
+                          href={`/panel/gastos?pestana=deudas&pagar=${n.deudaId}`}
+                          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-exito-700 px-5 text-lg font-bold text-white hover:bg-exito-800"
+                        >
+                          <Icono nombre="dinero" />
+                          Ir a pagar
                         </Link>
                       )}
                     </article>

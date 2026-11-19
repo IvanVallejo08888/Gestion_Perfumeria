@@ -56,11 +56,22 @@ export function lineasConteos(c: ConteosLimpieza) {
     );
   if (c.gastos.cantidad)
     borrar.push(`${de(c.gastos.cantidad, "gasto", "gastos")} por ${pesos(c.gastos.valor)}${c.gastos.eliminados ? ` (incluye ${de(c.gastos.eliminados, "eliminado", "eliminados")})` : ""}`);
+  // Las limpiezas anteriores a las deudas no tienen estos campos (historial): se tratan como 0
+  if (c.deudas?.cantidad) {
+    borrar.push(
+      `${de(c.deudas.cantidad, "deuda", "deudas")} por ${pesos(c.deudas.valor)}, con ${de(c.cuotasDeuda ?? 0, "cuota", "cuotas")} y ${de(c.pagosDeuda?.cantidad ?? 0, "pago", "pagos")} (${pesos(c.pagosDeuda?.valor ?? 0)})`,
+    );
+    if (c.deudas.conSaldo) {
+      borrar.push(`⚠ ${de(c.deudas.conSaldo, "deuda todavía tiene", "deudas todavía tienen")} saldo pendiente: se pierde el registro de ${pesos(c.deudas.saldo)} por pagar`);
+    }
+  }
   if (c.clientes.cantidad) borrar.push(de(c.clientes.cantidad, "cliente", "clientes"));
   if (c.productos.cantidad)
     borrar.push(`${de(c.productos.cantidad, "producto", "productos")} del inventario y ${de(c.productos.movimientos, "movimiento", "movimientos")} de stock`);
   if (c.conservados.creditos || c.conservados.abonos)
     conservar.push(`${de(c.conservados.creditos, "crédito", "créditos")} y ${de(c.conservados.abonos, "abono", "abonos")} de ese periodo (los créditos nunca se tocan aquí)`);
+  if (c.conservados.deudas || c.conservados.pagosDeuda)
+    conservar.push(`${de(c.conservados.deudas ?? 0, "deuda", "deudas")} y ${de(c.conservados.pagosDeuda ?? 0, "pago de deuda", "pagos de deudas")} de ese periodo (las deudas nunca se tocan aquí)`);
   if (c.clientes.conservados) conservar.push(de(c.clientes.conservados, "cliente", "clientes"));
   return { borrar, conservar };
 }

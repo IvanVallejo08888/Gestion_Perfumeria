@@ -8,25 +8,28 @@ import { anioMesColombia, MESES, rangoDias, rangoPeriodo } from "./formato";
 
 /**
  * Qué se borra:
- *  - PERIODO:    ventas de contado (incluidas las anuladas) y gastos de los meses elegidos.
+ *  - PERIODO:    ventas de contado (incluidas las anuladas) y gastos de CONTADO de los meses elegidos
+ *                (las deudas, sus pagos y sus gastos de origen se conservan, igual que los créditos).
  *  - VENTAS:     todas las ventas de contado con sus productos vendidos.
  *  - CREDITOS:   todos los créditos con sus cuotas y abonos.
- *  - GASTOS:     todos los gastos.
+ *  - GASTOS:     todos los gastos de contado (los de origen de una deuda se conservan).
  *  - CLIENTES:   los clientes SIN ventas ni créditos (los demás se conservan).
  *  - INVENTARIO: todos los productos (las facturas conservan el nombre).
- *  - TODO:       ventas, créditos, gastos, clientes e inventario.
+ *  - TODO:       ventas, créditos, deudas, gastos, clientes e inventario.
+ *  - DEUDAS:     todas las deudas (cuotas y pagos) y sus gastos de origen.
  */
-export const ALCANCES_LIMPIEZA = ["PERIODO", "VENTAS", "CREDITOS", "GASTOS", "CLIENTES", "INVENTARIO", "TODO"] as const;
+export const ALCANCES_LIMPIEZA = ["PERIODO", "VENTAS", "CREDITOS", "GASTOS", "CLIENTES", "INVENTARIO", "TODO", "DEUDAS"] as const;
 export type AlcanceLimpieza = (typeof ALCANCES_LIMPIEZA)[number];
 
 export const ETIQUETA_ALCANCE: Record<AlcanceLimpieza, string> = {
-  PERIODO: "Ventas de contado y gastos del periodo",
+  PERIODO: "Ventas de contado y gastos de contado del periodo",
   VENTAS: "Todas las ventas de contado",
   CREDITOS: "Todos los créditos",
-  GASTOS: "Todos los gastos",
+  GASTOS: "Todos los gastos de contado",
   CLIENTES: "Clientes sin ventas ni créditos",
   INVENTARIO: "Todo el inventario",
   TODO: "Todo el local",
+  DEUDAS: "Todas las deudas",
 };
 
 /** Segundos mínimos entre dos limpiezas del mismo local (evita doble clic y reintentos). */
@@ -100,13 +103,20 @@ export interface ConteosLimpieza {
   gastos: { cantidad: number; valor: number; eliminados: number };
   clientes: { cantidad: number; conservados: number };
   productos: { cantidad: number; movimientos: number };
+  /*
+   * Deudas del negocio (gastos a crédito). Son opcionales solo al LEER: las limpiezas registradas antes de
+   * existir las deudas guardaron sus conteos sin estos campos (el historial debe seguir mostrándose).
+   */
+  deudas?: { cantidad: number; valor: number; conSaldo: number; saldo: number };
+  cuotasDeuda?: number;
+  pagosDeuda?: { cantidad: number; valor: number };
   /** Lo que se CONSERVA aunque sea del periodo (para dejarlo claro en la vista previa). */
-  conservados: { creditos: number; abonos: number };
+  conservados: { creditos: number; abonos: number; deudas?: number; pagosDeuda?: number };
 }
 
 /** ¿Hay algo que borrar? */
 export function hayAlgoQueBorrar(c: ConteosLimpieza): boolean {
-  return c.ventas.cantidad + c.creditos.cantidad + c.gastos.cantidad + c.clientes.cantidad + c.productos.cantidad > 0;
+  return c.ventas.cantidad + c.creditos.cantidad + c.gastos.cantidad + (c.deudas?.cantidad ?? 0) + c.clientes.cantidad + c.productos.cantidad > 0;
 }
 
 /** "3 ventas, 2 gastos y 5 clientes" (solo lo que tiene registros). */
@@ -115,6 +125,7 @@ export function describirConteos(c: ConteosLimpieza): string {
     [c.ventas.cantidad, "venta", "ventas"],
     [c.creditos.cantidad, "crédito", "créditos"],
     [c.gastos.cantidad, "gasto", "gastos"],
+    [c.deudas?.cantidad ?? 0, "deuda", "deudas"],
     [c.clientes.cantidad, "cliente", "clientes"],
     [c.productos.cantidad, "producto", "productos"],
   ]

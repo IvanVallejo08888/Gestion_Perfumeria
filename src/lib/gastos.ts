@@ -10,22 +10,37 @@ export const NOMBRE_CATEGORIA_PERSONAL = "Gastos personales";
 interface GastoBase {
   valor: number;
   personal: boolean;
-  medioPago: "EFECTIVO" | "TRANSFERENCIA";
+  medioPago: "EFECTIVO" | "TRANSFERENCIA" | "CREDITO";
+}
+
+/** Pago de una deuda (dinero que SÍ salió de la caja), con la categoría personal de su gasto de origen. */
+interface PagoDeudaBase {
+  valorEfectivo: number;
+  valorTransferencia: number;
+  personal: boolean;
 }
 
 export interface TotalesGastosCalculados {
-  /** Gastos del negocio (los que se restan de la utilidad). */
+  /** Gastos del negocio (los que se restan de la utilidad) = contado + pagos de deudas. */
   total: number;
   totalEfectivo: number;
   totalTransferencia: number;
-  /** Gastos personales (no se restan de la utilidad). */
+  /** Gastos personales (no se restan de la utilidad), también los pagos de deudas personales. */
   totalPersonales: number;
+  /** Parte de "total" que son pagos de deudas del negocio. */
+  totalPagosDeudas: number;
 }
 
-/** Suma los gastos separando los del negocio de los personales. */
-export function totalesGastos(lista: GastoBase[]): TotalesGastosCalculados {
-  const totales: TotalesGastosCalculados = { total: 0, totalEfectivo: 0, totalTransferencia: 0, totalPersonales: 0 };
+/**
+ * Suma los gastos de un periodo con la regla contable de las deudas:
+ *  - los gastos a CRÉDITO no suman (ese día no sale dinero: solo nace la deuda);
+ *  - los pagos de deudas del periodo SÍ suman, con su efectivo y su transferencia;
+ *  - lo personal (de la dueña) va aparte.
+ */
+export function totalesGastos(lista: GastoBase[], pagosDeudas: PagoDeudaBase[] = []): TotalesGastosCalculados {
+  const totales: TotalesGastosCalculados = { total: 0, totalEfectivo: 0, totalTransferencia: 0, totalPersonales: 0, totalPagosDeudas: 0 };
   for (const g of lista) {
+    if (g.medioPago === "CREDITO") continue;
     if (g.personal) {
       totales.totalPersonales += g.valor;
       continue;
@@ -33,6 +48,17 @@ export function totalesGastos(lista: GastoBase[]): TotalesGastosCalculados {
     totales.total += g.valor;
     if (g.medioPago === "EFECTIVO") totales.totalEfectivo += g.valor;
     else totales.totalTransferencia += g.valor;
+  }
+  for (const p of pagosDeudas) {
+    const valor = p.valorEfectivo + p.valorTransferencia;
+    if (p.personal) {
+      totales.totalPersonales += valor;
+      continue;
+    }
+    totales.total += valor;
+    totales.totalPagosDeudas += valor;
+    totales.totalEfectivo += p.valorEfectivo;
+    totales.totalTransferencia += p.valorTransferencia;
   }
   return totales;
 }

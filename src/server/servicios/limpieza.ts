@@ -8,25 +8,33 @@
  *  3. Ejecución: exige la contraseña del administrador, el texto "BORRAR <LOCAL>" y la huella del
  *     respaldo. Dentro de UNA transacción: bloquea el local (FOR UPDATE), rechaza si hubo otra limpieza
  *     hace menos de 30 s, vuelve a contar y, si algo cambió desde el respaldo, NO borra nada.
- *     Borra en orden (facturas → gastos → clientes → productos) y escribe el registro de auditoría
+ *     Borra en orden (facturas → deudas → gastos → clientes → productos) y escribe el registro de auditoría
  *     en la misma transacción. Si algo falla, PostgreSQL revierte todo.
  *
  * Mapa de dependencias (ver README): facturas.cliente_id es RESTRICT → las facturas se borran antes
  * que los clientes. Ítems, cuotas y abonos caen en cascada con su factura; los movimientos de
  * inventario caen en cascada con su producto. Nunca se tocan: el local, usuarios, sectores, marcas,
  * categorías de gasto, proveedores, compras a proveedores ni el historial de limpiezas.
+ *
+ * Deudas (gastos a crédito): deudas.gasto_id es RESTRICT → las deudas se borran ANTES que los gastos;
+ * sus cuotas y pagos caen en cascada con la deuda. Igual que los créditos de clientes, la limpieza por
+ * periodo y «Todos los gastos» CONSERVAN las deudas, sus pagos y sus gastos de origen (medio CREDITO):
+ * solo se borran con «Todas las deudas» o «Todo el local».
  */
 import "server-only";
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import ExcelJS from "exceljs";
-import { and, asc, count, desc, eq, getTableColumns, gt, gte, inArray, lt, notExists, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, getTableColumns, gt, gte, inArray, lt, ne, notExists, or, sql, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { db, type Transaccion } from "@/db";
 import {
   abonos,
   clientes,
   cuotas,
+  deudaCuotas,
+  deudaPagos,
+  deudas,
   facturaItems,
   facturas,
   gastos,
@@ -93,8 +101,11 @@ function condiciones(s: Required<SolicitudLimpieza>) {
 
   let facturasCond: SQL | null = null;
   let gastosCond: SQL | null = null;
+  let deudasCond: SQL | null = null;
   let clientesCond: SQL | null = null;
   let productosCond: SQL | null = null;
+  // Gastos de contado (los de medio CREDITO son el origen de una deuda: se conservan con ella)
+  const deContado = ne(gastos.medioPago, "CREDITO");
 
   switch (s.alcance) {
     case "PERIODO": {
@@ -105,7 +116,8 @@ function condiciones(s: Required<SolicitudLimpieza>) {
         eq(facturas.tipo, "NORMAL"),
         or(...instantes.map((r) => and(gte(facturas.creadoEn, r.inicio), lt(facturas.creadoEn, r.fin))!)),
       )!;
-      gastosCond = and(eq(gastos.localId, s.localId), or(...dias.map((d) => and(gte(gastos.fecha, d.desde), lt(gastos.fecha, d.hasta))!)))!;
+      // SOLO gastos de contado del periodo: las deudas, sus pagos y sus gastos de origen se conservan
+      gastosCond = and(eq(gastos.localId, s.localId), deContado, or(...dias.map((d) => and(gte(gastos.fecha, d.desde), lt(gastos.fecha, d.hasta))!)))!;
       break;
     }
     case "VENTAS":
@@ -115,7 +127,13 @@ function condiciones(s: Required<SolicitudLimpieza>) {
       facturasCond = and(delLocal, eq(facturas.tipo, "CREDITO"))!;
       break;
     case "GASTOS":
-      gastosCond = eq(gastos.localId, s.localId);
+      // Todos los gastos de contado; los de origen de una deuda solo se borran con «Todas las deudas»
+      gastosCond = and(eq(gastos.localId, s.localId), deContado)!;
+      break;
+    case "DEUDAS":
+      // Todas las deudas (con sus cuotas y pagos, en cascada) y sus gastos de origen (medio CREDITO)
+      deudasCond = eq(deudas.localId, s.localId);
+      gastosCond = and(eq(gastos.localId, s.localId), eq(gastos.medioPago, "CREDITO"))!;
       break;
     case "CLIENTES":
       // Solo los que no tienen ninguna factura (venta o crédito): los demás se conservan
@@ -127,19 +145,20 @@ function condiciones(s: Required<SolicitudLimpieza>) {
     case "TODO":
       // Al borrar primero todas las facturas, ningún cliente del local queda con facturas
       facturasCond = delLocal;
+      deudasCond = eq(deudas.localId, s.localId);
       gastosCond = eq(gastos.localId, s.localId);
       clientesCond = eq(clientes.localId, s.localId);
       productosCond = eq(productos.localId, s.localId);
       break;
   }
-  return { facturasCond, gastosCond, clientesCond, productosCond };
+  return { facturasCond, gastosCond, deudasCond, clientesCond, productosCond };
 }
 
 const n = (v: unknown) => Number(v ?? 0);
 
 /** Cuenta lo que se borraría (y lo que se conserva). No modifica nada. */
 async function contar(cx: Conexion, s: Required<SolicitudLimpieza>): Promise<ConteosLimpieza> {
-  const { facturasCond, gastosCond, clientesCond, productosCond } = condiciones(s);
+  const { facturasCond, gastosCond, deudasCond, clientesCond, productosCond } = condiciones(s);
   const vigente = sql`not ${facturas.anulada}`;
   const ventasCond = facturasCond && and(facturasCond, eq(facturas.tipo, "NORMAL"));
   const creditosCond = facturasCond && and(facturasCond, eq(facturas.tipo, "CREDITO"));
@@ -188,6 +207,27 @@ async function contar(cx: Conexion, s: Required<SolicitudLimpieza>): Promise<Con
         .from(gastos)
         .where(gastosCond)
     : [{ cantidad: 0, valor: 0, eliminados: 0 }];
+  const [nDeudas] = deudasCond
+    ? await cx
+        .select({
+          cantidad: count(),
+          valor: sql`coalesce(sum(${deudas.valorTotal}) filter (where ${deudas.estado} <> 'ANULADA'), 0)`,
+          conSaldo: sql`count(*) filter (where ${deudas.estado} = 'PENDIENTE')`,
+          saldo: sql`coalesce(sum(${deudas.saldo}) filter (where ${deudas.estado} = 'PENDIENTE'), 0)`,
+        })
+        .from(deudas)
+        .where(deudasCond)
+    : [{ cantidad: 0, valor: 0, conSaldo: 0, saldo: 0 }];
+  const [nCuotasDeuda] = deudasCond
+    ? await cx.select({ n: count() }).from(deudaCuotas).innerJoin(deudas, eq(deudaCuotas.deudaId, deudas.id)).where(deudasCond)
+    : [{ n: 0 }];
+  const [nPagosDeuda] = deudasCond
+    ? await cx
+        .select({ cantidad: count(), valor: sql`coalesce(sum(${deudaPagos.valor}) filter (where not ${deudaPagos.anulado}), 0)` })
+        .from(deudaPagos)
+        .innerJoin(deudas, eq(deudaPagos.deudaId, deudas.id))
+        .where(deudasCond)
+    : [{ cantidad: 0, valor: 0 }];
   const [totalClientes] = await cx.select({ n: count() }).from(clientes).where(eq(clientes.localId, s.localId));
   const [nClientes] = clientesCond ? await cx.select({ n: count() }).from(clientes).where(clientesCond) : [{ n: 0 }];
   const [nProductos] = productosCond ? await cx.select({ n: count() }).from(productos).where(productosCond) : [{ n: 0 }];
@@ -199,10 +239,11 @@ async function contar(cx: Conexion, s: Required<SolicitudLimpieza>): Promise<Con
         .where(productosCond)
     : [{ n: 0 }];
 
-  // Lo que se CONSERVA aunque sea del periodo: créditos creados y abonos recibidos en esos meses
-  let conservados = { creditos: 0, abonos: 0 };
+  // Lo que se CONSERVA aunque sea del periodo: créditos creados y abonos recibidos en esos meses,
+  // deudas adquiridas y pagos de deudas hechos en esos meses
+  let conservados = { creditos: 0, abonos: 0, deudas: 0, pagosDeuda: 0 };
   if (s.alcance === "PERIODO") {
-    const { instantes } = rangosDelPeriodo(s.anio, s.meses);
+    const { instantes, dias } = rangosDelPeriodo(s.anio, s.meses);
     const enPeriodo = (col: typeof facturas.creadoEn | typeof abonos.creadoEn) => or(...instantes.map((r) => and(gte(col, r.inicio), lt(col, r.fin))!));
     const [c] = await cx.select({ n: count() }).from(facturas).where(and(eq(facturas.localId, s.localId), eq(facturas.tipo, "CREDITO"), enPeriodo(facturas.creadoEn)));
     const [a] = await cx
@@ -210,7 +251,16 @@ async function contar(cx: Conexion, s: Required<SolicitudLimpieza>): Promise<Con
       .from(abonos)
       .innerJoin(facturas, eq(abonos.facturaId, facturas.id))
       .where(and(eq(facturas.localId, s.localId), enPeriodo(abonos.creadoEn)));
-    conservados = { creditos: n(c.n), abonos: n(a.n) };
+    const [dd] = await cx
+      .select({ n: count() })
+      .from(deudas)
+      .innerJoin(gastos, eq(deudas.gastoId, gastos.id))
+      .where(and(eq(deudas.localId, s.localId), or(...dias.map((d) => and(gte(gastos.fecha, d.desde), lt(gastos.fecha, d.hasta))!))));
+    const [pd] = await cx
+      .select({ n: count() })
+      .from(deudaPagos)
+      .where(and(eq(deudaPagos.localId, s.localId), or(...instantes.map((r) => and(gte(deudaPagos.fecha, r.inicio), lt(deudaPagos.fecha, r.fin))!))));
+    conservados = { creditos: n(c.n), abonos: n(a.n), deudas: n(dd.n), pagosDeuda: n(pd.n) };
   }
 
   return {
@@ -222,6 +272,9 @@ async function contar(cx: Conexion, s: Required<SolicitudLimpieza>): Promise<Con
     gastos: { cantidad: n(nGastos.cantidad), valor: n(nGastos.valor), eliminados: n(nGastos.eliminados) },
     clientes: { cantidad: n(nClientes.n), conservados: n(totalClientes.n) - n(nClientes.n) },
     productos: { cantidad: n(nProductos.n), movimientos: n(nMovimientos.n) },
+    deudas: { cantidad: n(nDeudas.cantidad), valor: n(nDeudas.valor), conSaldo: n(nDeudas.conSaldo), saldo: n(nDeudas.saldo) },
+    cuotasDeuda: n(nCuotasDeuda.n),
+    pagosDeuda: { cantidad: n(nPagosDeuda.cantidad), valor: n(nPagosDeuda.valor) },
     conservados,
   };
 }
@@ -250,7 +303,16 @@ export async function resumenLocal(localId: string) {
     .from(clientes)
     .where(eq(clientes.localId, localId));
   const [p] = await db.select({ n: count() }).from(productos).where(eq(productos.localId, localId));
-  const [g] = await db.select({ n: count() }).from(gastos).where(eq(gastos.localId, localId));
+  // Gastos de contado (los de origen de una deuda se cuentan con las deudas)
+  const [g] = await db.select({ n: count() }).from(gastos).where(and(eq(gastos.localId, localId), ne(gastos.medioPago, "CREDITO")));
+  const [d] = await db
+    .select({
+      total: count(),
+      pendientes: sql`count(*) filter (where ${deudas.estado} = 'PENDIENTE')`,
+      saldo: sql`coalesce(sum(${deudas.saldo}) filter (where ${deudas.estado} = 'PENDIENTE'), 0)`,
+    })
+    .from(deudas)
+    .where(eq(deudas.localId, localId));
   const iso = (v: string | null) => (v ? new Date(v).toISOString() : null);
   return {
     local: { id: local.id, nombre: local.nombre, activo: local.activo, consecutivoFactura: local.consecutivoFactura },
@@ -262,6 +324,9 @@ export async function resumenLocal(localId: string) {
     clientesConFacturas: n(c.conFacturas),
     productos: n(p.n),
     gastos: n(g.n),
+    deudas: n(d.total),
+    deudasPendientes: n(d.pendientes),
+    saldoDeudas: n(d.saldo),
     primeraVenta: iso(f.primeraVenta),
     ultimaVenta: iso(f.ultimaVenta),
   };
@@ -381,7 +446,7 @@ export async function generarRespaldo(solicitud: SolicitudLimpieza, admin: { nom
     async (tx) => {
       const local = await obtenerLocalOError(tx, s.localId);
       const conteos = await contar(tx, s);
-      const { facturasCond, gastosCond, clientesCond, productosCond } = condiciones(s);
+      const { facturasCond, gastosCond, deudasCond, clientesCond, productosCond } = condiciones(s);
       const libro = nuevoLibro();
 
       /* Hoja de resumen */
@@ -401,6 +466,10 @@ export async function generarRespaldo(solicitud: SolicitudLimpieza, admin: { nom
         { dato: "Cuotas", valor: conteos.cuotas },
         { dato: "Abonos", valor: conteos.abonos.cantidad },
         { dato: "Gastos", valor: conteos.gastos.cantidad },
+        { dato: "Deudas", valor: conteos.deudas?.cantidad ?? 0 },
+        { dato: "Cuotas de deudas", valor: conteos.cuotasDeuda ?? 0 },
+        { dato: "Pagos de deudas", valor: conteos.pagosDeuda?.cantidad ?? 0 },
+        { dato: "Saldo de deudas pendientes que se pierde", valor: conteos.deudas?.saldo ?? 0 },
         { dato: "Clientes", valor: conteos.clientes.cantidad },
         { dato: "Productos del inventario", valor: conteos.productos.cantidad },
         { dato: "Movimientos de inventario", valor: conteos.productos.movimientos },
@@ -419,6 +488,14 @@ export async function generarRespaldo(solicitud: SolicitudLimpieza, admin: { nom
           hojaDeTabla(libro, "Cuotas", cuotas, await porIds((i) => tx.select().from(cuotas).where(inArray(cuotas.facturaId, i)).orderBy(asc(cuotas.numero))));
           hojaDeTabla(libro, "Abonos", abonos, await porIds((i) => tx.select().from(abonos).where(inArray(abonos.facturaId, i)).orderBy(asc(abonos.creadoEn))));
         }
+      }
+      /* Deudas y lo que depende de ellas (cuotas y pagos, también los anulados) */
+      if (deudasCond) {
+        const lista = await tx.select().from(deudas).where(deudasCond).orderBy(asc(deudas.creadoEn));
+        const ids = lista.map((x) => x.id);
+        hojaDeTabla(libro, "Deudas", deudas, lista);
+        hojaDeTabla(libro, "Cuotas de deudas", deudaCuotas, ids.length ? await tx.select().from(deudaCuotas).where(inArray(deudaCuotas.deudaId, ids)).orderBy(asc(deudaCuotas.deudaId), asc(deudaCuotas.numero)) : []);
+        hojaDeTabla(libro, "Pagos de deudas", deudaPagos, ids.length ? await tx.select().from(deudaPagos).where(inArray(deudaPagos.deudaId, ids)).orderBy(asc(deudaPagos.fecha)) : []);
       }
       if (gastosCond) hojaDeTabla(libro, "Gastos", gastos, await tx.select().from(gastos).where(gastosCond).orderBy(asc(gastos.fecha)));
       if (clientesCond) hojaDeTabla(libro, "Clientes", clientes, await tx.select().from(clientes).where(clientesCond).orderBy(asc(clientes.nombre)));
@@ -503,9 +580,11 @@ export async function ejecutarLimpieza(admin: UsuarioSesion, datos: DatosEjecuci
       throw new ApiError(409, "Los datos cambiaron desde que se descargó la copia de respaldo (por ejemplo, alguien registró una venta). No se borró nada: vuelve a revisar y confirma de nuevo.");
     }
 
-    // 6. Borrado en orden: facturas (con ítems, cuotas y abonos en cascada) → gastos → clientes → productos
-    const { facturasCond, gastosCond, clientesCond, productosCond } = condiciones(s);
+    // 6. Borrado en orden: facturas (con ítems, cuotas y abonos en cascada) → deudas (con cuotas y pagos en
+    //    cascada; antes que los gastos, por la FK RESTRICT) → gastos → clientes → productos
+    const { facturasCond, gastosCond, deudasCond, clientesCond, productosCond } = condiciones(s);
     if (facturasCond) await tx.delete(facturas).where(facturasCond);
+    if (deudasCond) await tx.delete(deudas).where(deudasCond);
     if (gastosCond) await tx.delete(gastos).where(gastosCond);
     if (clientesCond) await tx.delete(clientes).where(clientesCond);
     if (productosCond) await tx.delete(productos).where(productosCond);

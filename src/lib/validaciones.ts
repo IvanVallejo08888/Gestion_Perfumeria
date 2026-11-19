@@ -11,6 +11,7 @@ import { z } from "zod";
  */
 z.config(z.locales.es());
 import { CATEGORIAS, CONCENTRACIONES, GENEROS, PUBLICOS, TIPOS_PRODUCTO } from "./clasificacion";
+import { validarPlanCuotas } from "./deudas";
 import { ESTADOS_STOCK } from "./inventario";
 import { ALCANCES_LIMPIEZA } from "./limpieza";
 
@@ -349,12 +350,54 @@ export const editarCategoriaSchema = z.object({
   activo: z.boolean().optional(),
 });
 
-export const gastoSchema = z.object({
-  categoriaId: z.uuid("Elige una categoría."),
-  valor: dineroSchema("El valor del gasto").refine((v) => v > 0, "El gasto debe ser mayor que cero."),
-  medioPago: z.enum(["EFECTIVO", "TRANSFERENCIA"], { error: "Elige cómo se pagó el gasto." }),
+/** Una cuota del plan de pagos de una deuda: fecha y hora + valor (editable). */
+export const cuotaDeudaSchema = z.object({
+  fechaVencimiento: z.iso.datetime({ offset: true, error: "Fecha de cuota no válida." }),
+  valor: dineroSchema("El valor de la cuota").refine((v) => v > 0, "Cada cuota debe ser mayor que cero."),
+});
+
+/**
+ * Gasto. Con medio CREDITO (gasto a crédito) también exige el acreedor y el plan de cuotas,
+ * y que las cuotas sumen exactamente el valor del gasto. Las fechas pasadas se permiten (deudas antiguas).
+ */
+export const gastoSchema = z
+  .object({
+    categoriaId: z.uuid("Elige una categoría."),
+    valor: dineroSchema("El valor del gasto").refine((v) => v > 0, "El gasto debe ser mayor que cero."),
+    medioPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "CREDITO"], { error: "Elige cómo se pagó el gasto." }),
+    fecha: z.iso.date("Escribe una fecha válida."),
+    descripcion: z.string().trim().max(200, "La descripción es demasiado larga.").optional(),
+    /** Solo en CREDITO: a quién se le debe. */
+    acreedor: z.string().trim().max(80, "El nombre es demasiado largo (máximo 80 caracteres).").optional(),
+    /** Solo en CREDITO: plan de pagos. */
+    cuotas: z.array(cuotaDeudaSchema).optional(),
+  })
+  .superRefine((d, ctx) => {
+    if (d.medioPago !== "CREDITO") return;
+    if (!d.acreedor || d.acreedor.length < 2) {
+      ctx.addIssue({ code: "custom", path: ["acreedor"], message: "Escribe a quién le debes (mínimo 2 letras)." });
+    }
+    const error = validarPlanCuotas(d.valor, (d.cuotas ?? []).map((c) => c.valor));
+    if (error) ctx.addIssue({ code: "custom", path: ["cuotas"], message: error });
+  });
+
+/** Pago (abono) a una deuda. Sin fecha = ahora. Con fecha: un pago olvidado (nunca futuro). */
+export const pagoDeudaSchema = z.object({
+  valor: dineroSchema("El valor del pago").refine((v) => v > 0, "El pago debe ser mayor que cero."),
+  medioPago: medioPagoSchema,
+  ...valoresPago,
+  fecha: z.iso.datetime({ offset: true, error: "Escribe una fecha válida." }).optional(),
+  nota: z.string().trim().max(200, "La nota es demasiado larga.").optional(),
+});
+
+/** Filtro de la lista de deudas. */
+export const filtroDeudasSchema = z.object({
+  estado: z.enum(["PENDIENTE", "PAGADA", "ANULADA"]).default("PENDIENTE"),
+});
+
+/** Día de la caja (AAAA-MM-DD). */
+export const cajaSchema = z.object({
   fecha: z.iso.date("Escribe una fecha válida."),
-  descripcion: z.string().trim().max(200, "La descripción es demasiado larga.").optional(),
 });
 
 /** Filtros de la lista de gastos (vienen en la dirección de la petición). */
