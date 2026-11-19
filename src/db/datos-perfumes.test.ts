@@ -1,8 +1,8 @@
 /** Pruebas del catálogo de perfumes de ejemplo. Ejecutar con: npm test */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { etiquetaPara, TAMANOS, TIPOS_PRODUCTO } from "../lib/clasificacion";
-import { MARCAS_EJEMPLO, PERFUMES_EJEMPLO, PRECIOS_EJEMPLO, precioEjemplo, STOCK_MINIMO_EJEMPLO } from "./datos-perfumes";
+import { etiquetaPara, TIPOS_PRODUCTO } from "../lib/clasificacion";
+import { MARCAS_EJEMPLO, MILILITROS_EJEMPLO, PERFUMES_EJEMPLO, PRECIOS_EJEMPLO, precioEjemplo, STOCK_MINIMO_EJEMPLO } from "./datos-perfumes";
 
 describe("catálogo de perfumes de ejemplo", () => {
   it("tiene 8 marcas y 30 perfumes", () => {
@@ -10,10 +10,10 @@ describe("catálogo de perfumes de ejemplo", () => {
     assert.equal(PERFUMES_EJEMPLO.length, 30);
   });
 
-  it("usa todas las marcas, tipos y tamaños", () => {
+  it("usa todas las marcas, tipos y contenidos (ml)", () => {
     for (const m of MARCAS_EJEMPLO) assert.ok(PERFUMES_EJEMPLO.some((p) => p.marca === m), `falta la marca ${m}`);
     for (const t of TIPOS_PRODUCTO) assert.ok(PERFUMES_EJEMPLO.some((p) => p.tipo === t), `falta el tipo ${t}`);
-    for (const t of TAMANOS) assert.ok(PERFUMES_EJEMPLO.some((p) => p.tamano === t), `falta el tamaño ${t}`);
+    for (const ml of MILILITROS_EJEMPLO) assert.ok(PERFUMES_EJEMPLO.some((p) => p.contenidoMl === ml), `falta el contenido ${ml} ml`);
   });
 
   it("cubre Hombre, Mujer, Niño y Niña", () => {

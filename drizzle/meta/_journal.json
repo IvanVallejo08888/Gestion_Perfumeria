@@ -36,6 +36,20 @@
       "when": 1795043617979,
       "tag": "0004_anulaciones_clientes",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795046602175,
+      "tag": "0005_caracteristicas_productos",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795046855599,
+      "tag": "0006_quitar_tamano",
+      "breakpoints": true
     }
   ]
 }

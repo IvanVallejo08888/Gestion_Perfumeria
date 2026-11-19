@@ -66,7 +66,7 @@ export async function listarNotificaciones(localId: string): Promise<Notificacio
   });
 
   const stock = await db
-    .select({ id: productos.id, nombre: productos.nombre, stock: productos.stock, minimo: productos.stockMinimo })
+    .select({ id: productos.id, nombre: productos.nombreCompleto, stock: productos.stock, minimo: productos.stockMinimo })
     .from(productos)
     .where(and(eq(productos.localId, localId), eq(productos.activo, true), lte(productos.stock, productos.stockMinimo)))
     .orderBy(asc(productos.stock), asc(productos.nombreBusqueda))

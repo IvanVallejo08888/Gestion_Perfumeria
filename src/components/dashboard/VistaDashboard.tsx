@@ -2,7 +2,7 @@
  * Dashboard de reportes (lo usan el vendedor y el administrador, arriba de las estadísticas).
  *
  *  - Indicadores en tarjetas.
- *  - Ventas del periodo: top 10 perfumes y cortes por público, tipo, marca y tamaño.
+ *  - Ventas del periodo: top 10 perfumes y cortes por público, tipo, marca y contenido (ml).
  *  - Contado vs crédito mes a mes (siempre los 12 meses del año).
  *  - Inventario de hoy: stock por género y perfumes por reponer.
  *
@@ -84,7 +84,7 @@ export function VistaDashboard({ anio, mes, localId, puedeAgregarUnidades = fals
     { titulo: "Ventas por Hombre, Niño, Mujer y Niña", columna: "Público", datos: datos.porPublico },
     { titulo: "Ventas por tipo", columna: "Tipo", datos: datos.porTipo },
     { titulo: "Ventas por marca", columna: "Marca", datos: datos.porMarca },
-    { titulo: "Ventas por tamaño", columna: "Tamaño", datos: datos.porTamano },
+    { titulo: "Ventas por contenido (ml)", columna: "Contenido", datos: datos.porTamano },
   ];
 
   return (

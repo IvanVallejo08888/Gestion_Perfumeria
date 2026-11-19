@@ -17,13 +17,13 @@ describe("estado del stock", () => {
 
 describe("filtros en la URL", () => {
   it("ida y vuelta conserva los filtros válidos", () => {
-    const url = "?q=yara&genero=MUJER&publico=INFANTIL&tipo=ORIGINAL&tamano=OZ_3_4&stock=BAJO";
+    const url = "?q=yara&genero=MUJER&publico=INFANTIL&tipo=ORIGINAL&categoria=PERFUME&stock=BAJO";
     const filtros = leerFiltros(new URLSearchParams(url));
-    assert.deepEqual(filtros, { q: "yara", genero: "MUJER", publico: "INFANTIL", tipo: "ORIGINAL", tamano: "OZ_3_4", stock: "BAJO" });
+    assert.deepEqual(filtros, { q: "yara", genero: "MUJER", publico: "INFANTIL", tipo: "ORIGINAL", categoria: "PERFUME", stock: "BAJO" });
     assert.equal(filtrosAUrl(filtros), url);
   });
   it("ignora valores que no existen", () => {
-    assert.deepEqual(leerFiltros(new URLSearchParams("?genero=OTRO&tipo=X&stock=&tamano=OZ_9")), {});
+    assert.deepEqual(leerFiltros(new URLSearchParams("?genero=OTRO&tipo=X&stock=&categoria=ZAPATO")), {});
   });
   it("el público solo aplica dentro de una pestaña de género", () => {
     assert.deepEqual(leerFiltros(new URLSearchParams("?publico=INFANTIL")), {});

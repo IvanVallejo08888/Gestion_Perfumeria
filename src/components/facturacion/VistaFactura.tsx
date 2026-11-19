@@ -11,7 +11,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { describirClasificacion } from "@/lib/clasificacion";
+import { describirClasificacion, ETIQUETA_TIPO } from "@/lib/clasificacion";
 import { fecha, fechaHora, numeroFactura, pesos } from "@/lib/formato";
 import { textoMedioPago } from "@/lib/pagos";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
@@ -168,10 +168,25 @@ export function VistaFactura({ factura }: { factura: FacturaDetalle }) {
             <tbody>
               {factura.items.map((i) => (
                 <tr key={i.id} className="align-top">
-                  <td className="py-1 pr-2">
+                  <td className="py-1 pr-2 break-words">
                     {i.nombreProducto}
-                    <br />
-                    <span className="text-[15px]">{describirClasificacion(i)}</span>
+                    {/*
+                     * Ventas nuevas: el nombre ya trae marca, concentración, ml y género ("· ");
+                     * solo se agrega el tipo (Original, 1.1…). Facturas antiguas: la clasificación como antes.
+                     */}
+                    {i.nombreProducto.includes(" · ") ? (
+                      i.tipo && (
+                        <>
+                          <br />
+                          <span className="text-[15px]">{ETIQUETA_TIPO[i.tipo]}</span>
+                        </>
+                      )
+                    ) : (
+                      <>
+                        <br />
+                        <span className="text-[15px]">{describirClasificacion(i)}</span>
+                      </>
+                    )}
                     <br />
                     <span className="text-[15px]">{pesos(i.precioUnitario)} c/u</span>
                   </td>

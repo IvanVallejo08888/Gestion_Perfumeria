@@ -2,11 +2,11 @@
  * Tipos de datos que viajan entre la API y las pantallas.
  * (Las fechas llegan al navegador como texto ISO.)
  */
-import type { Clasificacion, Genero, Publico, Tamano, TipoProducto } from "@/lib/clasificacion";
+import type { Categoria, Clasificacion, Concentracion, Genero, Publico, TipoProducto } from "@/lib/clasificacion";
 
 import type { EstadoStock, FiltrosInventario, TipoMovimiento } from "@/lib/inventario";
 
-export type { Clasificacion, Genero, Publico, Tamano, TipoProducto };
+export type { Categoria, Clasificacion, Concentracion, Genero, Publico, TipoProducto };
 import type { CorteVenta } from "@/lib/dashboard";
 
 export type { EstadoStock, FiltrosInventario, TipoMovimiento };
@@ -29,21 +29,31 @@ export interface ClienteDatos {
 
 export interface ProductoVenta {
   id: string;
+  /** Nombre COMPLETO para mostrar: "Creed Aventus · EDP 100 ml · Hombre". */
   nombre: string;
   codigo: string | null;
   precio: number;
   stock: number;
+  /** Texto normalizado con todas las características (para filtrar en el navegador). */
+  busqueda?: string;
 }
 
-/** Producto del inventario. La clasificación es null en productos creados antes de clasificarlos. */
+/**
+ * Producto del inventario. `nombre` es el nombre completo (para mostrar) y `fragancia` el nombre
+ * que escribió la persona ("Aventus"). Las características son null si no se llenaron.
+ */
 export interface Producto extends ProductoVenta {
+  fragancia: string;
   stockMinimo: number;
   marcaId: string | null;
   marcaNombre: string | null;
+  variante: string | null;
+  concentracion: Concentracion | null;
+  contenidoMl: number | null;
+  categoria: Categoria | null;
   tipo: TipoProducto | null;
   genero: Genero | null;
   publico: Publico | null;
-  tamano: Tamano | null;
 }
 
 /** Un cambio de stock (detalle del perfume). "cantidad" lleva signo: +5 entra, -2 sale. */

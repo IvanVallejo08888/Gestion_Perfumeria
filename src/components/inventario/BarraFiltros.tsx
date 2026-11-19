@@ -1,8 +1,8 @@
 /**
  * Filtros del inventario (todos combinables; la página los guarda en la URL):
- *  - Pestañas Todos | Hombre | Mujer y, dentro de cada una, chips Adulto/Niño o Adulta/Niña.
- *  - Buscador por nombre o código.
- *  - Marca, tipo, tamaño y estado de stock: en celular y tablet van en un panel desplegable;
+ *  - Pestañas Todos | Hombre | Mujer | Unisex y, dentro de cada una, chips Adulto/Niño, Adulta/Niña o Adulto/Infantil.
+ *  - Buscador por marca, nombre, concentración, ml o código ("aventus 100", "edp dior").
+ *  - Marca, categoría, tipo y estado de stock: en celular y tablet van en un panel desplegable;
  *    en escritorio (≥1280px) se ven siempre, en una barra.
  * El botón elegido se marca con un ícono ✓ además del color.
  */
@@ -13,9 +13,9 @@ import { Tarjeta } from "@/components/ui/Basicos";
 import { Boton } from "@/components/ui/Boton";
 import { Campo, Selector } from "@/components/ui/Campo";
 import { Icono } from "@/components/ui/Icono";
-import { ETIQUETA_TAMANO, ETIQUETA_TIPO, TAMANOS, TIPOS_PRODUCTO, type Genero, type Publico } from "@/lib/clasificacion";
+import { CATEGORIAS, ETIQUETA_CATEGORIA, ETIQUETA_TIPO, TIPOS_PRODUCTO, type Genero, type Publico } from "@/lib/clasificacion";
 import { contarFiltros, ESTADOS_STOCK, ETIQUETA_ESTADO_STOCK, type EstadoStock, type FiltrosInventario } from "@/lib/inventario";
-import type { NombreActivo, Tamano, TipoProducto } from "@/tipos";
+import type { Categoria, NombreActivo, TipoProducto } from "@/tipos";
 
 interface Props {
   filtros: FiltrosInventario;
@@ -30,6 +30,7 @@ const PESTANAS: { valor: Genero | undefined; texto: string }[] = [
   { valor: undefined, texto: "Todos" },
   { valor: "HOMBRE", texto: "Hombre" },
   { valor: "MUJER", texto: "Mujer" },
+  { valor: "UNISEX", texto: "Unisex" },
 ];
 
 const CHIPS: Record<Genero, { valor: Publico | undefined; texto: string }[]> = {
@@ -42,6 +43,11 @@ const CHIPS: Record<Genero, { valor: Publico | undefined; texto: string }[]> = {
     { valor: undefined, texto: "Todas" },
     { valor: "ADULTO", texto: "Adulta" },
     { valor: "INFANTIL", texto: "Niña" },
+  ],
+  UNISEX: [
+    { valor: undefined, texto: "Todos" },
+    { valor: "ADULTO", texto: "Adulto" },
+    { valor: "INFANTIL", texto: "Infantil" },
   ],
 };
 
@@ -73,7 +79,7 @@ export function BarraFiltros({ filtros, onCambiar, texto, onTexto, marcas }: Pro
   return (
     <div className="mb-6 space-y-4">
       {/* Pestañas de género */}
-      <div role="group" aria-label="Género" className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
+      <div role="group" aria-label="Género" className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         {PESTANAS.map((p) => (
           <Opcion
             key={p.texto}
@@ -88,7 +94,7 @@ export function BarraFiltros({ filtros, onCambiar, texto, onTexto, marcas }: Pro
       </div>
 
       {filtros.genero && (
-        <div role="group" aria-label={`Público de ${filtros.genero === "HOMBRE" ? "hombre" : "mujer"}`} className="flex flex-wrap gap-2">
+        <div role="group" aria-label={`Público de ${PESTANAS.find((p) => p.valor === filtros.genero)?.texto.toLowerCase()}`} className="flex flex-wrap gap-2">
           {CHIPS[filtros.genero].map((c) => (
             <Opcion key={c.texto} activa={filtros.publico === c.valor} onClick={() => cambiar({ publico: c.valor })}>
               {c.texto}
@@ -102,7 +108,7 @@ export function BarraFiltros({ filtros, onCambiar, texto, onTexto, marcas }: Pro
           <Campo
             type="search"
             etiqueta="Buscar en el inventario"
-            placeholder="Nombre o código"
+            placeholder="Marca, nombre, ml o código. Ej.: aventus 100"
             value={texto}
             onChange={(e) => onTexto(e.target.value)}
             className="xl:col-span-4"
@@ -139,11 +145,15 @@ export function BarraFiltros({ filtros, onCambiar, texto, onTexto, marcas }: Pro
                 </option>
               ))}
             </Selector>
-            <Selector etiqueta="Tamaño" value={filtros.tamano ?? ""} onChange={(e) => cambiar({ tamano: (e.target.value || undefined) as Tamano | undefined })}>
-              <option value="">Todos los tamaños</option>
-              {TAMANOS.map((t) => (
-                <option key={t} value={t}>
-                  {ETIQUETA_TAMANO[t]}
+            <Selector
+              etiqueta="Categoría"
+              value={filtros.categoria ?? ""}
+              onChange={(e) => cambiar({ categoria: (e.target.value || undefined) as Categoria | undefined })}
+            >
+              <option value="">Todas las categorías</option>
+              {CATEGORIAS.map((c) => (
+                <option key={c} value={c}>
+                  {ETIQUETA_CATEGORIA[c]}
                 </option>
               ))}
             </Selector>

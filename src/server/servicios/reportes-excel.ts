@@ -16,7 +16,8 @@ import "server-only";
 import ExcelJS from "exceljs";
 import { and, asc, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { abonos, cuotas, facturaItems, facturas, locales, productos } from "@/db/schema";
+import { abonos, cuotas, facturaItems, facturas, locales, marcas, productos } from "@/db/schema";
+import { ETIQUETA_CATEGORIA, ETIQUETA_CONCENTRACION, ETIQUETA_GENERO } from "@/lib/clasificacion";
 import { fecha, fechaDia, fechaHora, MESES, numeroFactura, rangoPeriodo } from "@/lib/formato";
 import { textoMedioPago } from "@/lib/pagos";
 import { ventasPorCategoria, type VentasPorCategoria } from "./dashboard";
@@ -228,7 +229,10 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
     db.select().from(facturas).where(enPeriodo).orderBy(asc(facturas.creadoEn)),
     db
       .select({
+        // Nombre completo guardado en la venta (las facturas antiguas conservan su nombre original)
         nombre: facturaItems.nombreProducto,
+        marca: sql<string>`coalesce(max(${facturaItems.marcaNombre}), '')`,
+        contenidoMl: sql<number | null>`max(${facturaItems.contenidoMl})`,
         cantidad: sql<number>`sum(${facturaItems.cantidad})::int`,
         total: sql<number>`sum(${facturaItems.subtotal})::int`,
       })
@@ -277,10 +281,24 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
       .orderBy(desc(sql`sum(${facturas.total})`)),
     obtenerCartera(localId),
     db
-      .select()
+      .select({
+        codigo: productos.codigo,
+        nombreCompleto: productos.nombreCompleto,
+        marca: marcas.nombre,
+        fragancia: productos.nombre,
+        variante: productos.variante,
+        concentracion: productos.concentracion,
+        contenidoMl: productos.contenidoMl,
+        genero: productos.genero,
+        categoria: productos.categoria,
+        precio: productos.precio,
+        stock: productos.stock,
+        stockMinimo: productos.stockMinimo,
+      })
       .from(productos)
+      .leftJoin(marcas, eq(marcas.id, productos.marcaId))
       .where(and(eq(productos.localId, localId), eq(productos.activo, true)))
-      .orderBy(asc(productos.nombre)),
+      .orderBy(asc(productos.nombreCompleto)),
     ventasPorCategoria({ localId, anio, mes }),
     db.select().from(facturas).where(and(delPeriodo, eq(facturas.anulada, true))).orderBy(asc(facturas.creadoEn)),
     gastosDelPeriodo(localId, anio, mes, true),
@@ -377,7 +395,9 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
   /* ---------- Hoja 3: Productos vendidos ---------- */
   const hojaProductos = libro.addWorksheet("Productos vendidos");
   hojaProductos.columns = [
-    { header: "Producto", key: "nombre", width: 40 },
+    { header: "Producto", key: "nombre", width: 50 },
+    { header: "Marca", key: "marca", width: 20 },
+    { header: "Contenido (ml)", key: "contenidoMl", width: 14 },
     { header: "Unidades vendidas", key: "cantidad", width: 18 },
     { header: "Valor vendido", key: "total", width: 20, style: { numFmt: FORMATO_PESOS } },
   ];
@@ -472,7 +492,14 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
   const hojaInventario = libro.addWorksheet("Inventario");
   hojaInventario.columns = [
     { header: "Código", key: "codigo", width: 14 },
-    { header: "Producto", key: "nombre", width: 40 },
+    { header: "Producto (nombre completo)", key: "nombre", width: 50 },
+    { header: "Marca", key: "marca", width: 20 },
+    { header: "Fragancia", key: "fragancia", width: 24 },
+    { header: "Variante", key: "variante", width: 16 },
+    { header: "Concentración", key: "concentracion", width: 22 },
+    { header: "Contenido (ml)", key: "contenidoMl", width: 14 },
+    { header: "Género", key: "genero", width: 11 },
+    { header: "Categoría", key: "categoria", width: 16 },
     { header: "Precio", key: "precio", width: 15, style: { numFmt: FORMATO_PESOS } },
     { header: "Stock", key: "stock", width: 10 },
     { header: "Stock mínimo", key: "stockMinimo", width: 11 },
@@ -481,7 +508,19 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
   ];
   for (const p of inventario) {
     const estado = p.stock <= 0 ? "Agotado" : p.stock <= p.stockMinimo ? "Stock bajo" : "Disponible";
-    const fila = hojaInventario.addRow({ ...p, codigo: p.codigo ?? "", valor: p.precio * Math.max(p.stock, 0), estado });
+    const fila = hojaInventario.addRow({
+      ...p,
+      codigo: p.codigo ?? "",
+      nombre: p.nombreCompleto,
+      marca: p.marca ?? "",
+      variante: p.variante ?? "",
+      concentracion: p.concentracion ? ETIQUETA_CONCENTRACION[p.concentracion] : "",
+      contenidoMl: p.contenidoMl ?? "",
+      genero: p.genero ? ETIQUETA_GENERO[p.genero] : "",
+      categoria: p.categoria ? ETIQUETA_CATEGORIA[p.categoria] : "",
+      valor: p.precio * Math.max(p.stock, 0),
+      estado,
+    });
     if (estado === "Agotado") colorear(fila, COLOR_ALERTA);
     else if (estado === "Stock bajo") colorear(fila, COLOR_AVISO);
   }
@@ -564,7 +603,7 @@ function hojaVentasPorCategoria(libro: ExcelJS.Workbook, categorias: VentasPorCa
     { corte: "Público", filas: categorias.porPublico },
     { corte: "Tipo", filas: categorias.porTipo },
     { corte: "Marca", filas: categorias.porMarca },
-    { corte: "Tamaño", filas: categorias.porTamano },
+    { corte: "Contenido (ml)", filas: categorias.porTamano },
   ];
   // Todos los cortes reparten las mismas ventas: el total se toma de uno solo
   const totalUnidades = sumarCampo(categorias.porPublico, (c) => c.unidades);

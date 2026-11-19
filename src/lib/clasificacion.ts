@@ -1,23 +1,16 @@
 /**
- * Clasificación de los perfumes: tipo, género, público y tamaño.
+ * Clasificación de los productos: tipo, género, público, concentración, categoría y contenido (ml).
  * Estas listas son la ÚNICA fuente: las usan el esquema de la base de datos (enums),
  * las validaciones Zod y las pantallas. Se pueden usar en el servidor y en el navegador.
  */
 
 export const TIPOS_PRODUCTO = ["ORIGINAL", "UNO_UNO", "IMITACION", "VERSION", "ESENCIA"] as const;
-export const GENEROS = ["HOMBRE", "MUJER"] as const;
+export const GENEROS = ["HOMBRE", "MUJER", "UNISEX"] as const;
 export const PUBLICOS = ["ADULTO", "INFANTIL"] as const;
-/**
- * Tamaños permitidos. Se guardan como enum (no como número decimal):
- * la base de datos rechaza cualquier otro valor y no hay errores de redondeo.
- * El orden de la lista es de menor a mayor.
- */
-export const TAMANOS = ["OZ_2", "OZ_2_5", "OZ_3_4", "OZ_4", "OZ_4_2"] as const;
 
 export type TipoProducto = (typeof TIPOS_PRODUCTO)[number];
 export type Genero = (typeof GENEROS)[number];
 export type Publico = (typeof PUBLICOS)[number];
-export type Tamano = (typeof TAMANOS)[number];
 
 export const ETIQUETA_TIPO: Record<TipoProducto, string> = {
   ORIGINAL: "Original",
@@ -27,23 +20,65 @@ export const ETIQUETA_TIPO: Record<TipoProducto, string> = {
   ESENCIA: "Esencia",
 };
 
-export const ETIQUETA_GENERO: Record<Genero, string> = { HOMBRE: "Hombre", MUJER: "Mujer" };
+export const ETIQUETA_GENERO: Record<Genero, string> = { HOMBRE: "Hombre", MUJER: "Mujer", UNISEX: "Unisex" };
 export const ETIQUETA_PUBLICO: Record<Publico, string> = { ADULTO: "Adulto", INFANTIL: "Infantil" };
 
-/** Mililitros con los que se venden comercialmente (1 oz ≈ 29,57 ml, redondeado como en las etiquetas). */
-export const ETIQUETA_TAMANO: Record<Tamano, string> = {
-  OZ_2: "2 oz (60 ml)",
-  OZ_2_5: "2.5 oz (75 ml)",
-  OZ_3_4: "3.4 oz (100 ml)",
-  OZ_4: "4 oz (120 ml)",
-  OZ_4_2: "4.2 oz (125 ml)",
-};
+/** Contenido para mostrar: 100 → "100 ml". (Antes se guardaba en onzas; la migración 0005 lo pasó a ml.) */
+export const textoMl = (ml: number) => `${ml} ml`;
 
 export const SIN_CATEGORIA = "Sin categoría";
 
-/** Hombre + Infantil = "Niño" · Mujer + Infantil = "Niña" · Adulto = "Hombre" / "Mujer". */
+/* ------------------------- Concentración y categoría ------------------------- */
+
+/** Concentración de la fragancia (de más a menos concentrada). */
+export const CONCENTRACIONES = ["EXTRAIT", "PARFUM", "EDP", "EDT", "EDC", "BODY_MIST", "SPLASH", "OTRO"] as const;
+export type Concentracion = (typeof CONCENTRACIONES)[number];
+
+/** Nombre completo, para el selector del formulario. */
+export const ETIQUETA_CONCENTRACION: Record<Concentracion, string> = {
+  EXTRAIT: "Extrait de Parfum",
+  PARFUM: "Parfum",
+  EDP: "Eau de Parfum (EDP)",
+  EDT: "Eau de Toilette (EDT)",
+  EDC: "Eau de Cologne (EDC)",
+  BODY_MIST: "Body Mist",
+  SPLASH: "Splash",
+  OTRO: "Otro",
+};
+
+/** Forma corta que va en el nombre del producto ("EDP 100 ml"). "Otro" no se escribe en el nombre. */
+export const SIGLA_CONCENTRACION: Record<Concentracion, string> = {
+  EXTRAIT: "Extrait de Parfum",
+  PARFUM: "Parfum",
+  EDP: "EDP",
+  EDT: "EDT",
+  EDC: "EDC",
+  BODY_MIST: "Body Mist",
+  SPLASH: "Splash",
+  OTRO: "",
+};
+
+/** Qué clase de artículo es. */
+export const CATEGORIAS = ["PERFUME", "ESTUCHE", "BODY_MIST", "CREMA", "DESODORANTE", "DECANT", "ACCESORIO", "OTRO"] as const;
+export type Categoria = (typeof CATEGORIAS)[number];
+
+export const ETIQUETA_CATEGORIA: Record<Categoria, string> = {
+  PERFUME: "Perfume",
+  ESTUCHE: "Estuche / Set",
+  BODY_MIST: "Body Mist",
+  CREMA: "Crema",
+  DESODORANTE: "Desodorante",
+  DECANT: "Decant",
+  ACCESORIO: "Accesorio",
+  OTRO: "Otro",
+};
+
+/** Contenidos más comunes, para sugerirlos en el formulario (se puede escribir cualquier otro). */
+export const MILILITROS_SUGERIDOS = [10, 30, 50, 60, 75, 80, 90, 100, 120, 125, 150, 200, 250] as const;
+
+/** Hombre + Infantil = "Niño" · Mujer + Infantil = "Niña" · Unisex + Infantil = "Infantil unisex" · Adulto = el género. */
 export function etiquetaPara(genero: Genero, publico: Publico): string {
-  if (publico === "INFANTIL") return genero === "HOMBRE" ? "Niño" : "Niña";
+  if (publico === "INFANTIL") return genero === "HOMBRE" ? "Niño" : genero === "MUJER" ? "Niña" : "Infantil unisex";
   return ETIQUETA_GENERO[genero];
 }
 
@@ -52,7 +87,9 @@ export interface Clasificacion {
   tipo?: TipoProducto | null;
   genero?: Genero | null;
   publico?: Publico | null;
-  tamano?: Tamano | null;
+  contenidoMl?: number | null;
+  concentracion?: Concentracion | null;
+  categoria?: Categoria | null;
 }
 
 /**
@@ -66,7 +103,8 @@ export function describirClasificacion(c: Clasificacion): string {
   if (c.genero && c.publico) partes.push(etiquetaPara(c.genero, c.publico));
   else if (c.genero) partes.push(ETIQUETA_GENERO[c.genero]);
   else if (c.publico) partes.push(ETIQUETA_PUBLICO[c.publico]);
-  if (c.tamano) partes.push(ETIQUETA_TAMANO[c.tamano]);
+  if (c.concentracion && c.concentracion !== "OTRO") partes.push(SIGLA_CONCENTRACION[c.concentracion]);
+  if (c.contenidoMl) partes.push(textoMl(c.contenidoMl));
   return partes.length ? partes.join(" · ") : SIN_CATEGORIA;
 }
 

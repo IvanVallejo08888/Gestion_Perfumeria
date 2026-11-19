@@ -1,7 +1,9 @@
 /**
  * Lista de productos de la factura.
  * - La lista se ve SIEMPRE: un recuadro con scroll donde caben unos 3 productos.
- * - Al escribir se filtra desde la primera letra, sin importar mayúsculas, tildes, ñ ni signos.
+ * - Al escribir se filtra desde la primera letra, sin importar mayúsculas, tildes, ñ ni signos,
+ *   por marca, nombre, variante, concentración, ml, género o código ("aventus 100", "edp dior").
+ * - Cada producto muestra su nombre completo en 2 líneas («Creed Aventus» / «EDP 100 ml · Hombre»).
  * - El inventario se carga una vez y se filtra en el navegador (es instantáneo). Si el local
  *   tiene más de 500 productos, se busca en el servidor con una pequeña espera (200 ms).
  * - Si no hay stock, la fila se ve atenuada, muestra una ADVERTENCIA y no se agrega a la venta.
@@ -13,6 +15,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useConsulta } from "@/hooks/useConsulta";
 import { useValorDiferido } from "@/hooks/useValorDiferido";
 import { coincideBusqueda, normalizarTexto, pesos } from "@/lib/formato";
+import { partirNombre } from "@/lib/productos";
 import type { ProductoVenta } from "@/tipos";
 import { Cargando, Insignia, Mensaje } from "../ui/Basicos";
 import { Icono } from "../ui/Icono";
@@ -59,7 +62,8 @@ export function BuscadorProductos({ onAgregar, enFactura, versionInventario }: P
   const resultados = useMemo(() => {
     if (!hayBusqueda) return productos;
     if (enServidor) return remotaAlDia ? (remota.datos?.productos ?? []) : [];
-    return productos.filter((p) => coincideBusqueda(p.nombre, p.codigo, consulta));
+    // Se busca en el texto con todas las características (o en el nombre, si no viene)
+    return productos.filter((p) => coincideBusqueda(p.busqueda ?? p.nombre, p.codigo, consulta));
   }, [hayBusqueda, productos, enServidor, remotaAlDia, remota.datos, consulta]);
 
   const buscando = enServidor && hayBusqueda && !remota.error && !remotaAlDia;
@@ -109,13 +113,13 @@ export function BuscadorProductos({ onAgregar, enFactura, versionInventario }: P
               if (hayBusqueda && resultados[0]) elegir(resultados[0], true);
             }
           }}
-          placeholder="Nombre o código, ej. Dior"
+          placeholder="Marca, nombre, ml o código. Ej.: aventus 100"
           className="block min-h-14 w-full rounded-xl border-2 border-marca-700 bg-tarjeta py-3 pl-12 pr-4 text-lg focus:outline-none focus:ring-4 focus:ring-marca-200"
         />
       </div>
 
       {/* Ayuda siempre visible (no depende del placeholder, que desaparece al escribir) */}
-      <p id={`${idCampo}-ayuda`} className="mt-1 text-base text-texto-suave">Ignora tildes y signos.</p>
+      <p id={`${idCampo}-ayuda`} className="mt-1 text-base text-texto-suave">Ignora tildes y signos. Puedes escribir las palabras en cualquier orden.</p>
 
       {advertencia && (
         <div className="mt-3">
@@ -151,12 +155,15 @@ export function BuscadorProductos({ onAgregar, enFactura, versionInventario }: P
                   // Tocar una fila sin stock también avisa por qué no se puede vender.
                   // Las filas con stock solo agregan con el botón "+", para no agregar por error al deslizar.
                   onClick={sinStock ? () => elegir(p) : undefined}
-                  className={`flex items-center justify-between gap-2 rounded-xl border-2 bg-tarjeta px-2 py-2 sm:px-3 ${
+                  // En celular el nombre ocupa todo el ancho (cabe en 2 líneas) y precio, stock y "+" van debajo;
+                  // desde tablet todo va en una sola fila
+                  className={`flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-xl border-2 bg-tarjeta px-2 py-2 sm:flex-nowrap sm:px-3 ${
                     sinStock ? "cursor-not-allowed border-linea bg-superficie-apagada" : "border-linea"
                   }`}
                 >
-                  <div className={`min-w-0 flex-1 ${sinStock ? "opacity-70" : ""}`}>
-                    <p className="text-lg font-bold leading-snug break-words">{p.nombre}</p>
+                  <div className={`min-w-0 basis-full sm:basis-auto sm:flex-1 ${sinStock ? "opacity-70" : ""}`}>
+                    <p className="text-lg font-bold leading-snug break-words">{partirNombre(p.nombre)[0]}</p>
+                    {partirNombre(p.nombre)[1] && <p className="text-base leading-snug break-words">{partirNombre(p.nombre)[1]}</p>}
                     {(p.codigo || yaAgregado > 0) && (
                       <p className="text-base leading-snug text-texto-suave">
                         {p.codigo ? `Código ${p.codigo}` : ""}
@@ -165,7 +172,7 @@ export function BuscadorProductos({ onAgregar, enFactura, versionInventario }: P
                       </p>
                     )}
                   </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1 text-right">
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 sm:flex-none sm:shrink-0 sm:flex-col sm:items-end sm:gap-1 sm:text-right">
                     <span className="text-lg font-bold whitespace-nowrap">{pesos(p.precio)}</span>
                     {sinStock ? (
                       <Insignia tono="peligro">Sin stock</Insignia>

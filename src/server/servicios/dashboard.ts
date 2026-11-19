@@ -18,8 +18,8 @@ import { db } from "@/db";
 import { abonos, facturaItems, facturas, locales, marcas, productos } from "@/db/schema";
 import {
   completarCortes,
+  cortesPorMl,
   CORTES_PUBLICO,
-  CORTES_TAMANO,
   CORTES_TIPO,
   ordenarCortes,
   topConOtras,
@@ -86,7 +86,7 @@ export async function ventasPorCategoria({ localId, anio, mes }: AlcanceDashboar
   const [publico, tipo, tamano, marca] = await Promise.all([
     corte(clavePublicoSql(facturaItems.genero, facturaItems.publico)),
     corte(sql<string | null>`${facturaItems.tipo}::text`),
-    corte(sql<string | null>`${facturaItems.tamano}::text`),
+    corte(sql<string | null>`${facturaItems.contenidoMl}::text`),
     // La marca se agrupa sin importar mayúsculas (dos locales pueden escribirla distinto)
     corte(sql<string | null>`lower(${facturaItems.marcaNombre})`, sql<string | null>`min(${facturaItems.marcaNombre})`),
   ]);
@@ -95,7 +95,7 @@ export async function ventasPorCategoria({ localId, anio, mes }: AlcanceDashboar
     porPublico: completarCortes(CORTES_PUBLICO, publico),
     porTipo: completarCortes(CORTES_TIPO, tipo),
     porMarca: ordenarCortes(marca),
-    porTamano: completarCortes(CORTES_TAMANO, tamano),
+    porTamano: cortesPorMl(tamano),
   };
 }
 
@@ -192,7 +192,7 @@ export async function obtenerDashboard(alcance: AlcanceDashboard): Promise<Dashb
     db
       .select({
         id: productos.id,
-        nombre: productos.nombre,
+        nombre: productos.nombreCompleto,
         marcaNombre: marcas.nombre,
         stock: productos.stock,
         stockMinimo: productos.stockMinimo,

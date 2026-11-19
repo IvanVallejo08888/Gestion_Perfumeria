@@ -22,7 +22,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { GENEROS, PUBLICOS, TAMANOS, TIPOS_PRODUCTO } from "../lib/clasificacion";
+import { CATEGORIAS, CONCENTRACIONES, GENEROS, PUBLICOS, TIPOS_PRODUCTO } from "../lib/clasificacion";
 import { TIPOS_MOVIMIENTO } from "../lib/inventario";
 
 /* ---------------------------- Enumeraciones ---------------------------- */
@@ -57,7 +57,8 @@ export const generoEnum = pgEnum("genero", GENEROS);
 /** ADULTO o INFANTIL. Hombre + Infantil = niño · Mujer + Infantil = niña. */
 export const publicoEnum = pgEnum("publico", PUBLICOS);
 /** Tamaño en onzas como enum: solo se aceptan los tamaños de la lista, sin riesgo de decimales. */
-export const tamanoProductoEnum = pgEnum("tamano_producto", TAMANOS);
+export const concentracionEnum = pgEnum("concentracion", CONCENTRACIONES);
+export const categoriaProductoEnum = pgEnum("categoria_producto", CATEGORIAS);
 
 /** INGRESO = llegó mercancía · VENTA = salió en una factura · AJUSTE = corrección manual (con motivo). */
 export const tipoMovimientoEnum = pgEnum("tipo_movimiento", TIPOS_MOVIMIENTO);
@@ -173,7 +174,18 @@ export const productos = pgTable(
     tipo: tipoProductoEnum("tipo"),
     genero: generoEnum("genero"),
     publico: publicoEnum("publico"),
-    tamano: tamanoProductoEnum("tamano"),
+    /*
+     * Características del producto (todas opcionales): con ellas se arma el nombre completo
+     * "Creed Aventus · EDP 100 ml · Hombre" (ver armarNombreProducto en src/lib/productos.ts).
+     */
+    /** "Intense", "Blush", "Tester", "+ gel"… */
+    variante: text("variante"),
+    concentracion: concentracionEnum("concentracion"),
+    /** Contenido en mililitros. Vacío si no se mide en ml (estuche, accesorio). */
+    contenidoMl: integer("contenido_ml"),
+    categoria: categoriaProductoEnum("categoria"),
+    /** Nombre completo calculado en el servidor (nunca lo escribe el usuario). */
+    nombreCompleto: text("nombre_completo").notNull().default(""),
     activo: boolean("activo").notNull().default(true),
     creadoEn: creadoEn(),
     actualizadoEn: actualizadoEn(),
@@ -293,7 +305,9 @@ export const facturaItems = pgTable("factura_items", {
   tipo: tipoProductoEnum("tipo"),
   genero: generoEnum("genero"),
   publico: publicoEnum("publico"),
-  tamano: tamanoProductoEnum("tamano"),
+  contenidoMl: integer("contenido_ml"),
+  concentracion: concentracionEnum("concentracion"),
+  categoria: categoriaProductoEnum("categoria"),
 });
 
 export const cuotas = pgTable(

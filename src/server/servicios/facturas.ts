@@ -75,7 +75,7 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
       cantidad: number;
       /** Stock que quedó después de descontar (para el movimiento VENTA). */
       stockResultante: number;
-      clasificacion: Pick<typeof productos.$inferSelect, "marcaId" | "tipo" | "genero" | "publico" | "tamano">;
+      clasificacion: Pick<typeof productos.$inferSelect, "marcaId" | "tipo" | "genero" | "publico" | "contenidoMl" | "concentracion" | "categoria">;
     }[] = [];
     for (const [productoId, cantidad] of cantidades) {
       const [actualizado] = await tx
@@ -90,14 +90,17 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
           ),
         )
         .returning({
-          nombre: productos.nombre,
+          // La factura guarda el NOMBRE COMPLETO ("Creed Aventus · EDP 100 ml · Hombre") como copia
+          nombre: productos.nombreCompleto,
           precio: productos.precio,
           stock: productos.stock,
           marcaId: productos.marcaId,
           tipo: productos.tipo,
           genero: productos.genero,
           publico: productos.publico,
-          tamano: productos.tamano,
+          contenidoMl: productos.contenidoMl,
+          concentracion: productos.concentracion,
+          categoria: productos.categoria,
         });
 
       if (!actualizado) {
@@ -185,7 +188,9 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
         tipo: c.tipo,
         genero: c.genero,
         publico: c.publico,
-        tamano: c.tamano,
+        contenidoMl: c.contenidoMl,
+        concentracion: c.concentracion,
+        categoria: c.categoria,
       })),
     );
 
@@ -319,7 +324,9 @@ export async function obtenerFactura(localId: string, id: string): Promise<Factu
       tipo: i.tipo,
       genero: i.genero,
       publico: i.publico,
-      tamano: i.tamano,
+      contenidoMl: i.contenidoMl,
+      concentracion: i.concentracion,
+      categoria: i.categoria,
     })),
     cuotas: f.cuotas.map((c) => ({
       id: c.id,

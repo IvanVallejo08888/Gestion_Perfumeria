@@ -87,6 +87,26 @@ export async function eliminarMarca(id: string): Promise<"eliminado" | "desactiv
 }
 
 /**
+ * Marca de un producto a partir del NOMBRE escrito en el formulario (campo con sugerencias):
+ *  - Si ya existe en el local (sin importar mayúsculas), se usa esa.
+ *  - Si no existe, se crea (igual que «Agregar marca»).
+ *  - Una marca desactivada solo se acepta si es la que el producto ya tenía (al editar).
+ */
+export async function resolverMarcaPorNombre(
+  localId: string,
+  nombreEscrito: string,
+  marcaActual?: string | null,
+): Promise<{ id: string; nombre: string }> {
+  const nombre = limpiar(nombreEscrito);
+  const existente = await db.query.marcas.findFirst({
+    where: and(eq(marcas.localId, localId), sql`lower(${marcas.nombre}) = lower(${nombre})`),
+  });
+  if (existente && (existente.activo || existente.id === marcaActual)) return { id: existente.id, nombre: existente.nombre };
+  // No existe (se crea) o está desactivada (crearMarcaDelLocal responde con el mensaje claro)
+  return crearMarcaDelLocal(localId, nombre);
+}
+
+/**
  * Verifica que la marca elegida para un producto sea del local y esté activa.
  * Excepción: al editar, el producto puede conservar la marca que ya tenía aunque esté desactivada.
  */

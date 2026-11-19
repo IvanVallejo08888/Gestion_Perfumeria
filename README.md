@@ -69,7 +69,7 @@ npm run start
 `npm run db:seed-perfumes -- "Nombre del local"` carga en un local que ya exista:
 
 - 8 marcas (Dior, Chanel, Carolina Herrera, Paco Rabanne, Lattafa, Armaf, Rasasi y Afnan).
-- 30 perfumes con códigos `DEMO-01` a `DEMO-30`, que cubren Hombre, Mujer, Niño y Niña, los 5 tipos y los 5 tamaños.
+- 30 perfumes con códigos `DEMO-01` a `DEMO-30`, que cubren Hombre, Mujer, Niño y Niña, los 5 tipos y 5 contenidos (60, 75, 100, 120 y 125 ml).
 - Precios según el tipo: Original > 1.1 > Versión / Imitación > Esencia.
 - 3 perfumes agotados y 4 en stock bajo, para ver las alertas y las notificaciones.
 
@@ -101,13 +101,19 @@ En **Locales → Sectores de la ciudad** el administrador agrega sectores (uno a
 ### Marcas
 Cada local tiene sus propias marcas (Dior, Lattafa…). El administrador las maneja en **Locales → Editar → Marcas** igual que los sectores: agregar una o varias, renombrar, desactivar o eliminar. El nombre no se repite en el local aunque cambien las mayúsculas, y una marca que ya se usó en productos solo se desactiva.
 
-El vendedor elige la marca al crear o editar un perfume y, si no está, la agrega ahí mismo con **«Agregar marca»** (queda elegida). Si el administrador desactivó una marca, el vendedor no la puede volver a crear.
+El vendedor escribe la marca al crear o editar un producto, con sugerencias de las marcas del local. Si escribe una que no existe, se crea sola al guardar (sin duplicar, aunque cambien las mayúsculas). Si el administrador desactivó una marca, el vendedor no la puede volver a crear.
 
 ### Inventario
-Cada perfume se clasifica con **marca**, **tipo** (Original, 1.1, Imitación, Versión, Esencia), **género** (Hombre/Mujer), **público** (Adulto/Infantil → Niño/Niña) y **tamaño** (2, 2.5, 3.4, 4 y 4.2 oz). Los productos creados antes de la clasificación aparecen como «Sin categoría» hasta que se editen.
+Cada producto tiene **marca** (obligatoria), **nombre de la fragancia** (obligatorio) y, opcionales: **variante** («Intense», «Tester»), **concentración** (Extrait de Parfum, Parfum, EDP, EDT, EDC, Body Mist, Splash, Otro), **contenido en ml**, **género** (Hombre, Mujer, Unisex) con su **público** (Adulto/Infantil → Niño/Niña), **categoría** (Perfume, Estuche / Set, Body Mist, Crema, Desodorante, Decant, Accesorio, Otro) y **tipo** (Original, 1.1, Imitación, Versión, Esencia). Los productos sin ningún dato aparecen como «Sin categoría».
 
-- **Buscar y filtrar:** pestañas Todos | Hombre | Mujer, con chips Adulto/Niño o Adulta/Niña, más filtros de marca, tipo, tamaño y estado de stock (disponible, bajo, agotado) y el buscador por nombre o código. Los filtros se combinan, se aplican en el servidor y quedan en la dirección (`/panel/inventario?genero=MUJER&tipo=ORIGINAL`), así se pueden guardar o compartir.
-- **En celular y tablet** cada perfume es una tarjeta con dos botones grandes; **en escritorio** (desde 1280 px) se ve una tabla con Marca, Nombre, Tipo, Género, Tamaño, Precio, Stock y Acciones.
+**Nombre completo.** El servidor lo arma con `armarNombreProducto()` (`src/lib/productos.ts`, con pruebas) al crear o editar: «Marca Nombre Variante · Concentración ml · Género», por ejemplo **«Creed Aventus · EDP 100 ml · Hombre»**, «Victoria's Secret Bombshell · Body Mist 250 ml» o «Estuche Dior Sauvage · EDT 100 ml + gel» (una variante que empieza por «+» va al final). Los campos vacíos no dejan separadores. El formulario muestra una **vista previa en vivo** y avisa si ya existe un producto con la misma marca, nombre, variante, concentración y ml (se puede continuar con confirmación).
+
+El nombre completo se usa en el inventario, el buscador y las líneas de la factura (en 2 líneas: «Creed Aventus» / «EDP 100 ml · Hombre»), la factura (imagen, PDF, WhatsApp), el historial, el récord del cliente, los avisos de stock, los productos más vendidos y todos los Excel. **Cada venta guarda una copia** del nombre completo, la marca, los ml, la concentración y la categoría: editar el producto después no cambia las facturas, y las facturas antiguas conservan su nombre original.
+
+**Búsqueda.** `nombre_busqueda` lleva todos los datos normalizados (marca, nombre, variante, concentración con sigla y nombre largo, ml como «100 ml» y «100ml», género, categoría, tipo y código). Se encuentra con «aventus 100», «creed hombre», «edp 100ml», «100 ml dior» o «sauvage edt», en cualquier orden y sin tildes.
+
+- **Buscar y filtrar:** pestañas Todos | Hombre | Mujer | Unisex, con chips de público, más filtros de marca, categoría, tipo y estado de stock (disponible, bajo, agotado) y el buscador. Los filtros se combinan, se aplican en el servidor y quedan en la dirección (`/panel/inventario?genero=MUJER&categoria=PERFUME`), así se pueden guardar o compartir.
+- **En celular y tablet** cada producto es una tarjeta con la **marca en grande**, la fragancia y sus características como insignias; **en escritorio** (desde 1280 px) se ve una tabla con Marca, Fragancia, Características, Género, Tipo, Precio, Stock y Acciones.
 - **Agregar unidades:** cantidad y nota opcional (por ejemplo, la factura del proveedor).
 - **Vender:** abre **Facturación** con ese perfume ya cargado (`?producto=…`), en contado o en crédito. No hay otro flujo de venta. Si está agotado, el botón lo dice y no deja vender.
 - **Detalle:** datos del perfume, sus **últimos 20 movimientos**, y los botones Editar, Ajustar stock y Eliminar.
@@ -164,7 +170,7 @@ Cobros vencidos, del día y de los próximos 3 días (según las fechas de las c
 Arriba de las estadísticas, en **Reportes** (vendedor: su local · administrador: un local o «Todos los locales»), con el año y el mes elegidos:
 
 - **Indicadores:** total vendido, recaudado, unidades vendidas, valor del inventario hoy, cartera pendiente y perfumes agotados.
-- **Gráficas:** top 10 perfumes (por unidades o por valor), ventas por Hombre / Niño / Mujer / Niña, por tipo, por marca (top 8 + «Otras») y por tamaño, contado y crédito mes a mes con el recaudo, y el inventario de hoy (stock por género y perfumes por reponer, con «Agregar unidades» para el vendedor).
+- **Gráficas:** top 10 perfumes (por unidades o por valor), ventas por Hombre / Niño / Mujer / Niña, por tipo, por marca (top 8 + «Otras») y por contenido en ml, contado y crédito mes a mes con el recaudo, y el inventario de hoy (stock por género y perfumes por reponer, con «Agregar unidades» para el vendedor).
 
 **Qué periodo usa cada cosa:** las ventas, el recaudo, las unidades y las gráficas de ventas usan el año o mes elegido; la gráfica mes a mes muestra siempre los 12 meses del año; el valor del inventario, la cartera, los agotados y la sección de inventario son **de hoy**.
 
@@ -183,13 +189,13 @@ Se descargan desde **Reportes**, del año completo o de un mes.
 |---|---|
 | Resumen | Ventas de contado, créditos, abonos, recibido en efectivo/transferencia, gastos y utilidad mes a mes |
 | Facturas | Todas las facturas del periodo, con totales |
-| Productos vendidos | Unidades y valor vendido por producto |
-| Ventas por categoría | Unidades y valor vendido por público, tipo, marca y tamaño (los mismos cortes del dashboard) |
+| Productos vendidos | Unidades y valor vendido por producto (nombre completo de la venta, marca y ml) |
+| Ventas por categoría | Unidades y valor vendido por público, tipo, marca y contenido en ml (los mismos cortes del dashboard) |
 | Abonos | Cada abono recibido en el periodo |
 | Ventas por vendedor | Lo que vendió cada vendedor y su % del total |
 | Gastos | Cada gasto del periodo, con categoría y medio de pago |
 | Cartera | Créditos con saldo **hoy**: valor vencido, días de atraso y próxima cuota (rojo = más de 30 días, amarillo = algo vencido) |
-| Inventario | Stock **hoy** y valor del inventario (rojo = agotado, amarillo = stock bajo) |
+| Inventario | Stock **hoy** y valor del inventario, con nombre completo, marca, fragancia, variante, concentración, ml, género y categoría (rojo = agotado, amarillo = stock bajo) |
 
 **Consolidado** (solo administrador): hoja *Comparativo locales*, con las cifras de cada local lado a lado y su % de las ventas, hoja *Ventas por categoría* de todos los locales, y hoja *Cartera*, con los créditos pendientes de todos los locales.
 
@@ -273,6 +279,26 @@ ALTER TABLE cuotas DROP COLUMN anulada;
 ALTER TABLE abonos DROP COLUMN anulado;
 ALTER TABLE clientes DROP COLUMN nombre_busqueda, DROP COLUMN nombre_compacto, DROP COLUMN telefono_digitos;
 DELETE FROM drizzle.__drizzle_migrations WHERE id = (SELECT max(id) FROM drizzle.__drizzle_migrations);
+```
+
+**Migraciones 0005 y 0006 (características del producto):**
+- La 0005 agrega `variante`, `concentracion`, `contenido_ml`, `categoria` y `nombre_completo` a `productos`; `contenido_ml`, `concentracion` y `categoria` a `factura_items`, y el género **Unisex**. Convierte el tamaño viejo a ml (2 oz → 60, 2.5 → 75, 3.4 → 100, 4 → 120, 4.2 → 125) en productos **y** en las ventas guardadas, marca como «Perfume» los productos ya clasificados y deja `nombre_completo` = nombre actual.
+- La 0006 quita la columna `tamano` y su tipo (los datos ya quedaron en ml).
+- Después ejecuta `npm run db:recalcular-busqueda`: arma el nombre completo y la búsqueda de cada producto con la misma función de la app. **Las facturas no se modifican.**
+
+Para revertirlas (vuelve primero a la versión anterior del código; con un respaldo es más seguro):
+
+```sql
+CREATE TYPE tamano_producto AS ENUM ('OZ_2','OZ_2_5','OZ_3_4','OZ_4','OZ_4_2');
+ALTER TABLE productos ADD COLUMN tamano tamano_producto;
+ALTER TABLE factura_items ADD COLUMN tamano tamano_producto;
+UPDATE productos SET tamano = (CASE contenido_ml WHEN 60 THEN 'OZ_2' WHEN 75 THEN 'OZ_2_5' WHEN 100 THEN 'OZ_3_4' WHEN 120 THEN 'OZ_4' WHEN 125 THEN 'OZ_4_2' END)::tamano_producto;
+UPDATE factura_items SET tamano = (CASE contenido_ml WHEN 60 THEN 'OZ_2' WHEN 75 THEN 'OZ_2_5' WHEN 100 THEN 'OZ_3_4' WHEN 120 THEN 'OZ_4' WHEN 125 THEN 'OZ_4_2' END)::tamano_producto;
+ALTER TABLE productos DROP COLUMN variante, DROP COLUMN concentracion, DROP COLUMN contenido_ml, DROP COLUMN categoria, DROP COLUMN nombre_completo;
+ALTER TABLE factura_items DROP COLUMN contenido_ml, DROP COLUMN concentracion, DROP COLUMN categoria;
+DROP TYPE concentracion; DROP TYPE categoria_producto;
+DELETE FROM drizzle.__drizzle_migrations WHERE id IN (SELECT id FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 2);
+-- El valor UNISEX del tipo "genero" no se puede quitar en PostgreSQL; si algún producto lo usa, cámbialo antes a HOMBRE o MUJER.
 ```
 
 **Para agregar una función nueva:** tabla en `src/db/schema.ts` → `npm run db:generate` → lógica en `src/server/servicios/` → endpoint en `src/app/api/` → pantalla en `src/app/panel/` o `src/app/admin/`.

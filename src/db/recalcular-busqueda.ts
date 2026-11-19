@@ -2,7 +2,7 @@
  * Recalcula los textos de búsqueda con la versión actual de normalizarTexto.
  * Ejecutar una vez después de migrar:  npm run db:recalcular-busqueda
  *
- *  - productos.nombre_busqueda
+ *  - productos.nombre_completo y nombre_busqueda (con armarNombreProducto / textoBusquedaProducto)
  *  - facturas.cliente_nombre_busqueda
  *  - clientes.nombre_busqueda, nombre_compacto y telefono_digitos (buscador de Clientes)
  *
@@ -11,6 +11,7 @@
  */
 import "dotenv/config";
 import { eq } from "drizzle-orm";
+import { armarNombreProducto, textoBusquedaProducto } from "../lib/productos";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { camposBusquedaCliente, normalizarTexto } from "../lib/formato";
@@ -19,15 +20,33 @@ import * as schema from "./schema";
 async function main() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const db = drizzle(pool, { schema });
-  const { productos, facturas, clientes } = schema;
+  const { productos, facturas, clientes, marcas } = schema;
 
   try {
     let productosCambiados = 0;
-    const listaProductos = await db.select({ id: productos.id, nombre: productos.nombre, actual: productos.nombreBusqueda }).from(productos);
+    const listaProductos = await db
+      .select({
+        id: productos.id,
+        nombre: productos.nombre,
+        marca: marcas.nombre,
+        variante: productos.variante,
+        concentracion: productos.concentracion,
+        contenidoMl: productos.contenidoMl,
+        genero: productos.genero,
+        publico: productos.publico,
+        categoria: productos.categoria,
+        tipo: productos.tipo,
+        codigo: productos.codigo,
+        completoActual: productos.nombreCompleto,
+        busquedaActual: productos.nombreBusqueda,
+      })
+      .from(productos)
+      .leftJoin(marcas, eq(marcas.id, productos.marcaId));
     for (const p of listaProductos) {
-      const nombreBusqueda = normalizarTexto(p.nombre);
-      if (nombreBusqueda === p.actual) continue;
-      await db.update(productos).set({ nombreBusqueda }).where(eq(productos.id, p.id));
+      const nombreCompleto = armarNombreProducto(p);
+      const nombreBusqueda = textoBusquedaProducto(p);
+      if (nombreCompleto === p.completoActual && nombreBusqueda === p.busquedaActual) continue;
+      await db.update(productos).set({ nombreCompleto, nombreBusqueda }).where(eq(productos.id, p.id));
       productosCambiados++;
     }
 

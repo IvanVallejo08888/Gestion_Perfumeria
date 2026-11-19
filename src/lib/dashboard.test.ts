@@ -1,13 +1,13 @@
 /** Pruebas de las reglas del dashboard (cortes de ventas). Ejecutar con: npm test */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { completarCortes, CORTES_PUBLICO, CORTES_TIPO, hayDatos, ordenarCortes, pesosCorto, topConOtras } from "./dashboard";
+import { completarCortes, CORTES_PUBLICO, CORTES_TIPO, cortesPorMl, hayDatos, ordenarCortes, pesosCorto, topConOtras } from "./dashboard";
 
 describe("cortes de lista fija", () => {
-  it("el público sale siempre como Hombre, Niño, Mujer, Niña", () => {
+  it("el público sale siempre como Hombre, Niño, Mujer, Niña, Unisex, Infantil unisex", () => {
     assert.deepEqual(
       CORTES_PUBLICO.map((c) => c.etiqueta),
-      ["Hombre", "Niño", "Mujer", "Niña"],
+      ["Hombre", "Niño", "Mujer", "Niña", "Unisex", "Infantil unisex"],
     );
   });
   it("completa con cero y conserva el orden", () => {
@@ -21,6 +21,23 @@ describe("cortes de lista fija", () => {
     const cortes = completarCortes(CORTES_TIPO, [{ clave: null, unidades: 2, valor: 50_000 }]);
     assert.deepEqual(cortes.at(-1), { clave: "SIN_CATEGORIA", etiqueta: "Sin categoría", unidades: 2, valor: 50_000 });
     assert.equal(completarCortes(CORTES_TIPO, []).length, 5);
+  });
+});
+
+describe("contenido en ml", () => {
+  it("ordena de menor a mayor, con la etiqueta en ml y «Sin categoría» al final", () => {
+    const cortes = cortesPorMl([
+      { clave: "100", unidades: 5, valor: 500_000 },
+      { clave: null, unidades: 1, valor: 10_000 },
+      { clave: "60", unidades: 2, valor: 120_000 },
+    ]);
+    assert.deepEqual(
+      cortes.map((c) => [c.clave, c.etiqueta, c.unidades]),
+      [["60", "60 ml", 2], ["100", "100 ml", 5], ["SIN_CATEGORIA", "Sin categoría", 1]],
+    );
+  });
+  it("sin ventas: lista vacía", () => {
+    assert.deepEqual(cortesPorMl([]), []);
   });
 });
 

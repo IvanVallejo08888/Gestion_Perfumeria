@@ -18,6 +18,7 @@ import { avisarCambioNotificaciones } from "@/hooks/useNotificaciones";
 import { pesos } from "@/lib/formato";
 import { cargarBorradorGuardado, cuotasVigentes, guardarBorradorFactura, reconciliarLineas } from "@/lib/borrador-factura";
 import { api, ErrorApi } from "@/lib/http";
+import { partirNombre } from "@/lib/productos";
 import { calcularPago } from "@/lib/pagos";
 import { clienteSchema } from "@/lib/validaciones";
 import type { ClienteDatos, FacturaDetalle, MedioPago, NombreActivo, ProductoVenta, TipoFactura } from "@/tipos";
@@ -378,7 +379,9 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
               {lineas.map((l) => (
                 <li key={l.producto.id} className="grid gap-3 rounded-xl border-2 border-linea p-4 sm:grid-cols-[1fr_auto_auto] sm:items-center">
                   <div>
-                    <p className="text-lg font-bold">{l.producto.nombre}</p>
+                    {/* Nombre completo en 2 líneas: «Marca Nombre» y «EDP 100 ml · Hombre» */}
+                    <p className="text-lg font-bold break-words">{partirNombre(l.producto.nombre)[0]}</p>
+                    {partirNombre(l.producto.nombre)[1] && <p className="text-base break-words">{partirNombre(l.producto.nombre)[1]}</p>}
                     <p className="text-base text-texto-suave">
                       {pesos(l.producto.precio)} c/u · Disponibles: {l.producto.stock}
                     </p>

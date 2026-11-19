@@ -1,33 +1,34 @@
 /** Pruebas de las etiquetas de clasificación de perfumes. Ejecutar con: npm test */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { describirClasificacion, ETIQUETA_TAMANO, ETIQUETA_TIPO, etiquetaPara, SIN_CATEGORIA, TAMANOS } from "./clasificacion";
+import { describirClasificacion, ETIQUETA_TIPO, etiquetaPara, SIN_CATEGORIA, textoMl } from "./clasificacion";
 
 describe("etiquetas de clasificación", () => {
   it("los tipos se muestran como en el local", () => {
     assert.equal(ETIQUETA_TIPO.UNO_UNO, "1.1");
     assert.equal(ETIQUETA_TIPO.IMITACION, "Imitación");
   });
-  it("todos los tamaños muestran onzas y mililitros", () => {
-    assert.equal(ETIQUETA_TAMANO.OZ_3_4, "3.4 oz (100 ml)");
-    for (const t of TAMANOS) assert.match(ETIQUETA_TAMANO[t], /^\d(\.\d)? oz \(\d+ ml\)$/);
+  it("el contenido se muestra en mililitros", () => {
+    assert.equal(textoMl(100), "100 ml");
   });
   it("Hombre/Mujer + Infantil = Niño/Niña", () => {
     assert.equal(etiquetaPara("HOMBRE", "INFANTIL"), "Niño");
     assert.equal(etiquetaPara("MUJER", "INFANTIL"), "Niña");
     assert.equal(etiquetaPara("MUJER", "ADULTO"), "Mujer");
+    assert.equal(etiquetaPara("UNISEX", "ADULTO"), "Unisex");
+    assert.equal(etiquetaPara("UNISEX", "INFANTIL"), "Infantil unisex");
   });
 });
 
 describe("describirClasificacion", () => {
-  it("une los datos en orden: marca · tipo · género · tamaño", () => {
+  it("une los datos en orden: marca · tipo · género · concentración · ml", () => {
     assert.equal(
-      describirClasificacion({ marcaNombre: "Dior", tipo: "ORIGINAL", genero: "HOMBRE", publico: "ADULTO", tamano: "OZ_3_4" }),
-      "Dior · Original · Hombre · 3.4 oz (100 ml)",
+      describirClasificacion({ marcaNombre: "Dior", tipo: "ORIGINAL", genero: "HOMBRE", publico: "ADULTO", concentracion: "EDT", contenidoMl: 100 }),
+      "Dior · Original · Hombre · EDT · 100 ml",
     );
   });
   it("sin ningún dato (facturas o productos antiguos) → Sin categoría", () => {
     assert.equal(describirClasificacion({}), SIN_CATEGORIA);
-    assert.equal(describirClasificacion({ marcaNombre: null, tipo: null, genero: null, publico: null, tamano: null }), SIN_CATEGORIA);
+    assert.equal(describirClasificacion({ marcaNombre: null, tipo: null, genero: null, publico: null, contenidoMl: null }), SIN_CATEGORIA);
   });
 });

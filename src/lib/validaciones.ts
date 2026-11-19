@@ -10,7 +10,7 @@ import { z } from "zod";
  * el servidor (vía src/lib/api.ts) y los formularios del navegador, así que se configura en ambos.
  */
 z.config(z.locales.es());
-import { GENEROS, PUBLICOS, TAMANOS, TIPOS_PRODUCTO } from "./clasificacion";
+import { CATEGORIAS, CONCENTRACIONES, GENEROS, PUBLICOS, TIPOS_PRODUCTO } from "./clasificacion";
 import { ESTADOS_STOCK } from "./inventario";
 import { MODULOS } from "./guia-usuario";
 
@@ -132,18 +132,49 @@ export const cambiarEstadoSchema = z.object({
 
 /* --------------------------------- Productos ------------------------------- */
 
+/** Texto opcional: "" o solo espacios se guardan como vacío (null). */
+const textoOpcional = (campo: string, max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max, `${campo} es demasiado largo.`)
+    .optional()
+    .nullable()
+    .transform((v) => v || null);
+
+/**
+ * Producto del inventario. Obligatorios: marca, nombre de la fragancia y precio.
+ * Las demás características son opcionales (un estuche o un accesorio no tienen ml ni concentración).
+ * El nombre completo NO viene del navegador: lo arma el servidor con armarNombreProducto().
+ */
 export const productoSchema = z.object({
-  nombre: texto("El nombre del producto", 120),
+  /** Nombre de la marca (se elige de las del local o se escribe una nueva). */
+  marca: texto("El nombre de la marca", 80),
+  nombre: texto("El nombre de la fragancia", 120),
+  variante: textoOpcional("La variante", 60),
+  concentracion: z.enum(CONCENTRACIONES, { error: "Concentración no válida." }).nullable().optional().default(null),
+  contenidoMl: z.coerce
+    .number({ error: "El contenido debe ser un número de mililitros." })
+    .int("El contenido debe ser un número entero de mililitros.")
+    .min(1, "El contenido debe ser mayor que cero.")
+    .max(5000, "El contenido es demasiado alto.")
+    .nullable()
+    .optional()
+    .default(null),
+  genero: z.enum(GENEROS, { error: "Género no válido." }).nullable().optional().default(null),
+  publico: z.enum(PUBLICOS, { error: "Público no válido." }).nullable().optional().default(null),
+  categoria: z.enum(CATEGORIAS, { error: "Categoría no válida." }).nullable().optional().default(null),
+  tipo: z.enum(TIPOS_PRODUCTO, { error: "Tipo no válido." }).nullable().optional().default(null),
   codigo: z.string().trim().max(40).optional().default(""),
   precio: dineroSchema("El precio").refine((v) => v > 0, "El precio debe ser mayor que cero."),
   stock: z.coerce.number().int("El stock debe ser un número entero.").min(0, "El stock no puede ser negativo."),
   stockMinimo: z.coerce.number().int().min(0).default(3),
-  marcaId: z.uuid("Elige la marca."),
-  tipo: z.enum(TIPOS_PRODUCTO, { error: "Elige el tipo (Original, 1.1, Imitación, Versión o Esencia)." }),
-  genero: z.enum(GENEROS, { error: "Elige si es para hombre o para mujer." }),
-  publico: z.enum(PUBLICOS, { error: "Elige si es para adulto o infantil." }),
-  tamano: z.enum(TAMANOS, { error: "Elige el tamaño." }),
 });
+
+/** Consulta de posible duplicado (misma marca, nombre, variante, concentración y ml). */
+export const duplicadoProductoSchema = productoSchema
+  .pick({ marca: true, nombre: true, variante: true, concentracion: true, contenidoMl: true })
+  .extend({ excluirId: z.uuid().optional() });
 
 const notaMovimiento = z.string().trim().max(200, "La nota es demasiado larga (máximo 200 caracteres).");
 
@@ -173,7 +204,7 @@ export const filtroProductosSchema = z.object({
   publico: z.enum(PUBLICOS).optional(),
   marcaId: z.uuid("Marca no válida.").optional(),
   tipo: z.enum(TIPOS_PRODUCTO).optional(),
-  tamano: z.enum(TAMANOS).optional(),
+  categoria: z.enum(CATEGORIAS).optional(),
   stock: z.enum(ESTADOS_STOCK).optional(),
 });
 
