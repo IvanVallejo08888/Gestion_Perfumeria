@@ -201,6 +201,52 @@ Se descargan desde **Reportes**, del año completo o de un mes.
 
 > Las hojas *Cartera* e *Inventario* muestran el estado **al momento de descargar**, sin importar el periodo elegido.
 
+### Limpieza del sistema (solo administrador)
+
+En **Limpieza del sistema** el administrador borra datos de un local **de forma definitiva**. Primero elige el local y ve un resumen de lo que tiene.
+
+**Por periodo** (año y uno o varios meses, o todo el año; nunca meses que no han llegado):
+
+| Borra | Conserva |
+|---|---|
+| Las **ventas de contado** creadas en esos meses (también las anuladas) con sus productos vendidos | **Todos los créditos** con sus cuotas y abonos, aunque se hayan creado o abonado en esos meses |
+| Los **gastos** con fecha en esos meses (también los eliminados) | Todos los clientes, todo el inventario (el **stock no cambia**), sectores, categorías, usuarios y la configuración |
+
+Antes de borrar hay que tocar **«Ver qué se va a borrar»** (vista previa: cuántas ventas y gastos, por qué valor, y cuántos créditos y abonos del periodo se conservan).
+
+**Zona de peligro** (borra todo lo de ese tipo, sin importar la fecha):
+
+| Opción | Borra | No toca |
+|---|---|---|
+| Todas las ventas de contado | Facturas de contado y sus productos vendidos | Créditos, clientes, inventario |
+| Todos los créditos | Créditos, cuotas y abonos (avisa cuánto queda por cobrar) | Ventas de contado, clientes, inventario |
+| Todos los gastos | Todos los gastos | Lo demás |
+| Clientes | Solo los clientes **sin** ventas ni créditos (los demás se conservan y se avisa cuántos) | Facturas |
+| Todo el inventario | Productos y su historial de movimientos | Las facturas conservan el nombre del producto |
+| TODO el local | Ventas, créditos (cuotas y abonos), gastos, clientes e inventario. Opcional: reiniciar la numeración de facturas a 1 | El local, sus usuarios, sectores, marcas, categorías de gasto, proveedores y compras a proveedores |
+
+**Protecciones** (en todas las opciones):
+1. Resumen exacto de lo que se borra y lo que se conserva.
+2. **Copia de respaldo obligatoria:** se descarga un Excel con una hoja por tabla, con exactamente lo que se va a borrar. Si la descarga falla, no se borra nada.
+3. Escribir `BORRAR <NOMBRE DEL LOCAL>` (no importan las mayúsculas ni los espacios de más).
+4. La contraseña del administrador (el servidor la verifica).
+5. Una cuenta regresiva de 5 segundos antes de habilitar **«Sí, borrar definitivamente»**.
+
+En el servidor todo ocurre en **una transacción**:
+- bloquea el local, así que una factura nueva del mismo local espera a que termine;
+- rechaza otra limpieza del mismo local en menos de 30 segundos;
+- vuelve a contar y, si los datos cambiaron desde que se descargó el respaldo, **no borra nada**;
+- borra en orden: facturas, gastos, clientes y productos;
+- deja el registro en el **Historial de limpiezas** (quién, cuándo, qué y cuántos), que la app no permite borrar.
+
+Si algo falla a mitad, PostgreSQL revierte todo. Para probarlo, se puede arrancar el servidor con `LIMPIEZA_SIMULAR_FALLO=1`: la limpieza falla al final y no se borra nada. **Nunca uses esa variable en producción.**
+
+> **Recomendación:** antes de una limpieza grande, haz también un respaldo completo de la base de datos, además del Excel. En Neon basta con crear una *branch*; en cualquier PostgreSQL:
+> ```bash
+> pg_dump "postgresql://USUARIO:CLAVE@HOST:5432/BASE" -Fc -f respaldo_antes_de_limpiar.dump
+> # Para restaurar: pg_restore --clean -d "postgresql://…" respaldo_antes_de_limpiar.dump
+> ```
+
 ## 5. Instalar como aplicación (PWA)
 
 La app se puede instalar en celular, tablet y computador, y se abre en su propia ventana, sin barra del navegador.
@@ -300,6 +346,10 @@ DROP TYPE concentracion; DROP TYPE categoria_producto;
 DELETE FROM drizzle.__drizzle_migrations WHERE id IN (SELECT id FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 2);
 -- El valor UNISEX del tipo "genero" no se puede quitar en PostgreSQL; si algún producto lo usa, cámbialo antes a HOMBRE o MUJER.
 ```
+
+**Migración 0010 (limpieza del sistema):** crea la tabla `limpiezas` (historial de auditoría). Para revertirla: `DROP TABLE limpiezas; DROP TYPE alcance_limpieza;` y borrar su fila de `drizzle.__drizzle_migrations`.
+
+> **Ojo con las migraciones de fechas antiguas.** `npm run db:migrate` solo aplica las migraciones con fecha **posterior** a la última registrada en la base. Si al unir ramas aparece una migración nueva con una fecha anterior (pasó con 0004, 0005 y 0006), `db:migrate` la salta sin avisar. Para comprobarlo, compara `drizzle/meta/_journal.json` con `SELECT created_at FROM drizzle.__drizzle_migrations`: cada `when` del journal debe estar en la base.
 
 **Para agregar una función nueva:** tabla en `src/db/schema.ts` → `npm run db:generate` → lógica en `src/server/servicios/` → endpoint en `src/app/api/` → pantalla en `src/app/panel/` o `src/app/admin/`.
 

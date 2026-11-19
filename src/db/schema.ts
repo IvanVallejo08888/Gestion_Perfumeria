@@ -11,10 +11,12 @@
  */
 import { relations, sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   date,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -24,6 +26,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { CATEGORIAS, CONCENTRACIONES, GENEROS, PUBLICOS, TIPOS_PRODUCTO } from "../lib/clasificacion";
 import { TIPOS_MOVIMIENTO } from "../lib/inventario";
+import { ALCANCES_LIMPIEZA, type ConteosLimpieza } from "../lib/limpieza";
 
 /* ---------------------------- Enumeraciones ---------------------------- */
 
@@ -68,6 +71,9 @@ export const medioPagoCompraEnum = pgEnum("medio_pago_compra", ["EFECTIVO", "TRA
 
 /** PENDIENTE = se le debe algo al proveedor · SALDADA = pagada en su totalidad. */
 export const estadoCuentaPagarEnum = pgEnum("estado_cuenta_pagar", ["PENDIENTE", "SALDADA"]);
+
+/** Qué borró una limpieza del sistema (ver src/lib/limpieza.ts). */
+export const alcanceLimpiezaEnum = pgEnum("alcance_limpieza", ALCANCES_LIMPIEZA);
 
 /* Columnas de fecha reutilizables (con zona horaria) */
 const creadoEn = () => timestamp("creado_en", { withTimezone: true }).notNull().defaultNow();
@@ -500,6 +506,35 @@ export const abonosProveedor = pgTable(
     creadoEn: creadoEn(),
   },
   (t) => [index("abonos_proveedor_compra_idx").on(t.compraId)],
+);
+
+/**
+ * Registro de auditoría de la "Limpieza del sistema": quién borró qué, cuándo y cuánto.
+ * Se escribe en la MISMA transacción que el borrado (o se guardan los dos, o ninguno).
+ * La app NO tiene forma de borrar este historial. Si luego se elimina el local o el administrador,
+ * el registro se conserva con sus nombres copiados (snapshot).
+ */
+export const limpiezas = pgTable(
+  "limpiezas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    localId: uuid("local_id").references(() => locales.id, { onDelete: "set null" }),
+    localNombre: text("local_nombre").notNull(),
+    adminId: uuid("admin_id").references(() => usuarios.id, { onDelete: "set null" }),
+    adminNombre: text("admin_nombre").notNull(),
+    alcance: alcanceLimpiezaEnum("alcance").notNull(),
+    /** Solo en la limpieza por periodo. */
+    anio: integer("anio"),
+    /** Meses del periodo (vacío = todo el año). */
+    meses: integer("meses").array(),
+    /** Cantidades y valores borrados (y lo que se conservó). */
+    conteos: jsonb("conteos").$type<ConteosLimpieza>().notNull(),
+    /** Suma del valor de las ventas, créditos y gastos borrados (pesos). */
+    valorTotal: bigint("valor_total", { mode: "number" }).notNull().default(0),
+    reinicioConsecutivo: boolean("reinicio_consecutivo").notNull().default(false),
+    creadoEn: creadoEn(),
+  },
+  (t) => [index("limpiezas_local_fecha_idx").on(t.localId, t.creadoEn)],
 );
 
 /* ------------------------------ Relaciones ------------------------------ */

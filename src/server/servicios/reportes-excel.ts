@@ -25,7 +25,7 @@ import { obtenerEstadisticas } from "./estadisticas";
 import { gastosDelPeriodo } from "./gastos";
 import { listarLocales, obtenerLocal } from "./locales";
 
-const FORMATO_PESOS = '"$"#,##0';
+export const FORMATO_PESOS = '"$"#,##0';
 const COLOR_ENCABEZADO = "FF1E3A8A"; // azul oscuro
 const COLOR_TOTAL = "FFE0E7FF"; // azul claro
 const COLOR_ALERTA = "FFFEE2E2"; // rojo claro
@@ -35,7 +35,7 @@ const UN_DIA = 24 * 60 * 60 * 1000;
 /* ============================== Utilidades ============================== */
 
 /** Aplica estilo a la fila de títulos de una hoja. */
-function estilizarEncabezado(hoja: ExcelJS.Worksheet) {
+export function estilizarEncabezado(hoja: ExcelJS.Worksheet) {
   const fila = hoja.getRow(1);
   fila.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 12 };
   fila.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_ENCABEZADO } };
@@ -57,7 +57,7 @@ function colorear(fila: ExcelJS.Row, argb: string) {
   fila.fill = { type: "pattern", pattern: "solid", fgColor: { argb } };
 }
 
-function nota(hoja: ExcelJS.Worksheet, texto: string) {
+export function nota(hoja: ExcelJS.Worksheet, texto: string) {
   hoja.addRow([]);
   hoja.addRow([texto]).font = { italic: true, color: { argb: "FF4B5563" } };
 }
@@ -66,16 +66,16 @@ function sumarCampo<T>(lista: T[], campo: (x: T) => number) {
   return lista.reduce((acc, x) => acc + campo(x), 0);
 }
 
-function nombreSeguro(texto: string) {
+export function nombreSeguro(texto: string) {
   return texto.replace(/[^\p{L}\p{N}]+/gu, "_");
 }
 
-async function aArchivo(libro: ExcelJS.Workbook, nombreArchivo: string) {
+export async function aArchivo(libro: ExcelJS.Workbook, nombreArchivo: string) {
   const buffer = await libro.xlsx.writeBuffer();
   return { buffer: Buffer.from(buffer as ArrayBuffer), nombreArchivo };
 }
 
-function nuevoLibro() {
+export function nuevoLibro() {
   const libro = new ExcelJS.Workbook();
   libro.creator = "Gestión de Perfumerías";
   libro.created = new Date();

@@ -12,6 +12,7 @@ import { z } from "zod";
 z.config(z.locales.es());
 import { CATEGORIAS, CONCENTRACIONES, GENEROS, PUBLICOS, TIPOS_PRODUCTO } from "./clasificacion";
 import { ESTADOS_STOCK } from "./inventario";
+import { ALCANCES_LIMPIEZA } from "./limpieza";
 
 /* --------------------------- Reglas de contraseña --------------------------- */
 
@@ -461,3 +462,26 @@ export const quejaSchema = z.object({
 });
 
 export type Queja = z.infer<typeof quejaSchema>;
+
+/* ---------------------------- Limpieza del sistema ---------------------------- */
+
+/** Qué limpiar (lo usan la vista previa, el respaldo y la ejecución). */
+export const solicitudLimpiezaSchema = z.object({
+  localId: z.uuid("Elige un local."),
+  alcance: z.enum(ALCANCES_LIMPIEZA, { error: "Lo que se quiere borrar no es válido." }),
+  anio: z.coerce.number().int().min(2000, "Año no válido.").max(2100, "Año no válido.").optional(),
+  /** Meses 1-12 (vacío = todo el año). En la dirección del respaldo llegan como "3,4". */
+  meses: z
+    .union([z.array(z.coerce.number()), z.string()])
+    .optional()
+    .transform((v) => (typeof v === "string" ? v.split(",").filter(Boolean).map(Number) : (v ?? [])))
+    .pipe(z.array(z.number().int().min(1, "Mes no válido.").max(12, "Mes no válido.")).max(12)),
+});
+
+/** Ejecutar la limpieza: además exige la confirmación escrita, la contraseña y la huella del respaldo. */
+export const ejecutarLimpiezaSchema = solicitudLimpiezaSchema.extend({
+  confirmacion: z.string().max(200, "La confirmación es demasiado larga."),
+  password: z.string().min(1, "Escribe tu contraseña."),
+  huella: z.string().min(1, "Primero se debe descargar la copia de respaldo.").max(10_000),
+  reiniciarConsecutivo: z.boolean().optional().default(false),
+});

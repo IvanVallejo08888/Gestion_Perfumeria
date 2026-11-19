@@ -71,6 +71,13 @@
       "when": 1795046855599,
       "tag": "0009_quitar_tamano",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795068007943,
+      "tag": "0010_limpiezas",
+      "breakpoints": true
     }
   ]
 }
