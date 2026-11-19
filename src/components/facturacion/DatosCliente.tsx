@@ -57,7 +57,7 @@ export function DatosCliente({ valor, onCambio, errores, sectores }: Props) {
       return;
     }
     let vigente = true;
-    api<{ clientes: ClienteDatos[] }>(`/api/clientes?nombre=${encodeURIComponent(nombreBuscado)}`)
+    api<{ clientes: ClienteDatos[] }>(`/api/clientes/sugerencias?nombre=${encodeURIComponent(nombreBuscado)}`)
       .then(({ clientes }) => {
         if (!vigente || !escribiendoNombre.current) return;
         setSugerencias(clientes);
@@ -95,7 +95,7 @@ export function DatosCliente({ valor, onCambio, errores, sectores }: Props) {
     if (ident.length < 5) return;
     setEstadoBusqueda("buscando");
     try {
-      const { cliente } = await api<{ cliente: ClienteDatos | null }>(`/api/clientes/${encodeURIComponent(ident)}`);
+      const { cliente } = await api<{ cliente: ClienteDatos | null }>(`/api/clientes/buscar-identificacion?identificacion=${encodeURIComponent(ident)}`);
       if (cliente) {
         escribiendoNombre.current = false;
         setSugerencias(null);

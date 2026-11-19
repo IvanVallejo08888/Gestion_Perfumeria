@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/lib/formato.test.ts src/lib/pagos.test.ts src/lib/whatsapp.test.ts src/lib/clasificacion.test.ts src/lib/inventario.test.ts src/lib/dashboard.test.ts src/db/datos-perfumes.test.ts src/lib/validaciones.test.ts src/lib/borrador-factura.test.ts src/lib/soporte.test.ts src/lib/manual.test.ts src/lib/imagen-factura.test.ts src/lib/gastos.test.ts src/lib/cuentas-por-pagar.test.ts src/lib/correccion-tamanos.test.ts",
+    "test": "node --import tsx --test src/lib/formato.test.ts src/lib/pagos.test.ts src/lib/whatsapp.test.ts src/lib/clasificacion.test.ts src/lib/inventario.test.ts src/lib/dashboard.test.ts src/db/datos-perfumes.test.ts src/lib/validaciones.test.ts src/lib/borrador-factura.test.ts src/lib/soporte.test.ts src/lib/manual.test.ts src/lib/imagen-factura.test.ts src/lib/gastos.test.ts src/lib/cuentas-por-pagar.test.ts src/lib/correccion-tamanos.test.ts src/lib/paginacion.test.ts src/lib/productos.test.ts",
     "iconos": "node scripts/generar-iconos.mjs",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",

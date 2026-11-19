@@ -4,20 +4,22 @@
  *  - Dashboard: indicadores y gráficas de un local o del consolidado.
  *  - Ver las estadísticas del local en pantalla.
  *  - Descargar Excel del AÑO o del MES elegido.
- *  - Ver los gastos del local en el periodo elegido.
+ *  - Ver los gastos del local en el periodo elegido y eliminarlos (anularlos) con un motivo.
+ *    Al eliminar uno se recargan los gastos y las estadísticas (cambia la utilidad).
  */
 "use client";
 
 import { useState } from "react";
-import { TablaGastos, TotalesGastos } from "@/components/compartidos/TablaGastos";
+import { ConfirmarAnulacionGasto, TablaGastos, TotalesGastos } from "@/components/compartidos/TablaGastos";
 import { VistaEstadisticas } from "@/components/compartidos/VistaEstadisticas";
 import { VistaDashboard } from "@/components/dashboard/VistaDashboard";
 import { Cargando, EncabezadoPagina, Mensaje, Tarjeta, Vacio } from "@/components/ui/Basicos";
+import { GrupoOpciones } from "@/components/ui/GrupoOpciones";
 import { Selector } from "@/components/ui/Campo";
 import { Icono } from "@/components/ui/Icono";
 import { useConsulta } from "@/hooks/useConsulta";
 import { MESES } from "@/lib/formato";
-import type { Estadisticas, ListaGastos } from "@/tipos";
+import type { Estadisticas, GastoFila, ListaGastos } from "@/tipos";
 
 const ANIO_ACTUAL = new Date().getFullYear();
 const ANIOS = Array.from({ length: 6 }, (_, i) => ANIO_ACTUAL - i);
@@ -28,6 +30,8 @@ export default function ReportesAdmin() {
   const [localId, setLocalId] = useState("");
   const [anio, setAnio] = useState(ANIO_ACTUAL);
   const [mes, setMes] = useState(0); // 0 = todo el año
+  const [verEliminados, setVerEliminados] = useState(false);
+  const [eliminando, setEliminando] = useState<GastoFila | null>(null);
 
   const consultaLocales = useConsulta<{ locales: { id: string; nombre: string }[] }>("/api/admin/locales", {
     alCargar: (d) => {
@@ -42,7 +46,11 @@ export default function ReportesAdmin() {
 
   const consultaDatos = useConsulta<Estadisticas>(unLocal ? `/api/admin/estadisticas?localId=${unLocal}&anio=${anio}` : null);
   const { datos, cargando } = consultaDatos;
-  const consultaGastos = useConsulta<ListaGastos>(unLocal ? `/api/admin/gastos?localId=${unLocal}&anio=${anio}${mes ? `&mes=${mes}` : ""}` : null);
+  const consultaGastos = useConsulta<ListaGastos>(
+    unLocal
+      ? `/api/admin/gastos?localId=${unLocal}&anio=${anio}${mes ? `&mes=${mes}` : ""}${verEliminados ? "&estado=eliminados" : ""}`
+      : null,
+  );
   const gastos = unLocal ? consultaGastos.datos : null;
   const error = consultaLocales.error || consultaDatos.error || consultaGastos.error;
 
@@ -153,9 +161,32 @@ export default function ReportesAdmin() {
                 {anio}
               </h2>
               <TotalesGastos datos={gastos} />
-              <TablaGastos gastos={gastos.gastos} />
+              <GrupoOpciones
+                etiqueta="Qué gastos ver"
+                opciones={[
+                  { valor: "vigentes", texto: "Gastos vigentes" },
+                  { valor: "eliminados", texto: "Eliminados" },
+                ]}
+                valor={verEliminados ? "eliminados" : "vigentes"}
+                onCambio={(v) => setVerEliminados(v === "eliminados")}
+              />
+              <TablaGastos
+                gastos={gastos.gastos}
+                onEliminar={setEliminando}
+                vacio={verEliminados ? "No hay gastos eliminados en este periodo." : "No hay gastos en este periodo."}
+              />
             </section>
           )}
+          <ConfirmarAnulacionGasto
+            gasto={eliminando}
+            urlAnular={(id) => `/api/admin/gastos/${id}/anular`}
+            onCerrar={() => setEliminando(null)}
+            onAnulado={() => {
+              setEliminando(null);
+              consultaGastos.recargar();
+              consultaDatos.recargar();
+            }}
+          />
         </>
       )}
     </>

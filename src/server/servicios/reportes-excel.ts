@@ -8,12 +8,16 @@
  * Reporte CONSOLIDADO (solo administrador): todos los locales comparados + ventas por categoría + cartera de todos los locales.
  *
  * "Ventas por categoría" usa los mismos cortes del dashboard (ver dashboard.ts).
+ *
+ * Lo anulado NO aparece en esas hojas ni en sus totales (tampoco en Cartera ni en el consolidado).
+ * Va aparte, en las hojas "Ventas anuladas" y "Gastos eliminados" (por la fecha de la venta o del gasto).
  */
 import "server-only";
 import ExcelJS from "exceljs";
 import { and, asc, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { abonos, cuotas, facturaItems, facturas, locales, productos } from "@/db/schema";
+import { abonos, cuotas, facturaItems, facturas, locales, marcas, productos } from "@/db/schema";
+import { ETIQUETA_CATEGORIA, ETIQUETA_CONCENTRACION, ETIQUETA_GENERO } from "@/lib/clasificacion";
 import { fecha, fechaDia, fechaHora, MESES, numeroFactura, rangoPeriodo } from "@/lib/formato";
 import { textoMedioPago } from "@/lib/pagos";
 import { ventasPorCategoria, type VentasPorCategoria } from "./dashboard";
@@ -109,7 +113,7 @@ async function obtenerCartera(localId?: string) {
       })
       .from(facturas)
       .innerJoin(locales, eq(facturas.localId, locales.id))
-      .where(and(filtroLocal, eq(facturas.tipo, "CREDITO"), eq(facturas.estado, "PENDIENTE"))),
+      .where(and(filtroLocal, eq(facturas.anulada, false), eq(facturas.tipo, "CREDITO"), eq(facturas.estado, "PENDIENTE"))),
     db
       .select({
         facturaId: cuotas.facturaId,
@@ -118,7 +122,7 @@ async function obtenerCartera(localId?: string) {
       })
       .from(cuotas)
       .innerJoin(facturas, eq(cuotas.facturaId, facturas.id))
-      .where(and(filtroLocal, eq(facturas.estado, "PENDIENTE"), eq(cuotas.estado, "PENDIENTE")))
+      .where(and(filtroLocal, eq(facturas.anulada, false), eq(cuotas.anulada, false), eq(facturas.estado, "PENDIENTE"), eq(cuotas.estado, "PENDIENTE")))
       .orderBy(asc(cuotas.fechaVencimiento)),
   ]);
 
@@ -204,14 +208,31 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
   const local = await obtenerLocal(localId);
   const { inicio, fin } = rangoPeriodo(anio, mes);
   const periodo = textoPeriodo(anio, mes);
-  const enPeriodo = and(eq(facturas.localId, localId), gte(facturas.creadoEn, inicio), lt(facturas.creadoEn, fin));
+  const delPeriodo = and(eq(facturas.localId, localId), gte(facturas.creadoEn, inicio), lt(facturas.creadoEn, fin));
+  // Las ventas anuladas no cuentan en ninguna hoja del periodo (van aparte en "Ventas anuladas")
+  const enPeriodo = and(delPeriodo, eq(facturas.anulada, false));
 
-  const [estadisticas, listaFacturas, productosVendidos, listaAbonos, listaGastos, porVendedor, cartera, inventario, categorias] = await Promise.all([
+  const [
+    estadisticas,
+    listaFacturas,
+    productosVendidos,
+    listaAbonos,
+    listaGastos,
+    porVendedor,
+    cartera,
+    inventario,
+    categorias,
+    ventasAnuladas,
+    gastosEliminados,
+  ] = await Promise.all([
     obtenerEstadisticas(localId, anio),
     db.select().from(facturas).where(enPeriodo).orderBy(asc(facturas.creadoEn)),
     db
       .select({
+        // Nombre completo guardado en la venta (las facturas antiguas conservan su nombre original)
         nombre: facturaItems.nombreProducto,
+        marca: sql<string>`coalesce(max(${facturaItems.marcaNombre}), '')`,
+        contenidoMl: sql<number | null>`max(${facturaItems.contenidoMl})`,
         cantidad: sql<number>`sum(${facturaItems.cantidad})::int`,
         total: sql<number>`sum(${facturaItems.subtotal})::int`,
       })
@@ -234,7 +255,15 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
       })
       .from(abonos)
       .innerJoin(facturas, eq(abonos.facturaId, facturas.id))
-      .where(and(eq(facturas.localId, localId), gte(abonos.creadoEn, inicio), lt(abonos.creadoEn, fin)))
+      .where(
+        and(
+          eq(facturas.localId, localId),
+          eq(facturas.anulada, false),
+          eq(abonos.anulado, false),
+          gte(abonos.creadoEn, inicio),
+          lt(abonos.creadoEn, fin),
+        ),
+      )
       .orderBy(asc(abonos.creadoEn)),
     gastosDelPeriodo(localId, anio, mes),
     db
@@ -252,11 +281,27 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
       .orderBy(desc(sql`sum(${facturas.total})`)),
     obtenerCartera(localId),
     db
-      .select()
+      .select({
+        codigo: productos.codigo,
+        nombreCompleto: productos.nombreCompleto,
+        marca: marcas.nombre,
+        fragancia: productos.nombre,
+        variante: productos.variante,
+        concentracion: productos.concentracion,
+        contenidoMl: productos.contenidoMl,
+        genero: productos.genero,
+        categoria: productos.categoria,
+        precio: productos.precio,
+        stock: productos.stock,
+        stockMinimo: productos.stockMinimo,
+      })
       .from(productos)
+      .leftJoin(marcas, eq(marcas.id, productos.marcaId))
       .where(and(eq(productos.localId, localId), eq(productos.activo, true)))
-      .orderBy(asc(productos.nombre)),
+      .orderBy(asc(productos.nombreCompleto)),
     ventasPorCategoria({ localId, anio, mes }),
+    db.select().from(facturas).where(and(delPeriodo, eq(facturas.anulada, true))).orderBy(asc(facturas.creadoEn)),
+    gastosDelPeriodo(localId, anio, mes, true),
   ]);
 
   const libro = nuevoLibro();
@@ -351,7 +396,9 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
   /* ---------- Hoja 3: Productos vendidos ---------- */
   const hojaProductos = libro.addWorksheet("Productos vendidos");
   hojaProductos.columns = [
-    { header: "Producto", key: "nombre", width: 40 },
+    { header: "Producto", key: "nombre", width: 50 },
+    { header: "Marca", key: "marca", width: 20 },
+    { header: "Contenido (ml)", key: "contenidoMl", width: 14 },
     { header: "Unidades vendidas", key: "cantidad", width: 18 },
     { header: "Valor vendido", key: "total", width: 20, style: { numFmt: FORMATO_PESOS } },
   ];
@@ -453,7 +500,14 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
   const hojaInventario = libro.addWorksheet("Inventario");
   hojaInventario.columns = [
     { header: "Código", key: "codigo", width: 14 },
-    { header: "Producto", key: "nombre", width: 40 },
+    { header: "Producto (nombre completo)", key: "nombre", width: 50 },
+    { header: "Marca", key: "marca", width: 20 },
+    { header: "Fragancia", key: "fragancia", width: 24 },
+    { header: "Variante", key: "variante", width: 16 },
+    { header: "Concentración", key: "concentracion", width: 22 },
+    { header: "Contenido (ml)", key: "contenidoMl", width: 14 },
+    { header: "Género", key: "genero", width: 11 },
+    { header: "Categoría", key: "categoria", width: 16 },
     { header: "Precio", key: "precio", width: 15, style: { numFmt: FORMATO_PESOS } },
     { header: "Stock", key: "stock", width: 10 },
     { header: "Stock mínimo", key: "stockMinimo", width: 11 },
@@ -462,7 +516,19 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
   ];
   for (const p of inventario) {
     const estado = p.stock <= 0 ? "Agotado" : p.stock <= p.stockMinimo ? "Stock bajo" : "Disponible";
-    const fila = hojaInventario.addRow({ ...p, codigo: p.codigo ?? "", valor: p.precio * Math.max(p.stock, 0), estado });
+    const fila = hojaInventario.addRow({
+      ...p,
+      codigo: p.codigo ?? "",
+      nombre: p.nombreCompleto,
+      marca: p.marca ?? "",
+      variante: p.variante ?? "",
+      concentracion: p.concentracion ? ETIQUETA_CONCENTRACION[p.concentracion] : "",
+      contenidoMl: p.contenidoMl ?? "",
+      genero: p.genero ? ETIQUETA_GENERO[p.genero] : "",
+      categoria: p.categoria ? ETIQUETA_CATEGORIA[p.categoria] : "",
+      valor: p.precio * Math.max(p.stock, 0),
+      estado,
+    });
     if (estado === "Agotado") colorear(fila, COLOR_ALERTA);
     else if (estado === "Stock bajo") colorear(fila, COLOR_AVISO);
   }
@@ -473,6 +539,58 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
     valor: sumarCampo(inventario, (p) => p.precio * Math.max(p.stock, 0)),
   });
   nota(hojaInventario, `Inventario al ${fechaHora(new Date())} (valorizado a precio de venta) · Rojo = agotado · Amarillo = stock bajo`);
+
+  /* ---------- Hoja 9: Ventas anuladas (no suman en ninguna otra hoja) ---------- */
+  const hojaAnuladas = libro.addWorksheet("Ventas anuladas");
+  hojaAnuladas.columns = [
+    { header: "N° factura", key: "numero", width: 12 },
+    { header: "Fecha de la venta", key: "fecha", width: 22 },
+    { header: "Tipo", key: "tipo", width: 12 },
+    { header: "Identificación", key: "identificacion", width: 16 },
+    { header: "Cliente", key: "cliente", width: 28 },
+    { header: "Total", key: "total", width: 15, style: { numFmt: FORMATO_PESOS } },
+    { header: "Motivo", key: "motivo", width: 40 },
+    { header: "Anulada por", key: "anuladaPor", width: 24 },
+    { header: "Fecha de anulación", key: "anuladaEn", width: 22 },
+  ];
+  hojaAnuladas.addRows(
+    ventasAnuladas.map((f) => ({
+      numero: numeroFactura(f.numero),
+      fecha: fechaHora(f.creadoEn),
+      tipo: f.tipo === "NORMAL" ? "Contado" : "Crédito",
+      identificacion: f.clienteIdentificacion,
+      cliente: f.clienteNombre,
+      total: f.total,
+      motivo: f.motivoAnulacion ?? "",
+      anuladaPor: f.anuladaPorNombre ?? "",
+      anuladaEn: f.anuladaEn ? fechaHora(f.anuladaEn) : "",
+    })),
+  );
+  estilizarEncabezado(hojaAnuladas);
+
+  /* ---------- Hoja 10: Gastos eliminados (no suman en los gastos ni en la utilidad) ---------- */
+  const hojaGastosEliminados = libro.addWorksheet("Gastos eliminados");
+  hojaGastosEliminados.columns = [
+    { header: "Fecha", key: "fecha", width: 14 },
+    { header: "Categoría", key: "categoria", width: 26 },
+    { header: "Valor", key: "valor", width: 16, style: { numFmt: FORMATO_PESOS } },
+    { header: "Medio de pago", key: "medioPago", width: 16 },
+    { header: "Motivo", key: "motivo", width: 40 },
+    { header: "Eliminado por", key: "eliminadoPor", width: 24 },
+    { header: "Fecha de eliminación", key: "eliminadoEn", width: 22 },
+  ];
+  hojaGastosEliminados.addRows(
+    gastosEliminados.map((g) => ({
+      fecha: fechaDia(g.fecha),
+      categoria: g.categoriaNombre,
+      valor: g.valor,
+      medioPago: textoMedioPago(g.medioPago),
+      motivo: g.motivoAnulacion ?? "",
+      eliminadoPor: g.anuladoPorNombre ?? "",
+      eliminadoEn: g.anuladoEn ? fechaHora(g.anuladoEn) : "",
+    })),
+  );
+  estilizarEncabezado(hojaGastosEliminados);
 
   return aArchivo(libro, `Reporte_${nombreSeguro(local.nombre)}_${sufijoPeriodo(anio, mes)}.xlsx`);
 }
@@ -493,7 +611,7 @@ function hojaVentasPorCategoria(libro: ExcelJS.Workbook, categorias: VentasPorCa
     { corte: "Público", filas: categorias.porPublico },
     { corte: "Tipo", filas: categorias.porTipo },
     { corte: "Marca", filas: categorias.porMarca },
-    { corte: "Tamaño", filas: categorias.porTamano },
+    { corte: "Contenido (ml)", filas: categorias.porTamano },
   ];
   // Todos los cortes reparten las mismas ventas: el total se toma de uno solo
   const totalUnidades = sumarCampo(categorias.porPublico, (c) => c.unidades);

@@ -1,7 +1,17 @@
 /** Pruebas de la normalización de texto y de los rangos de fechas. Ejecutar con: npm test */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { coincideBusqueda, escaparLike, fechaDia, hoyColombia, normalizarTexto, rangoDias } from "./formato";
+import {
+  coincideBusqueda,
+  compactarTexto,
+  escaparLike,
+  fechaDia,
+  hoyColombia,
+  normalizarTelefono,
+  normalizarTexto,
+  rangoDias,
+  soloDigitos,
+} from "./formato";
 
 describe("normalizarTexto", () => {
   it("quita tildes y pasa a minúsculas", () => {
@@ -70,5 +80,45 @@ describe("fechas de los gastos", () => {
   });
   it("fechaDia muestra día/mes/año", () => {
     assert.equal(fechaDia("2026-11-05"), "05/11/2026");
+  });
+});
+
+/* ------------------------- Búsqueda de clientes ------------------------- */
+
+describe("normalizarTexto con nombres de clientes", () => {
+  it("«jose nunez» y «José Núñez» quedan iguales", () => {
+    assert.equal(normalizarTexto("José Núñez"), normalizarTexto("jose nunez"));
+    assert.equal(normalizarTexto("JOSÉ  NÚÑEZ."), "jose nunez");
+  });
+});
+
+describe("compactarTexto", () => {
+  it("quita espacios, tildes y signos", () => {
+    assert.equal(compactarTexto("Carlos Ruiz"), "carlosruiz");
+    assert.equal(compactarTexto("carlosruiz"), "carlosruiz");
+    assert.equal(compactarTexto("María-José  Peña"), "mariajosepena");
+  });
+});
+
+describe("soloDigitos", () => {
+  it("deja solo los números", () => {
+    assert.equal(soloDigitos("1.085.999.888"), "1085999888");
+    assert.equal(soloDigitos("315-987-6543"), "3159876543");
+    assert.equal(soloDigitos("abc"), "");
+  });
+});
+
+describe("normalizarTelefono", () => {
+  it("acepta espacios, guiones y prefijo de país", () => {
+    assert.equal(normalizarTelefono("315 987 6543"), "3159876543");
+    assert.equal(normalizarTelefono("315-987-6543"), "3159876543");
+    assert.equal(normalizarTelefono("+57 3159876543"), "3159876543");
+    assert.equal(normalizarTelefono("+57 315 987 6543"), "3159876543");
+    assert.equal(normalizarTelefono("573159876543"), "3159876543");
+  });
+  it("solo quita el 57 cuando el número tiene 12 dígitos", () => {
+    assert.equal(normalizarTelefono("5712345"), "5712345");
+    assert.equal(normalizarTelefono("57"), "57");
+    assert.equal(normalizarTelefono("6027201234"), "6027201234");
   });
 });

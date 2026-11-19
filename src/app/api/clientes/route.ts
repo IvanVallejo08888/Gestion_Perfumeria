@@ -1,10 +1,14 @@
-/** GET /api/clientes?nombre= — Sugerencias de clientes del local por nombre (para la factura). */
+/**
+ * GET /api/clientes?q=&pagina= — Clientes del local del vendedor, 10 por página.
+ * Devuelve { clientes, total, pagina, totalPaginas, coincidenciaExacta }.
+ * El conteo y los totales se calculan en SQL.
+ */
 import { comoVendedor, manejador, ok } from "@/lib/api";
-import { busquedaClienteSchema, parametros } from "@/lib/validaciones";
-import { buscarClientesPorNombre } from "@/server/servicios/clientes";
+import { filtroClientesSchema, parametros } from "@/lib/validaciones";
+import { listarClientes } from "@/server/servicios/clientes";
 
 export const GET = manejador("VENDEDOR", async ({ req, usuario }) => {
   const { localId } = comoVendedor(usuario);
-  const { nombre } = busquedaClienteSchema.parse(parametros(req.nextUrl.searchParams));
-  return ok({ clientes: await buscarClientesPorNombre(localId, nombre) });
+  const { q, pagina } = filtroClientesSchema.parse(parametros(req.nextUrl.searchParams));
+  return ok(await listarClientes(localId, q, pagina));
 });

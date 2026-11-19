@@ -1,37 +1,16 @@
 /**
- * Clasificación de los perfumes: tipo, género, público y tamaño.
+ * Clasificación de los productos: tipo, género, público, concentración, categoría y contenido (ml).
  * Estas listas son la ÚNICA fuente: las usan el esquema de la base de datos (enums),
  * las validaciones Zod y las pantallas. Se pueden usar en el servidor y en el navegador.
  */
 
 export const TIPOS_PRODUCTO = ["ORIGINAL", "UNO_UNO", "IMITACION", "VERSION", "ESENCIA"] as const;
-export const GENEROS = ["HOMBRE", "MUJER"] as const;
+export const GENEROS = ["HOMBRE", "MUJER", "UNISEX"] as const;
 export const PUBLICOS = ["ADULTO", "INFANTIL"] as const;
-/**
- * Tamaños permitidos. Se guardan como enum (no como número decimal):
- * la base de datos rechaza cualquier otro valor y no hay errores de redondeo.
- * El orden de la lista es de menor a mayor.
- */
-export const TAMANOS = [
-  "OZ_1",
-  "OZ_1_40ML",
-  "OZ_1_6",
-  "OZ_1_7",
-  "OZ_2",
-  "OZ_2_2",
-  "OZ_2_5",
-  "OZ_2_7",
-  "OZ_3_4",
-  "OZ_4",
-  "OZ_4_2",
-  "OZ_6_8",
-  "OZ_8_4",
-] as const;
 
 export type TipoProducto = (typeof TIPOS_PRODUCTO)[number];
 export type Genero = (typeof GENEROS)[number];
 export type Publico = (typeof PUBLICOS)[number];
-export type Tamano = (typeof TAMANOS)[number];
 
 export const ETIQUETA_TIPO: Record<TipoProducto, string> = {
   ORIGINAL: "Original",
@@ -41,42 +20,93 @@ export const ETIQUETA_TIPO: Record<TipoProducto, string> = {
   ESENCIA: "Esencia",
 };
 
-export const ETIQUETA_GENERO: Record<Genero, string> = { HOMBRE: "Hombre", MUJER: "Mujer" };
+export const ETIQUETA_GENERO: Record<Genero, string> = { HOMBRE: "Hombre", MUJER: "Mujer", UNISEX: "Unisex" };
 export const ETIQUETA_PUBLICO: Record<Publico, string> = { ADULTO: "Adulto", INFANTIL: "Infantil" };
 
-/** Se muestra primero en ml y entre paréntesis en oz: "100 ml (3.4 oz)" (1 oz ≈ 29,57 ml, redondeado como en las etiquetas). */
-export const ETIQUETA_TAMANO: Record<Tamano, string> = {
-  OZ_1: "30 ml (1 oz)",
-  /** Las esencias se venden como "1 oz" pero el frasco trae 40 ml. */
-  OZ_1_40ML: "40 ml (1 oz)",
-  OZ_1_6: "47 ml (1.6 oz)",
-  OZ_1_7: "50 ml (1.7 oz)",
-  OZ_2: "60 ml (2 oz)",
-  OZ_2_2: "65 ml (2.2 oz)",
-  OZ_2_5: "75 ml (2.5 oz)",
-  OZ_2_7: "80 ml (2.7 oz)",
-  OZ_3_4: "100 ml (3.4 oz)",
-  OZ_4: "120 ml (4 oz)",
-  OZ_4_2: "125 ml (4.2 oz)",
-  OZ_6_8: "200 ml (6.8 oz)",
-  OZ_8_4: "250 ml (8.4 oz)",
-};
+/** Contenido para mostrar: 100 → "100 ml". (Antes se guardaba en onzas; la migración 0005 lo pasó a ml.) */
+export const textoMl = (ml: number) => `${ml} ml`;
 
 /**
- * Grupos para los selectores de tamaño (<optgroup>): con 13 opciones, así se encuentran rápido.
- * Juntos contienen todos los TAMANOS, una sola vez y en el mismo orden (lo comprueba clasificacion.test.ts).
+ * Onzas con las que se venden comercialmente los tamaños más comunes (como dicen las etiquetas):
+ * 120 ml se vende como "4 oz" aunque la cuenta exacta dé 4.1. Las esencias de 40 ml se venden como "1 oz".
  */
-export const GRUPOS_TAMANO: { titulo: string; tamanos: readonly Tamano[] }[] = [
-  { titulo: "Frascos pequeños (30–50 ml)", tamanos: ["OZ_1", "OZ_1_40ML", "OZ_1_6", "OZ_1_7"] },
-  { titulo: "Frascos (60–125 ml)", tamanos: ["OZ_2", "OZ_2_2", "OZ_2_5", "OZ_2_7", "OZ_3_4", "OZ_4", "OZ_4_2"] },
-  { titulo: "Cremas y splash (200–250 ml)", tamanos: ["OZ_6_8", "OZ_8_4"] },
+const ONZAS_COMERCIALES: Record<number, string> = {
+  30: "1", 40: "1", 47: "1.6", 50: "1.7", 60: "2", 65: "2.2", 75: "2.5", 80: "2.7", 90: "3",
+  100: "3.4", 120: "4", 125: "4.2", 150: "5", 200: "6.8", 250: "8.4",
+};
+
+/** Equivalente en onzas: 100 → "3.4 oz". Si no es un tamaño común, se calcula (1 oz = 29,5735 ml) con un decimal. */
+export function textoOz(ml: number): string {
+  const oz = ONZAS_COMERCIALES[ml] ?? String(Math.round((ml / 29.5735) * 10) / 10);
+  return `${oz} oz`;
+}
+
+/** Contenido en ml con su equivalente en onzas: 100 → "100 ml (3.4 oz)". */
+export const textoMlConOz = (ml: number) => `${textoMl(ml)} (${textoOz(ml)})`;
+
+/** Tamaños del selector del formulario, agrupados (<optgroup>) para encontrarlos rápido. Se puede escribir otro. */
+export const GRUPOS_MILILITROS: { titulo: string; mililitros: readonly number[] }[] = [
+  { titulo: "Frascos pequeños (10–50 ml)", mililitros: [10, 30, 40, 47, 50] },
+  { titulo: "Frascos (60–150 ml)", mililitros: [60, 65, 75, 80, 90, 100, 120, 125, 150] },
+  { titulo: "Cremas y splash (200–250 ml)", mililitros: [200, 250] },
 ];
 
 export const SIN_CATEGORIA = "Sin categoría";
 
-/** Hombre + Infantil = "Niño" · Mujer + Infantil = "Niña" · Adulto = "Hombre" / "Mujer". */
+/* ------------------------- Concentración y categoría ------------------------- */
+
+/** Concentración de la fragancia (de más a menos concentrada). */
+export const CONCENTRACIONES = ["EXTRAIT", "PARFUM", "EDP", "EDT", "EDC", "BODY_MIST", "SPLASH", "OTRO"] as const;
+export type Concentracion = (typeof CONCENTRACIONES)[number];
+
+/** Nombre completo, para el selector del formulario. */
+export const ETIQUETA_CONCENTRACION: Record<Concentracion, string> = {
+  EXTRAIT: "Extrait de Parfum",
+  PARFUM: "Parfum",
+  EDP: "Eau de Parfum (EDP)",
+  EDT: "Eau de Toilette (EDT)",
+  EDC: "Eau de Cologne (EDC)",
+  BODY_MIST: "Body Mist",
+  SPLASH: "Splash",
+  OTRO: "Otro",
+};
+
+/** Forma corta que va en el nombre del producto ("EDP 100 ml"). "Otro" no se escribe en el nombre. */
+export const SIGLA_CONCENTRACION: Record<Concentracion, string> = {
+  EXTRAIT: "Extrait de Parfum",
+  PARFUM: "Parfum",
+  EDP: "EDP",
+  EDT: "EDT",
+  EDC: "EDC",
+  BODY_MIST: "Body Mist",
+  SPLASH: "Splash",
+  OTRO: "",
+};
+
+/** Qué clase de artículo es. */
+export const CATEGORIAS = ["PERFUME", "ESTUCHE", "BODY_MIST", "CREMA", "DESODORANTE", "DECANT", "ACCESORIO", "OTRO"] as const;
+export type Categoria = (typeof CATEGORIAS)[number];
+
+/** Categorías que se ofrecen al agregar un producto (Body Mist, Desodorante, Decant y Accesorio, de momento no). */
+export const CATEGORIAS_FORMULARIO = ["PERFUME", "ESTUCHE", "CREMA", "OTRO"] as const satisfies readonly Categoria[];
+
+export const ETIQUETA_CATEGORIA: Record<Categoria, string> = {
+  PERFUME: "Perfume",
+  ESTUCHE: "Estuche / Set",
+  BODY_MIST: "Body Mist",
+  CREMA: "Crema",
+  DESODORANTE: "Desodorante",
+  DECANT: "Decant",
+  ACCESORIO: "Accesorio",
+  OTRO: "Otro",
+};
+
+/** Contenidos más comunes, para sugerirlos en el formulario (se puede escribir cualquier otro). */
+export const MILILITROS_SUGERIDOS = [10, 30, 50, 60, 75, 80, 90, 100, 120, 125, 150, 200, 250] as const;
+
+/** Hombre + Infantil = "Niño" · Mujer + Infantil = "Niña" · Unisex + Infantil = "Infantil unisex" · Adulto = el género. */
 export function etiquetaPara(genero: Genero, publico: Publico): string {
-  if (publico === "INFANTIL") return genero === "HOMBRE" ? "Niño" : "Niña";
+  if (publico === "INFANTIL") return genero === "HOMBRE" ? "Niño" : genero === "MUJER" ? "Niña" : "Infantil unisex";
   return ETIQUETA_GENERO[genero];
 }
 
@@ -85,7 +115,9 @@ export interface Clasificacion {
   tipo?: TipoProducto | null;
   genero?: Genero | null;
   publico?: Publico | null;
-  tamano?: Tamano | null;
+  contenidoMl?: number | null;
+  concentracion?: Concentracion | null;
+  categoria?: Categoria | null;
 }
 
 /**
@@ -99,7 +131,8 @@ export function describirClasificacion(c: Clasificacion): string {
   if (c.genero && c.publico) partes.push(etiquetaPara(c.genero, c.publico));
   else if (c.genero) partes.push(ETIQUETA_GENERO[c.genero]);
   else if (c.publico) partes.push(ETIQUETA_PUBLICO[c.publico]);
-  if (c.tamano) partes.push(ETIQUETA_TAMANO[c.tamano]);
+  if (c.concentracion && c.concentracion !== "OTRO") partes.push(SIGLA_CONCENTRACION[c.concentracion]);
+  if (c.contenidoMl) partes.push(textoMl(c.contenidoMl));
   return partes.length ? partes.join(" · ") : SIN_CATEGORIA;
 }
 

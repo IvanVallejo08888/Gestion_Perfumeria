@@ -10,6 +10,7 @@
  *  - Recaudado = contado + abonos recibidos en el periodo (el dinero que entró).
  *  - Inventario, cartera pendiente y agotados = foto de HOY (no dependen del periodo).
  *  - La gráfica mes a mes muestra siempre los 12 meses del año elegido (hora de Colombia).
+ *  - Nada de lo anulado cuenta: ni las ventas eliminadas (con sus ítems y abonos) ni su saldo en la cartera.
  */
 import "server-only";
 import { and, asc, desc, eq, gte, lt, lte, sql, type AnyColumn, type SQL } from "drizzle-orm";
@@ -17,8 +18,8 @@ import { db } from "@/db";
 import { abonos, facturaItems, facturas, locales, marcas, productos } from "@/db/schema";
 import {
   completarCortes,
+  cortesPorMl,
   CORTES_PUBLICO,
-  CORTES_TAMANO,
   CORTES_TIPO,
   ordenarCortes,
   topConOtras,
@@ -61,7 +62,12 @@ export interface VentasPorCategoria {
 /** Los mismos cortes para el dashboard y para la hoja "Ventas por categoría" del Excel. */
 export async function ventasPorCategoria({ localId, anio, mes }: AlcanceDashboard): Promise<VentasPorCategoria> {
   const { inicio, fin } = rangoPeriodo(anio, mes);
-  const enPeriodo = and(delLocal(facturas.localId, localId), gte(facturas.creadoEn, inicio), lt(facturas.creadoEn, fin));
+  const enPeriodo = and(
+    delLocal(facturas.localId, localId),
+    eq(facturas.anulada, false),
+    gte(facturas.creadoEn, inicio),
+    lt(facturas.creadoEn, fin),
+  );
 
   // Un GROUP BY por corte. Se agrupa por la primera columna del SELECT ("group by 1").
   const corte = (clave: SQL<string | null>, etiqueta: SQL<string | null> = sql<string | null>`null`): Promise<FilaCorte[]> =>
@@ -80,7 +86,7 @@ export async function ventasPorCategoria({ localId, anio, mes }: AlcanceDashboar
   const [publico, tipo, tamano, marca] = await Promise.all([
     corte(clavePublicoSql(facturaItems.genero, facturaItems.publico)),
     corte(sql<string | null>`${facturaItems.tipo}::text`),
-    corte(sql<string | null>`${facturaItems.tamano}::text`),
+    corte(sql<string | null>`${facturaItems.contenidoMl}::text`),
     // La marca se agrupa sin importar mayúsculas (dos locales pueden escribirla distinto)
     corte(sql<string | null>`lower(${facturaItems.marcaNombre})`, sql<string | null>`min(${facturaItems.marcaNombre})`),
   ]);
@@ -89,7 +95,7 @@ export async function ventasPorCategoria({ localId, anio, mes }: AlcanceDashboar
     porPublico: completarCortes(CORTES_PUBLICO, publico),
     porTipo: completarCortes(CORTES_TIPO, tipo),
     porMarca: ordenarCortes(marca),
-    porTamano: completarCortes(CORTES_TAMANO, tamano),
+    porTamano: cortesPorMl(tamano),
   };
 }
 
@@ -106,9 +112,15 @@ export async function obtenerDashboard(alcance: AlcanceDashboard): Promise<Dashb
   const periodo = rangoPeriodo(anio, mes);
   const todoElAnio = rangoPeriodo(anio);
   const facturasEn = (r: { inicio: Date; fin: Date }) =>
-    and(delLocal(facturas.localId, localId), gte(facturas.creadoEn, r.inicio), lt(facturas.creadoEn, r.fin));
+    and(delLocal(facturas.localId, localId), eq(facturas.anulada, false), gte(facturas.creadoEn, r.inicio), lt(facturas.creadoEn, r.fin));
   const abonosEn = (r: { inicio: Date; fin: Date }) =>
-    and(delLocal(facturas.localId, localId), gte(abonos.creadoEn, r.inicio), lt(abonos.creadoEn, r.fin));
+    and(
+      delLocal(facturas.localId, localId),
+      eq(facturas.anulada, false),
+      eq(abonos.anulado, false),
+      gte(abonos.creadoEn, r.inicio),
+      lt(abonos.creadoEn, r.fin),
+    );
   const inventarioActivo = and(delLocal(productos.localId, localId), eq(productos.activo, true));
   const critico = and(inventarioActivo, lte(productos.stock, productos.stockMinimo));
 
@@ -157,7 +169,7 @@ export async function obtenerDashboard(alcance: AlcanceDashboard): Promise<Dashb
     db
       .select({ cantidad: conteo, saldo: suma(facturas.saldo) })
       .from(facturas)
-      .where(and(delLocal(facturas.localId, localId), eq(facturas.tipo, "CREDITO"), eq(facturas.estado, "PENDIENTE"))),
+      .where(and(delLocal(facturas.localId, localId), eq(facturas.anulada, false), eq(facturas.tipo, "CREDITO"), eq(facturas.estado, "PENDIENTE"))),
     top(sql`sum(${facturaItems.cantidad})`),
     top(sql`sum(${facturaItems.subtotal})`),
     ventasPorCategoria(alcance),
@@ -180,7 +192,7 @@ export async function obtenerDashboard(alcance: AlcanceDashboard): Promise<Dashb
     db
       .select({
         id: productos.id,
-        nombre: productos.nombre,
+        nombre: productos.nombreCompleto,
         marcaNombre: marcas.nombre,
         stock: productos.stock,
         stockMinimo: productos.stockMinimo,

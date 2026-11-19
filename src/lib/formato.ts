@@ -76,6 +76,41 @@ export function normalizarTexto(valor: string): string {
     .trim();
 }
 
+/**
+ * Nombre normalizado y SIN espacios: "Carlos Ruiz" → "carlosruiz".
+ * Permite encontrar a un cliente aunque se escriba todo junto ("carlosruiz").
+ */
+export function compactarTexto(valor: string): string {
+  return normalizarTexto(valor).replace(/ /g, "");
+}
+
+/** Deja solo los dígitos: "1.085.999-888" → "1085999888". */
+export function soloDigitos(valor: string): string {
+  return valor.replace(/\D/g, "");
+}
+
+/**
+ * Teléfono listo para comparar: solo dígitos y sin el indicativo de Colombia.
+ * "+57 315 987 6543" → "3159876543" · "315-987-6543" → "3159876543".
+ * El 57 solo se quita cuando el número tiene 12 dígitos (57 + celular de 10).
+ */
+export function normalizarTelefono(valor: string): string {
+  const digitos = soloDigitos(valor);
+  return digitos.length === 12 && digitos.startsWith("57") ? digitos.slice(2) : digitos;
+}
+
+/**
+ * Columnas de búsqueda de un cliente (tabla "clientes"). Se calculan SIEMPRE con esta
+ * función al crear o editar un cliente, para que el buscador encuentre lo mismo en todos lados.
+ */
+export function camposBusquedaCliente(nombre: string, telefono: string) {
+  return {
+    nombreBusqueda: normalizarTexto(nombre),
+    nombreCompacto: compactarTexto(nombre),
+    telefonoDigitos: normalizarTelefono(telefono),
+  };
+}
+
 /** Escapa los comodines de LIKE para que el texto del usuario se busque tal cual. */
 export function escaparLike(texto: string): string {
   return texto.replace(/[\\%_]/g, (c) => `\\${c}`);

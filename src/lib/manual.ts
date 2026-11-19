@@ -8,7 +8,7 @@
  *    Un bloque con `roles` solo se muestra a esos roles.
  * Formato del texto: **negrita** entre dos asteriscos dobles; `tramos()` lo separa para dibujarlo.
  */
-import { ETIQUETA_TAMANO, TAMANOS } from "./clasificacion";
+import { GRUPOS_MILILITROS, textoMlConOz } from "./clasificacion";
 
 export type RolManual = "ADMIN" | "VENDEDOR";
 
@@ -55,7 +55,7 @@ export const MANUAL: SeccionManual[] = [
           [
             "Vendedor",
             "El trabajo de todos los días: vender, cobrar, manejar inventario y gastos de su local",
-            "Facturación, Historial de ventas, Créditos y abonos, Gastos, Notificaciones, Inventario, Reportes y estadísticas, Ajustes",
+            "Facturación, Historial de ventas, Créditos y abonos, Clientes, Gastos, Notificaciones, Inventario, Reportes y estadísticas, Ajustes",
           ],
           [
             "Administrador",
@@ -343,7 +343,7 @@ export const MANUAL: SeccionManual[] = [
         items: [
           "En el menú toca **Historial de ventas**.",
           "Escribe en **Buscar factura** el nombre, la identificación o el número.",
-          "Elige qué ver: **Ventas completadas** (contado y créditos ya pagados), **Créditos pendientes** o **Todas**.",
+          "Elige qué ver: **Ventas completadas** (contado y créditos ya pagados), **Créditos pendientes**, **Todas** o **Anuladas** (las ventas eliminadas).",
           "Toca **Ver detalles** para abrir la factura y volver a compartirla.",
           "Si la lista es larga, toca **Ver más facturas** al final.",
         ],
@@ -354,7 +354,23 @@ export const MANUAL: SeccionManual[] = [
       },
       {
         tipo: "parrafo",
-        texto: "Para ver todo lo que le ha comprado un cliente, búscalo por nombre o identificación con el filtro **Todas**.",
+        texto:
+          "Para ver todo lo que le ha comprado un cliente, usa **Clientes** en el menú: busca por nombre, cédula o teléfono y toca al cliente para ver su récord completo.",
+      },
+      { tipo: "subtitulo", texto: "Eliminar una venta" },
+      {
+        tipo: "numerada",
+        items: [
+          "En **Historial de ventas** o en **Créditos y abonos**, toca el botón rojo **Eliminar venta** de esa factura.",
+          "Revisa el cliente, el total y los productos que volverán al inventario.",
+          "Escribe el **Motivo de la eliminación** (por ejemplo: «El cliente devolvió los productos»).",
+          "Toca **Sí, eliminar venta**.",
+        ],
+      },
+      {
+        tipo: "parrafo",
+        texto:
+          "La venta no se borra: queda en el filtro **Anuladas** con el motivo, quién la eliminó y cuándo, y deja de contar en los reportes. Si era un crédito con abonos, esos abonos también quedan anulados.",
       },
     ],
   },
@@ -373,23 +389,25 @@ export const MANUAL: SeccionManual[] = [
         tipo: "numerada",
         items: [
           "Toca **Agregar producto**.",
-          "Escribe el **Nombre del perfume**. Debajo va el **Código**, que es opcional (sirve el código de barras).",
+          "Escribe el **Nombre del perfume** (por ejemplo «Aventus»). Debajo va el **Código**, que es opcional (sirve el código de barras).",
           "Elige la **Marca**. Si no está en la lista, toca **Agregar marca**, escribe el nombre y toca **Guardar marca**.",
-          "Elige el **Tipo**, el **Género**, el **Público** y el **Tamaño** (en ml, con su equivalente en oz; opciones en la tabla de abajo).",
+          "Si tiene, escribe la **Variante** («Intense», «Tester»).",
+          "Elige el **Tipo**, el **Género**, el **Público** y la **Categoría** (opciones en la tabla de abajo).",
+          "Elige el **Tamaño**: se muestra en ml con su equivalente en oz, por ejemplo «100 ml (3.4 oz)». Si no está en la lista, elige **Otro tamaño** y escribe los ml.",
           "Escribe el **Precio de venta** y las **Unidades iniciales**.",
           "En **Avisar cuando queden** escribe desde cuántas unidades quieres el aviso de stock bajo. El sistema propone 0, es decir, avisa cuando se agota.",
-          "Toca **Guardar**.",
+          "Toca **Guardar**. Si ya hay un producto igual (misma marca, nombre, variante y ml), el sistema avisa y puedes guardarlo de todos modos.",
         ],
       },
       {
         tipo: "tabla",
         columnas: ["Dato", "Opciones"],
         filas: [
-          ["Tipo", "Original, 1.1, Imitación, Versión, Esencia"],
-          ["Género", "Hombre, Mujer"],
+          ["Género", "Hombre, Mujer, Unisex"],
           ["Público", "Adulto, Infantil (Hombre + Infantil aparece como Niño; Mujer + Infantil, como Niña)"],
-          // Sale de la lista de tamaños: si se agrega uno, el manual queda al día solo
-          ["Tamaño", TAMANOS.map((t) => ETIQUETA_TAMANO[t]).join(", ")],
+          ["Categoría", "Perfume, Estuche / Set, Crema, Otro"],
+          ["Tipo", "Original, 1.1, Imitación, Versión, Esencia"],
+          ["Tamaño", GRUPOS_MILILITROS.flatMap((g) => g.mililitros).map(textoMlConOz).join(", ") + " u otro en ml"],
         ],
       },
       { tipo: "subtitulo", texto: "Llegó mercancía" },
@@ -420,9 +438,9 @@ export const MANUAL: SeccionManual[] = [
       {
         tipo: "vinetas",
         items: [
-          "Las pestañas **Todos**, **Hombre** y **Mujer** filtran por género; dentro de cada una puedes elegir adulto o niño/niña.",
-          "**Buscar en el inventario** busca por nombre o código.",
-          "**Más filtros** permite filtrar por marca, tipo, tamaño y estado de stock. **Quitar filtros** vuelve a mostrar todo.",
+          "Las pestañas **Todos**, **Hombre**, **Mujer** y **Unisex** filtran por género; dentro de cada una puedes elegir adulto o infantil.",
+          "**Buscar en el inventario** busca por marca, nombre, concentración, ml o código, con las palabras en cualquier orden: «aventus 100», «edp dior», «100ml».",
+          "**Más filtros** permite filtrar por marca, categoría, tipo y estado de stock. **Quitar filtros** vuelve a mostrar todo.",
         ],
       },
       { tipo: "subtitulo", texto: "Qué significan los estados" },
@@ -479,7 +497,7 @@ export const MANUAL: SeccionManual[] = [
       {
         tipo: "parrafo",
         texto:
-          "Solo se puede eliminar un gasto que registraste tú y el mismo día en que lo registraste. Al día siguiente el botón **Eliminar** ya no aparece.",
+          "Toca el botón rojo **Eliminar gasto**, escribe el **Motivo de la eliminación** y toca **Sí, eliminar gasto**. El gasto deja de sumar en los totales y en los reportes, pero queda registrado en el filtro **Eliminados** con el motivo, quién y cuándo.",
       },
     ],
   },
@@ -564,7 +582,7 @@ export const MANUAL: SeccionManual[] = [
         tipo: "vinetas",
         items: [
           "**Top 10 perfumes más vendidos**, ordenado por unidades o por valor.",
-          "**Ventas por Hombre, Niño, Mujer y Niña**, por **tipo**, por **marca** y por **tamaño**.",
+          "**Ventas por Hombre, Niño, Mujer, Niña y Unisex**, por **tipo**, por **marca** y por **contenido (ml)**.",
           "**Contado y crédito mes a mes**, con una línea que muestra la plata que entró.",
           "**Inventario · hoy**: los perfumes por reponer, con el botón **Agregar unidades** ahí mismo.",
         ],
@@ -581,7 +599,7 @@ export const MANUAL: SeccionManual[] = [
           ["Resumen", "Contado, créditos, abonos, recibido, gastos y utilidad mes a mes"],
           ["Facturas", "Todas las facturas del periodo"],
           ["Productos vendidos", "Unidades y valor vendido por perfume"],
-          ["Ventas por categoría", "Vendido por público, tipo, marca y tamaño"],
+          ["Ventas por categoría", "Vendido por público, tipo, marca y contenido (ml)"],
           ["Abonos", "Cada abono recibido"],
           ["Ventas por vendedor", "Lo que vendió cada vendedor"],
           ["Gastos", "Cada gasto, con categoría y medio de pago"],

@@ -3,46 +3,70 @@
  * Todo cambio de stock deja un movimiento (ver movimientos.ts):
  *  crear con unidades → INGRESO "Stock inicial" · agregar unidades → INGRESO · ajuste → AJUSTE · factura → VENTA.
  * Editar un producto NO cambia su stock.
+ *
+ * El nombre completo ("Creed Aventus · EDP 100 ml · Hombre") y el texto de búsqueda se calculan
+ * SIEMPRE aquí, con armarNombreProducto() y textoBusquedaProducto() (src/lib/productos.ts).
  */
 import "server-only";
 import { and, asc, desc, eq, gt, ilike, lte, or, sql, type SQL } from "drizzle-orm";
 import { db, type Transaccion } from "@/db";
 import { facturaItems, marcas, productos } from "@/db/schema";
 import { ApiError } from "@/lib/api";
-import type { Genero, Publico, Tamano, TipoProducto } from "@/lib/clasificacion";
+import type { Categoria, Concentracion, Genero, Publico, TipoProducto } from "@/lib/clasificacion";
 import { escaparLike, normalizarTexto } from "@/lib/formato";
+import { armarNombreProducto, claveDuplicado, textoBusquedaProducto } from "@/lib/productos";
 import type { EstadoStock, FiltrosInventario } from "@/lib/inventario";
 import type { Producto, ProductoVenta } from "@/tipos";
 import { registrarCompra, type DatosCompra } from "./compras";
 import { validarMarcaDelLocal } from "./marcas";
+import { resolverMarcaPorNombre } from "./marcas";
 import { registrarMovimientos, type Autor } from "./movimientos";
 
-interface DatosProducto {
+export interface DatosProducto {
+  /** Nombre de la marca tal como se escribió (se busca o se crea en el local). */
+  marca: string;
   nombre: string;
+  variante: string | null;
+  concentracion: Concentracion | null;
+  contenidoMl: number | null;
+  genero: Genero | null;
+  publico: Publico | null;
+  categoria: Categoria | null;
+  tipo: TipoProducto | null;
   codigo: string;
   precio: number;
   stock: number;
   stockMinimo: number;
-  marcaId: string;
-  tipo: TipoProducto;
-  genero: Genero;
-  publico: Publico;
-  tamano: Tamano;
 }
 
 /** Columnas que se guardan igual al crear y al editar (el stock solo cambia con movimientos). */
-function columnas(datos: DatosProducto) {
+function columnas(datos: DatosProducto, marca: { id: string; nombre: string }) {
+  const caracteristicas = {
+    marca: marca.nombre,
+    nombre: datos.nombre,
+    variante: datos.variante,
+    concentracion: datos.concentracion,
+    contenidoMl: datos.contenidoMl,
+    // El público solo tiene sentido con un género (Niño / Niña / Infantil unisex)
+    genero: datos.genero,
+    publico: datos.genero ? datos.publico : null,
+    categoria: datos.categoria,
+  };
   return {
     nombre: datos.nombre,
-    nombreBusqueda: normalizarTexto(datos.nombre),
+    nombreCompleto: armarNombreProducto(caracteristicas),
+    nombreBusqueda: textoBusquedaProducto({ ...caracteristicas, tipo: datos.tipo, codigo: datos.codigo }),
     codigo: datos.codigo || null,
     precio: datos.precio,
     stockMinimo: datos.stockMinimo,
-    marcaId: datos.marcaId,
+    marcaId: marca.id,
+    variante: datos.variante,
+    concentracion: datos.concentracion,
+    contenidoMl: datos.contenidoMl,
+    categoria: datos.categoria,
     tipo: datos.tipo,
-    genero: datos.genero,
-    publico: datos.publico,
-    tamano: datos.tamano,
+    genero: caracteristicas.genero,
+    publico: caracteristicas.publico,
   };
 }
 
@@ -79,17 +103,22 @@ export async function listarProductos(localId: string, filtros: FiltrosInventari
   const filas = await db
     .select({
       id: productos.id,
-      nombre: productos.nombre,
+      nombre: productos.nombreCompleto,
+      fragancia: productos.nombre,
+      busqueda: productos.nombreBusqueda,
       codigo: productos.codigo,
       precio: productos.precio,
       stock: productos.stock,
       stockMinimo: productos.stockMinimo,
       marcaId: productos.marcaId,
       marcaNombre: marcas.nombre,
+      variante: productos.variante,
+      concentracion: productos.concentracion,
+      contenidoMl: productos.contenidoMl,
+      categoria: productos.categoria,
       tipo: productos.tipo,
       genero: productos.genero,
       publico: productos.publico,
-      tamano: productos.tamano,
     })
     .from(productos)
     .leftJoin(marcas, eq(marcas.id, productos.marcaId))
@@ -102,7 +131,7 @@ export async function listarProductos(localId: string, filtros: FiltrosInventari
         filtros.publico ? eq(productos.publico, filtros.publico) : undefined,
         filtros.marcaId ? eq(productos.marcaId, filtros.marcaId) : undefined,
         filtros.tipo ? eq(productos.tipo, filtros.tipo) : undefined,
-        filtros.tamano ? eq(productos.tamano, filtros.tamano) : undefined,
+        filtros.categoria ? eq(productos.categoria, filtros.categoria) : undefined,
         filtros.stock ? condicionStock(filtros.stock) : undefined,
       ),
     )
@@ -118,10 +147,11 @@ export async function buscarParaVenta(localId: string, texto: string) {
   return db
     .select({
       id: productos.id,
-      nombre: productos.nombre,
+      nombre: productos.nombreCompleto,
       codigo: productos.codigo,
       precio: productos.precio,
       stock: productos.stock,
+      busqueda: productos.nombreBusqueda,
     })
     .from(productos)
     .where(and(eq(productos.localId, localId), eq(productos.activo, true), condicion))
@@ -131,16 +161,16 @@ export async function buscarParaVenta(localId: string, texto: string) {
 
 /** Un producto para cargarlo en la factura ("Vender" desde el inventario). */
 export async function obtenerProductoVenta(localId: string, id: string): Promise<ProductoVenta> {
-  const { nombre, codigo, precio, stock } = await obtenerProducto(localId, id);
-  return { id, nombre, codigo, precio, stock };
+  const { nombreCompleto, codigo, precio, stock, nombreBusqueda } = await obtenerProducto(localId, id);
+  return { id, nombre: nombreCompleto, codigo, precio, stock, busqueda: nombreBusqueda };
 }
 
 export async function crearProducto(localId: string, datos: DatosProducto, autor: Autor) {
-  await validarMarcaDelLocal(localId, datos.marcaId);
+  const marca = await resolverMarcaPorNombre(localId, datos.marca);
   return db.transaction(async (tx) => {
     const [producto] = await tx
       .insert(productos)
-      .values({ localId, ...columnas(datos), stock: datos.stock })
+      .values({ localId, ...columnas(datos, marca), stock: datos.stock })
       .returning();
     if (datos.stock > 0) {
       await registrarMovimientos(tx, [
@@ -153,11 +183,46 @@ export async function crearProducto(localId: string, datos: DatosProducto, autor
 
 export async function editarProducto(localId: string, id: string, datos: DatosProducto) {
   const actual = await obtenerProducto(localId, id);
-  await validarMarcaDelLocal(localId, datos.marcaId, actual.marcaId);
+  const marca = await resolverMarcaPorNombre(localId, datos.marca, actual.marcaId);
   await db
     .update(productos)
-    .set(columnas(datos))
+    .set(columnas(datos, marca))
     .where(and(eq(productos.id, id), eq(productos.localId, localId)));
+}
+
+/**
+ * ¿Ya hay en el local un producto con la misma marca, nombre, variante, concentración y ml?
+ * Es solo una ADVERTENCIA (la persona puede continuar): por ejemplo, un tester o un lote distinto.
+ * excluirId: el producto que se está editando (no cuenta como duplicado de sí mismo).
+ */
+export async function buscarDuplicado(
+  localId: string,
+  datos: Pick<DatosProducto, "marca" | "nombre" | "variante" | "concentracion" | "contenidoMl">,
+  excluirId?: string,
+): Promise<{ id: string; nombre: string } | null> {
+  const candidatos = await db
+    .select({
+      id: productos.id,
+      nombreCompleto: productos.nombreCompleto,
+      marca: marcas.nombre,
+      nombre: productos.nombre,
+      variante: productos.variante,
+      concentracion: productos.concentracion,
+      contenidoMl: productos.contenidoMl,
+    })
+    .from(productos)
+    .innerJoin(marcas, eq(marcas.id, productos.marcaId))
+    .where(
+      and(
+        eq(productos.localId, localId),
+        eq(productos.activo, true),
+        sql`lower(${marcas.nombre}) = lower(${datos.marca.trim()})`,
+        excluirId ? sql`${productos.id} <> ${excluirId}` : undefined,
+      ),
+    );
+  const buscada = claveDuplicado(datos);
+  const igual = candidatos.find((c) => claveDuplicado(c) === buscada);
+  return igual ? { id: igual.id, nombre: igual.nombreCompleto } : null;
 }
 
 /**

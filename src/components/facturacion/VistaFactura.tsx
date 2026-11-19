@@ -11,12 +11,13 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { describirClasificacion } from "@/lib/clasificacion";
+import { describirClasificacion, ETIQUETA_TIPO } from "@/lib/clasificacion";
 import { fecha, fechaHora, numeroFactura, pesos } from "@/lib/formato";
 import { escalaImagenFactura } from "@/lib/imagen-factura";
 import { textoMedioPago } from "@/lib/pagos";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
 import type { FacturaDetalle } from "@/tipos";
+import { Mensaje } from "../ui/Basicos";
 import { Boton } from "../ui/Boton";
 import { useAvisos } from "../ui/Avisos";
 
@@ -108,29 +109,45 @@ export function VistaFactura({ factura }: { factura: FacturaDetalle }) {
 
   return (
     <div>
-      {/* Botones de acción grandes */}
-      <div className="mb-3 grid gap-3 sm:grid-cols-2">
-        <Boton variante="exito" icono="mensaje" onClick={enviarWhatsApp}>
-          Enviar por WhatsApp al cliente
-        </Boton>
-        <Boton icono="compartir" cargando={ocupado === "imagen"} disabled={!!ocupado} onClick={() => ejecutar("imagen")}>
-          Compartir imagen
-        </Boton>
-      </div>
-      <p className="mb-3 text-base text-texto-suave">
-        WhatsApp no permite adjuntar la imagen automáticamente desde un enlace: el mensaje lleva el detalle en texto. Si quieres enviar la imagen, usa «Compartir imagen».
-      </p>
-      <div className="mb-5 grid gap-3 sm:grid-cols-3">
-        <Boton icono="compartir" variante="secundario" cargando={ocupado === "pdf"} disabled={!!ocupado} onClick={() => ejecutar("pdf")}>
-          Compartir PDF
-        </Boton>
-        <Boton icono="descargar" variante="secundario" cargando={ocupado === "pdf-descarga"} disabled={!!ocupado} onClick={() => ejecutar("pdf-descarga")}>
-          Descargar PDF
-        </Boton>
-        <Boton icono="imprimir" variante="secundario" disabled={!!ocupado} onClick={() => window.print()}>
-          Imprimir
-        </Boton>
-      </div>
+      {factura.anulada ? (
+        /* Venta anulada: se puede ver, pero no compartir (el cliente no debe recibir una factura que ya no vale) */
+        <div className="mb-5">
+          <Mensaje tono="peligro" titulo="Venta eliminada (anulada)">
+            <p>Motivo: {factura.motivoAnulacion}</p>
+            <p>
+              Eliminada por {factura.anuladaPorNombre ?? "—"}
+              {factura.anuladaEn ? ` el ${fechaHora(factura.anuladaEn)}` : ""}.
+            </p>
+            <p>Esta factura no se puede enviar ni compartir.</p>
+          </Mensaje>
+        </div>
+      ) : (
+        <>
+          {/* Botones de acción grandes */}
+          <div className="mb-3 grid gap-3 sm:grid-cols-2">
+            <Boton variante="exito" icono="mensaje" onClick={enviarWhatsApp}>
+              Enviar por WhatsApp al cliente
+            </Boton>
+            <Boton icono="compartir" cargando={ocupado === "imagen"} disabled={!!ocupado} onClick={() => ejecutar("imagen")}>
+              Compartir imagen
+            </Boton>
+          </div>
+          <p className="mb-3 text-base text-texto-suave">
+            WhatsApp no permite adjuntar la imagen automáticamente desde un enlace: el mensaje lleva el detalle en texto. Si quieres enviar la imagen, usa «Compartir imagen».
+          </p>
+          <div className="mb-5 grid gap-3 sm:grid-cols-3">
+            <Boton icono="compartir" variante="secundario" cargando={ocupado === "pdf"} disabled={!!ocupado} onClick={() => ejecutar("pdf")}>
+              Compartir PDF
+            </Boton>
+            <Boton icono="descargar" variante="secundario" cargando={ocupado === "pdf-descarga"} disabled={!!ocupado} onClick={() => ejecutar("pdf-descarga")}>
+              Descargar PDF
+            </Boton>
+            <Boton icono="imprimir" variante="secundario" disabled={!!ocupado} onClick={() => window.print()}>
+              Imprimir
+            </Boton>
+          </div>
+        </>
+      )}
 
       {/* ---------------- Factura (esto es lo que se convierte en imagen/PDF) ---------------- */}
       <div className="overflow-x-auto rounded-xl border-2 border-linea bg-superficie-apagada p-2 sm:p-4">
@@ -169,10 +186,25 @@ export function VistaFactura({ factura }: { factura: FacturaDetalle }) {
             <tbody>
               {factura.items.map((i) => (
                 <tr key={i.id} className="align-top">
-                  <td className="py-1 pr-2">
+                  <td className="py-1 pr-2 break-words">
                     {i.nombreProducto}
-                    <br />
-                    <span className="text-[15px]">{describirClasificacion(i)}</span>
+                    {/*
+                     * Ventas nuevas: el nombre ya trae marca, concentración, ml y género ("· ");
+                     * solo se agrega el tipo (Original, 1.1…). Facturas antiguas: la clasificación como antes.
+                     */}
+                    {i.nombreProducto.includes(" · ") ? (
+                      i.tipo && (
+                        <>
+                          <br />
+                          <span className="text-[15px]">{ETIQUETA_TIPO[i.tipo]}</span>
+                        </>
+                      )
+                    ) : (
+                      <>
+                        <br />
+                        <span className="text-[15px]">{describirClasificacion(i)}</span>
+                      </>
+                    )}
                     <br />
                     <span className="text-[15px]">{pesos(i.precioUnitario)} c/u</span>
                   </td>

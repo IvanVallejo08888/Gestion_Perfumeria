@@ -9,6 +9,8 @@
  *  - Gastos: se agrupan por el día del gasto (no por el día en que se registró).
  *  - Gastos personales (de la dueña): se informan aparte y NO se restan.
  *  - Utilidad = total recaudado − gastos del negocio.
+ *
+ * Nada de lo anulado cuenta: ni las ventas eliminadas (con sus ítems y abonos) ni los gastos eliminados.
  */
 import "server-only";
 import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
@@ -22,7 +24,12 @@ import { obtenerLocal } from "./locales";
 export async function obtenerEstadisticas(localId: string, anio: number): Promise<Estadisticas> {
   const local = await obtenerLocal(localId);
   const { inicio, fin } = rangoPeriodo(anio);
-  const enPeriodo = and(eq(facturas.localId, localId), gte(facturas.creadoEn, inicio), lt(facturas.creadoEn, fin));
+  const enPeriodo = and(
+    eq(facturas.localId, localId),
+    eq(facturas.anulada, false),
+    gte(facturas.creadoEn, inicio),
+    lt(facturas.creadoEn, fin),
+  );
 
   const dias = rangoDias(anio);
 
@@ -46,11 +53,21 @@ export async function obtenerEstadisticas(localId: string, anio: number): Promis
       })
       .from(abonos)
       .innerJoin(facturas, eq(abonos.facturaId, facturas.id))
-      .where(and(eq(facturas.localId, localId), gte(abonos.creadoEn, inicio), lt(abonos.creadoEn, fin))),
+      .where(
+        and(
+          eq(facturas.localId, localId),
+          eq(facturas.anulada, false),
+          eq(abonos.anulado, false),
+          gte(abonos.creadoEn, inicio),
+          lt(abonos.creadoEn, fin),
+        ),
+      ),
     db
       .select({ valor: gastos.valor, fecha: gastos.fecha, personal: gastos.personal })
       .from(gastos)
-      .where(and(eq(gastos.localId, localId), gte(gastos.fecha, dias.desde), lt(gastos.fecha, dias.hasta))),
+      .where(
+        and(eq(gastos.localId, localId), eq(gastos.anulado, false), gte(gastos.fecha, dias.desde), lt(gastos.fecha, dias.hasta)),
+      ),
     db
       .select({
         nombre: facturaItems.nombreProducto,
@@ -66,7 +83,14 @@ export async function obtenerEstadisticas(localId: string, anio: number): Promis
     db
       .select({ cantidad: sql<number>`count(*)::int`, saldo: sql<number>`coalesce(sum(${facturas.saldo}), 0)::int` })
       .from(facturas)
-      .where(and(eq(facturas.localId, localId), eq(facturas.tipo, "CREDITO"), eq(facturas.estado, "PENDIENTE"))),
+      .where(
+        and(
+          eq(facturas.localId, localId),
+          eq(facturas.anulada, false),
+          eq(facturas.tipo, "CREDITO"),
+          eq(facturas.estado, "PENDIENTE"),
+        ),
+      ),
   ]);
 
   // 12 meses vacíos que se van llenando

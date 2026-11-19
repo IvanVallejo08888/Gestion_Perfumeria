@@ -2,11 +2,11 @@
  * Tipos de datos que viajan entre la API y las pantallas.
  * (Las fechas llegan al navegador como texto ISO.)
  */
-import type { Clasificacion, Genero, Publico, Tamano, TipoProducto } from "@/lib/clasificacion";
+import type { Categoria, Clasificacion, Concentracion, Genero, Publico, TipoProducto } from "@/lib/clasificacion";
 
 import type { EstadoStock, FiltrosInventario, TipoMovimiento } from "@/lib/inventario";
 
-export type { Clasificacion, Genero, Publico, Tamano, TipoProducto };
+export type { Categoria, Clasificacion, Concentracion, Genero, Publico, TipoProducto };
 import type { CorteVenta } from "@/lib/dashboard";
 
 export type { EstadoStock, FiltrosInventario, TipoMovimiento };
@@ -32,21 +32,31 @@ export interface ClienteDatos {
 
 export interface ProductoVenta {
   id: string;
+  /** Nombre COMPLETO para mostrar: "Creed Aventus · EDP 100 ml · Hombre". */
   nombre: string;
   codigo: string | null;
   precio: number;
   stock: number;
+  /** Texto normalizado con todas las características (para filtrar en el navegador). */
+  busqueda?: string;
 }
 
-/** Producto del inventario. La clasificación es null en productos creados antes de clasificarlos. */
+/**
+ * Producto del inventario. `nombre` es el nombre completo (para mostrar) y `fragancia` el nombre
+ * que escribió la persona ("Aventus"). Las características son null si no se llenaron.
+ */
 export interface Producto extends ProductoVenta {
+  fragancia: string;
   stockMinimo: number;
   marcaId: string | null;
   marcaNombre: string | null;
+  variante: string | null;
+  concentracion: Concentracion | null;
+  contenidoMl: number | null;
+  categoria: Categoria | null;
   tipo: TipoProducto | null;
   genero: Genero | null;
   publico: Publico | null;
-  tamano: Tamano | null;
 }
 
 /** Un cambio de stock (detalle del perfume). "cantidad" lleva signo: +5 entra, -2 sale. */
@@ -97,6 +107,20 @@ export interface FacturaResumen {
   valorTransferencia: number;
   creadoEn: string;
   completadaEn: string | null;
+  /** Venta eliminada (anulada): se conserva para el historial, pero no cuenta en ningún total. */
+  anulada: boolean;
+  anuladaEn: string | null;
+  anuladaPorNombre: string | null;
+  motivoAnulacion: string | null;
+}
+
+/** Resultado de anular una venta (para avisar qué productos regresaron al inventario). */
+export interface ResultadoAnulacion {
+  devueltos: { nombre: string; cantidad: number }[];
+  /** Productos que ya no existen en el inventario: no se pudo devolver su cantidad. */
+  omitidos: { nombre: string; cantidad: number }[];
+  /** Suma de los abonos que quedaron anulados (créditos). */
+  abonosAnulados: number;
 }
 
 export interface FacturaDetalle extends FacturaResumen {
@@ -137,12 +161,17 @@ export interface GastoFila {
   /** Día del gasto, "AAAA-MM-DD". */
   fecha: string;
   usuarioNombre: string;
-  puedeEliminar: boolean;
+  /** Gasto eliminado (anulado): se conserva para el registro, pero no cuenta en los totales. */
+  anulado: boolean;
+  anuladoEn: string | null;
+  anuladoPorNombre: string | null;
+  motivoAnulacion: string | null;
 }
 
 export interface ListaGastos {
+  /** Según el filtro: los gastos vigentes o los eliminados. */
   gastos: GastoFila[];
-  /** Total de gastos del negocio (sin los personales). */
+  /** Total de gastos del negocio (sin los personales). Los totales SIEMPRE son de los gastos vigentes del periodo (nunca suman los eliminados). */
   total: number;
   totalEfectivo: number;
   totalTransferencia: number;
@@ -189,6 +218,57 @@ export interface Estadisticas {
   totales: Omit<MesEstadistica, "mes" | "nombre">;
   topProductos: { nombre: string; cantidad: number; total: number }[];
   creditosPendientes: { cantidad: number; saldo: number };
+}
+
+/* --------------------------------- Clientes -------------------------------- */
+
+/** Cliente en la lista paginada, con sus totales (sin contar ventas anuladas). */
+export interface ClienteFila {
+  id: string;
+  identificacion: string;
+  nombre: string;
+  telefono: string;
+  sector: string;
+  compras: number;
+  totalComprado: number;
+  saldoPendiente: number;
+  ultimaCompra: string | null;
+}
+
+export interface ListaClientes {
+  clientes: ClienteFila[];
+  total: number;
+  pagina: number;
+  totalPaginas: number;
+  /** Id del cliente cuya cédula o teléfono coincide EXACTAMENTE con lo buscado (si es uno solo). */
+  coincidenciaExacta: string | null;
+}
+
+export interface ClienteDetalle extends ClienteDatos {
+  id: string;
+  creadoEn: string;
+}
+
+/** Resumen del récord del cliente. Los totales NO incluyen las ventas anuladas. */
+export interface ResumenCliente {
+  comprasContado: number;
+  comprasCredito: number;
+  totalComprado: number;
+  totalPagado: number;
+  saldoPendiente: number;
+  creditosPendientes: number;
+  primeraCompra: string | null;
+  ultimaCompra: string | null;
+  productoFavorito: { nombre: string; cantidad: number } | null;
+  /** Ventas anuladas, aparte (no suman en los totales). */
+  anuladas: { cantidad: number; total: number };
+}
+
+export interface ListaFacturasCliente {
+  facturas: FacturaResumen[];
+  total: number;
+  pagina: number;
+  totalPaginas: number;
 }
 
 /* -------------------------------- Dashboard -------------------------------- */

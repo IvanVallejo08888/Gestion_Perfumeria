@@ -1,10 +1,15 @@
 /**
- * Crear o editar un perfume con su clasificación (marca, tipo, género, público y tamaño).
- * Orden del formulario: nombre → código → marca → variante (tipo, género, público, tamaño, precio y stock).
- *  - "Agregar marca" ahí mismo: la marca nueva queda elegida.
+ * Crear o editar un producto.
+ * Orden del formulario: nombre del perfume → código → marca → variante → tipo, género, público,
+ * categoría y tamaño → precio, unidades y aviso de stock bajo.
+ *  - Marca: se elige de las del local o se agrega ahí mismo («Agregar marca»).
+ *  - Tamaño en ml con su equivalente en oz; si no está en la lista, «Otro tamaño» deja escribir los ml.
+ *  - Vista previa del nombre completo, el mismo que irá en la factura.
+ *  - Si ya existe un producto igual (marca + nombre + variante + ml), se advierte y se puede continuar.
  *  - Al crear, las unidades iniciales quedan como INGRESO "Stock inicial".
  *  - Al editar, el stock NO se cambia aquí: se usa «Agregar unidades» o «Ajustar stock»
  *    para que cada cambio quede registrado.
+ *  - La concentración ya no se pide; si un producto antiguo la tiene, se conserva al editarlo.
  */
 "use client";
 
@@ -13,50 +18,86 @@ import { BotonesMedioPago } from "@/components/facturacion/MedioPago";
 import { Mensaje } from "@/components/ui/Basicos";
 import { Boton } from "@/components/ui/Boton";
 import { Campo, CampoDinero, Selector } from "@/components/ui/Campo";
-import { Modal } from "@/components/ui/Modal";
+import { Confirmar, Modal } from "@/components/ui/Modal";
 import { useConsulta } from "@/hooks/useConsulta";
-import { ETIQUETA_GENERO, ETIQUETA_PUBLICO, ETIQUETA_TAMANO, ETIQUETA_TIPO, GENEROS, GRUPOS_TAMANO, opcionesDe, PUBLICOS, TIPOS_PRODUCTO } from "@/lib/clasificacion";
+import {
+  CATEGORIAS_FORMULARIO,
+  ETIQUETA_CATEGORIA,
+  ETIQUETA_GENERO,
+  ETIQUETA_PUBLICO,
+  ETIQUETA_TIPO,
+  GENEROS,
+  GRUPOS_MILILITROS,
+  opcionesDe,
+  PUBLICOS,
+  textoMlConOz,
+  TIPOS_PRODUCTO,
+} from "@/lib/clasificacion";
 import { api } from "@/lib/http";
-import type { Genero, NombreActivo, Producto, Publico, Tamano, TipoProducto } from "@/tipos";
+import { armarNombreProducto } from "@/lib/productos";
+import type { Categoria, Concentracion, Genero, NombreActivo, Producto, Publico, TipoProducto } from "@/tipos";
+
+/** Valor del selector de tamaño que muestra el campo para escribir los ml. */
+const OTRO_TAMANO = "otro";
+const TAMANOS_LISTA: number[] = GRUPOS_MILILITROS.flatMap((g) => g.mililitros);
 
 interface FormProducto {
   nombre: string;
   codigo: string;
-  precio: number;
-  stock: number;
-  stockMinimo: number;
-  marcaId: string;
+  marca: string;
+  variante: string;
   tipo: TipoProducto | null;
   genero: Genero | null;
   publico: Publico | null;
-  tamano: Tamano | null;
+  categoria: Categoria | null;
+  /** Texto con los ml (vacío = sin tamaño, por ejemplo un estuche). */
+  contenidoMl: string;
+  precio: number;
+  stock: number;
+  stockMinimo: number;
+  /** No se pide en el formulario: solo se conserva la de los productos antiguos. */
+  concentracion: Concentracion | null;
 }
 
 const FORM_VACIO: FormProducto = {
   nombre: "",
   codigo: "",
+  marca: "",
+  variante: "",
+  tipo: null,
+  genero: null,
+  publico: null,
+  categoria: "PERFUME",
+  contenidoMl: "",
   precio: 0,
   stock: 0,
   // Por defecto avisa cuando se agota (0 unidades); se puede subir si se quiere el aviso antes
   stockMinimo: 0,
-  marcaId: "",
-  tipo: null,
-  genero: null,
-  publico: null,
-  tamano: null,
+  concentracion: null,
 };
 
 const desdeProducto = (p: Producto): FormProducto => ({
-  nombre: p.nombre,
+  nombre: p.fragancia,
   codigo: p.codigo ?? "",
-  precio: p.precio,
-  stock: p.stock,
-  stockMinimo: p.stockMinimo,
-  marcaId: p.marcaId ?? "",
+  marca: p.marcaNombre ?? "",
+  variante: p.variante ?? "",
   tipo: p.tipo,
   genero: p.genero,
   publico: p.publico,
-  tamano: p.tamano,
+  categoria: p.categoria,
+  contenidoMl: p.contenidoMl ? String(p.contenidoMl) : "",
+  precio: p.precio,
+  stock: p.stock,
+  stockMinimo: p.stockMinimo,
+  concentracion: p.concentracion,
+});
+
+/** Lo que se envía al servidor (el nombre completo lo arma el servidor, no el navegador). */
+const aEnviar = (f: FormProducto) => ({
+  ...f,
+  variante: f.variante.trim() || null,
+  contenidoMl: f.contenidoMl ? Number(f.contenidoMl) : null,
+  publico: f.genero ? f.publico : null,
 });
 
 interface Props {
@@ -69,78 +110,168 @@ export function ModalProducto({ producto, onCerrar, onListo }: Props) {
   const [form, setForm] = useState<FormProducto>(producto ? desdeProducto(producto) : FORM_VACIO);
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
+  /** Producto parecido encontrado: se pide confirmación antes de guardar. */
+  const [duplicado, setDuplicado] = useState<string | null>(null);
+  // "Otro tamaño" abierto: el producto tiene unos ml que no están en la lista, o la persona lo eligió
+  const [otroTamano, setOtroTamano] = useState(() => form.contenidoMl !== "" && !TAMANOS_LISTA.includes(Number(form.contenidoMl)));
 
   const consultaMarcas = useConsulta<{ marcas: NombreActivo[] }>("/api/marcas");
   const marcas = consultaMarcas.datos?.marcas ?? null;
   // Si el producto tiene una marca que el administrador desactivó, se muestra igual para poder conservarla
-  const marcaDesactivada =
-    producto?.marcaId && marcas && !marcas.some((m) => m.id === producto.marcaId)
-      ? { id: producto.marcaId, nombre: `${producto.marcaNombre ?? "Marca"} (desactivada)` }
-      : null;
+  const marcaDesactivada = producto?.marcaNombre && marcas && !marcas.some((m) => m.nombre === producto.marcaNombre) ? producto.marcaNombre : null;
   const sinMarcas = marcas?.length === 0 && !marcaDesactivada;
 
-  async function guardar(e: FormEvent) {
-    e.preventDefault();
-    if (!form.nombre.trim()) return setError("Escribe el nombre del producto.");
-    if (form.precio <= 0) return setError("Escribe el precio de venta.");
-    if (!form.marcaId) return setError("Elige la marca.");
-    if (!form.tipo) return setError("Elige el tipo (Original, 1.1, Imitación, Versión o Esencia).");
-    if (!form.genero) return setError("Elige si es para hombre o para mujer.");
-    if (!form.publico) return setError("Elige si es para adulto o infantil.");
-    if (!form.tamano) return setError("Elige el tamaño.");
+  const cambiar = <K extends keyof FormProducto>(campo: K, valor: FormProducto[K]) => setForm((f) => ({ ...f, [campo]: valor }));
+
+  // Vista previa: la MISMA función que usa el servidor al guardar
+  const datos = aEnviar(form);
+  const nombreCompleto = form.nombre.trim() && form.marca ? armarNombreProducto(datos) : "";
+  const ml = Number(form.contenidoMl);
+
+  function validar(): string {
+    if (!form.nombre.trim()) return "Escribe el nombre del perfume.";
+    if (!form.marca.trim()) return "Elige la marca.";
+    if (form.contenidoMl && (!/^\d+$/.test(form.contenidoMl) || ml <= 0)) return "El tamaño debe ser un número entero de mililitros.";
+    if (form.precio <= 0) return "Escribe el precio de venta.";
+    return "";
+  }
+
+  async function guardar(confirmado = false) {
     setCargando(true);
     setError("");
     try {
-      if (producto) await api(`/api/productos/${producto.id}`, { method: "PUT", json: form });
-      else await api("/api/productos", { method: "POST", json: form });
-      onListo(producto ? "Producto actualizado." : `«${form.nombre}» agregado al inventario.`);
+      // Advertencia de posible duplicado (solo si la persona aún no confirmó)
+      if (!confirmado) {
+        const { duplicado: igual } = await api<{ duplicado: { id: string; nombre: string } | null }>("/api/productos/duplicado", {
+          method: "POST",
+          json: { ...datos, excluirId: producto?.id },
+        });
+        if (igual) {
+          setDuplicado(igual.nombre);
+          setCargando(false);
+          return;
+        }
+      }
+      if (producto) await api(`/api/productos/${producto.id}`, { method: "PUT", json: datos });
+      else await api("/api/productos", { method: "POST", json: datos });
+      onListo(producto ? "Producto actualizado." : `«${nombreCompleto}» agregado al inventario.`);
     } catch (err) {
       setError((err as Error).message === "Ya existe un registro con esos datos." ? "Ya existe un producto con ese código." : (err as Error).message);
       setCargando(false);
     }
   }
 
+  function enviar(e: FormEvent) {
+    e.preventDefault();
+    const problema = validar();
+    if (problema) return setError(problema);
+    void guardar();
+  }
+
+  function elegirTamano(valor: string) {
+    if (valor === OTRO_TAMANO) {
+      setOtroTamano(true);
+      cambiar("contenidoMl", "");
+      return;
+    }
+    setOtroTamano(false);
+    cambiar("contenidoMl", valor);
+  }
+
   return (
     <Modal abierto onCerrar={onCerrar} titulo={producto ? "Editar producto" : "Agregar producto"}>
-      <form onSubmit={guardar} className="space-y-5" noValidate>
+      <form onSubmit={enviar} className="space-y-5" noValidate>
         {error && <Mensaje tono="peligro">{error}</Mensaje>}
-        <Campo etiqueta="Nombre del perfume" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} obligatorio autoFocus />
-        <Campo etiqueta="Código (opcional)" value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} ayuda="Por ejemplo, el código de barras." />
+
+        <Campo
+          etiqueta="Nombre del perfume"
+          maxLength={120}
+          value={form.nombre}
+          onChange={(e) => cambiar("nombre", e.target.value)}
+          placeholder="Ej. Aventus, Sauvage, Good Girl"
+          obligatorio
+          autoFocus
+        />
+        <Campo etiqueta="Código (opcional)" value={form.codigo} onChange={(e) => cambiar("codigo", e.target.value)} ayuda="Por ejemplo, el código de barras." />
 
         <SelectorMarca
           marcas={marcas}
           marcaDesactivada={marcaDesactivada}
           sinMarcas={sinMarcas}
-          valor={form.marcaId}
-          onCambio={(marcaId) => setForm((f) => ({ ...f, marcaId }))}
-          onMarcaCreada={async (marcaId) => {
+          valor={form.marca}
+          onCambio={(marca) => cambiar("marca", marca)}
+          onMarcaCreada={async (marca) => {
             await consultaMarcas.recargar();
-            setForm((f) => ({ ...f, marcaId }));
+            cambiar("marca", marca);
           }}
         />
         {consultaMarcas.error && <Mensaje tono="peligro">{consultaMarcas.error}</Mensaje>}
 
-        <BotonesMedioPago titulo="Tipo" opciones={opcionesDe(TIPOS_PRODUCTO, ETIQUETA_TIPO)} valor={form.tipo} onCambio={(tipo) => setForm({ ...form, tipo })} />
-        <BotonesMedioPago titulo="Género" opciones={opcionesDe(GENEROS, ETIQUETA_GENERO)} valor={form.genero} onCambio={(genero) => setForm({ ...form, genero })} />
-        <BotonesMedioPago titulo="Público" opciones={opcionesDe(PUBLICOS, ETIQUETA_PUBLICO)} valor={form.publico} onCambio={(publico) => setForm({ ...form, publico })} />
+        <Campo
+          etiqueta="Variante (opcional)"
+          maxLength={60}
+          value={form.variante}
+          onChange={(e) => cambiar("variante", e.target.value)}
+          placeholder="Ej. Intense, Blush, Tester"
+          ayuda="En un estuche, escribe lo que trae con «+»: «+ gel» (va al final del nombre)."
+        />
+
+        <BotonesMedioPago titulo="Tipo" opciones={opcionesDe(TIPOS_PRODUCTO, ETIQUETA_TIPO)} valor={form.tipo} onCambio={(tipo) => cambiar("tipo", tipo)} />
+        <BotonesMedioPago
+          titulo="Género"
+          opciones={opcionesDe(GENEROS, ETIQUETA_GENERO)}
+          valor={form.genero}
+          onCambio={(genero) => setForm((f) => ({ ...f, genero, publico: f.publico ?? "ADULTO" }))}
+        />
+        {form.genero && (
+          <BotonesMedioPago titulo="Público" opciones={opcionesDe(PUBLICOS, ETIQUETA_PUBLICO)} valor={form.publico} onCambio={(publico) => cambiar("publico", publico)} />
+        )}
+
+        <Selector etiqueta="Categoría" value={form.categoria ?? ""} onChange={(e) => cambiar("categoria", (e.target.value || null) as Categoria | null)}>
+          <option value="">Sin especificar</option>
+          {CATEGORIAS_FORMULARIO.map((c) => (
+            <option key={c} value={c}>
+              {ETIQUETA_CATEGORIA[c]}
+            </option>
+          ))}
+          {/* Un producto antiguo con una categoría que ya no se ofrece la conserva */}
+          {form.categoria && !(CATEGORIAS_FORMULARIO as readonly string[]).includes(form.categoria) && (
+            <option value={form.categoria}>{ETIQUETA_CATEGORIA[form.categoria]}</option>
+          )}
+        </Selector>
+
         <Selector
           etiqueta="Tamaño"
-          value={form.tamano ?? ""}
-          onChange={(e) => setForm({ ...form, tamano: (e.target.value || null) as Tamano | null })}
-          obligatorio
+          value={otroTamano ? OTRO_TAMANO : form.contenidoMl}
+          onChange={(e) => elegirTamano(e.target.value)}
+          ayuda="En ml, con su equivalente en onzas."
         >
-          <option value="">Elige el tamaño</option>
-          {GRUPOS_TAMANO.map((g) => (
+          <option value="">Sin tamaño (estuche u otro)</option>
+          {GRUPOS_MILILITROS.map((g) => (
             <optgroup key={g.titulo} label={g.titulo}>
-              {g.tamanos.map((t) => (
-                <option key={t} value={t}>
-                  {ETIQUETA_TAMANO[t]}
+              {g.mililitros.map((m) => (
+                <option key={m} value={String(m)}>
+                  {textoMlConOz(m)}
                 </option>
               ))}
             </optgroup>
           ))}
+          <option value={OTRO_TAMANO}>Otro tamaño…</option>
         </Selector>
-        <CampoDinero etiqueta="Precio de venta" valor={form.precio} onCambio={(v) => setForm({ ...form, precio: v })} obligatorio />
+        {otroTamano && (
+          <Campo
+            etiqueta="Tamaño en ml"
+            inputMode="numeric"
+            autoComplete="off"
+            value={form.contenidoMl}
+            onChange={(e) => cambiar("contenidoMl", e.target.value.replace(/\D/g, "").slice(0, 4))}
+            placeholder="Ej. 35"
+            ayuda={ml > 0 ? `Equivale a ${textoMlConOz(ml)}.` : "Escribe los mililitros: se mostrará su equivalente en onzas."}
+            obligatorio
+          />
+        )}
+
+        <CampoDinero etiqueta="Precio de venta" valor={form.precio} onCambio={(v) => cambiar("precio", v)} obligatorio />
 
         <div className="grid gap-5 sm:grid-cols-2">
           {producto ? (
@@ -156,7 +287,7 @@ export function ModalProducto({ producto, onCerrar, onListo }: Props) {
               inputMode="numeric"
               min={0}
               value={form.stock}
-              onChange={(e) => setForm({ ...form, stock: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+              onChange={(e) => cambiar("stock", Math.max(0, Math.floor(Number(e.target.value) || 0)))}
               ayuda="Quedan registradas como «Stock inicial»."
               obligatorio
             />
@@ -167,14 +298,40 @@ export function ModalProducto({ producto, onCerrar, onListo }: Props) {
             inputMode="numeric"
             min={0}
             value={form.stockMinimo}
-            onChange={(e) => setForm({ ...form, stockMinimo: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
-            ayuda="Recibirás una notificación de stock bajo."
+            onChange={(e) => cambiar("stockMinimo", Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+            ayuda="Recibirás una notificación de stock bajo. Con 0, cuando se agote."
           />
         </div>
+
+        {/* Vista previa en vivo */}
+        <div aria-live="polite" className="rounded-xl border-2 border-marca-700 bg-marca-50 p-4 text-lg">
+          <p className="text-base font-bold text-texto-suave">Así se verá en la factura:</p>
+          <p className="mt-1 text-xl font-bold break-words text-acento">{nombreCompleto || "Escribe el nombre del perfume y elige la marca"}</p>
+        </div>
+
         <Boton type="submit" ancho cargando={cargando} icono="check">
           Guardar
         </Boton>
       </form>
+
+      <Confirmar
+        abierto={duplicado !== null}
+        titulo="¿Producto repetido?"
+        mensaje={
+          <div className="space-y-2">
+            <p>Ya existe en tu inventario:</p>
+            <p className="rounded-xl bg-superficie p-3 font-bold break-words">{duplicado}</p>
+            <p>¿Es otro producto (por ejemplo, un tester o un lote distinto) y quieres guardarlo de todos modos?</p>
+          </div>
+        }
+        textoConfirmar="Sí, guardar de todos modos"
+        cargando={cargando}
+        onConfirmar={() => {
+          setDuplicado(null);
+          void guardar(true);
+        }}
+        onCerrar={() => setDuplicado(null)}
+      />
     </Modal>
   );
 }
@@ -190,11 +347,12 @@ function SelectorMarca({
   onMarcaCreada,
 }: {
   marcas: NombreActivo[] | null;
-  marcaDesactivada: { id: string; nombre: string } | null;
+  marcaDesactivada: string | null;
   sinMarcas: boolean;
+  /** Nombre de la marca elegida. */
   valor: string;
-  onCambio: (marcaId: string) => void;
-  onMarcaCreada: (marcaId: string) => Promise<void>;
+  onCambio: (marca: string) => void;
+  onMarcaCreada: (marca: string) => Promise<void>;
 }) {
   const [agregando, setAgregando] = useState(false);
   const [nombre, setNombre] = useState("");
@@ -213,7 +371,7 @@ function SelectorMarca({
         method: "POST",
         json: { nombre },
       });
-      await onMarcaCreada(marca.id);
+      await onMarcaCreada(marca.nombre);
       setAviso(marca.existia ? `«${marca.nombre}» ya existía: quedó elegida.` : `Marca «${marca.nombre}» agregada y elegida.`);
       setNombre("");
       setAgregando(false);
@@ -230,9 +388,9 @@ function SelectorMarca({
         <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
           <Selector etiqueta="Marca" value={valor} onChange={(e) => onCambio(e.target.value)} disabled={!marcas} obligatorio>
             <option value="">{marcas ? "Elige la marca" : "Cargando marcas…"}</option>
-            {marcaDesactivada && <option value={marcaDesactivada.id}>{marcaDesactivada.nombre}</option>}
+            {marcaDesactivada && <option value={marcaDesactivada}>{`${marcaDesactivada} (desactivada)`}</option>}
             {marcas?.map((m) => (
-              <option key={m.id} value={m.id}>
+              <option key={m.id} value={m.nombre}>
                 {m.nombre}
               </option>
             ))}

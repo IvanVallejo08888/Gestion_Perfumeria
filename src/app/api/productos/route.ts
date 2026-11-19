@@ -1,5 +1,5 @@
 /**
- * GET /api/productos?q=&genero=&publico=&marcaId=&tipo=&tamano=&stock= — Inventario del local (filtros opcionales).
+ * GET /api/productos?q=&genero=&publico=&marcaId=&tipo=&categoria=&stock= — Inventario del local (filtros opcionales).
  * POST — Crear producto (si trae unidades, registra el INGRESO "Stock inicial").
  */
 import { comoVendedor, leerCuerpo, manejador, ok } from "@/lib/api";

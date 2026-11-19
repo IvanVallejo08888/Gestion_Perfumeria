@@ -13,7 +13,7 @@ import "dotenv/config";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { normalizarTexto } from "../lib/formato";
+import { armarNombreProducto, textoBusquedaProducto } from "../lib/productos";
 import { MARCAS_EJEMPLO, PERFUMES_EJEMPLO, precioEjemplo, STOCK_MINIMO_EJEMPLO } from "./datos-perfumes";
 import * as schema from "./schema";
 
@@ -70,7 +70,9 @@ async function main() {
             return {
               localId: local.id,
               nombre: p.nombre,
-              nombreBusqueda: normalizarTexto(p.nombre),
+              // Mismo nombre completo y texto de búsqueda que arma la app al guardar un producto
+              nombreCompleto: armarNombreProducto({ ...p, categoria: "PERFUME" }),
+              nombreBusqueda: textoBusquedaProducto({ ...p, categoria: "PERFUME" }),
               codigo: p.codigo,
               precio: precioEjemplo(p),
               stock: p.stock,
@@ -79,7 +81,8 @@ async function main() {
               tipo: p.tipo,
               genero: p.genero,
               publico: p.publico,
-              tamano: p.tamano,
+              contenidoMl: p.contenidoMl,
+              categoria: "PERFUME" as const,
             };
           }),
         )

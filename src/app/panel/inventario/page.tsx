@@ -1,7 +1,7 @@
 /**
  * Inventario de perfumes del local.
  *  - Pestañas Todos | Hombre | Mujer, chips de público y filtros combinables (marca, tipo,
- *    tamaño, estado de stock y buscador). Todo queda en la URL: ?genero=MUJER&tipo=ORIGINAL…
+ *    categoría, estado de stock y buscador). Todo queda en la URL: ?genero=MUJER&tipo=ORIGINAL…
  *  - Por perfume: «Agregar unidades» (INGRESO) y «Vender» (abre Facturación con el perfume cargado).
  *  - Detalle: datos, últimos 20 movimientos, editar, ajustar stock (AJUSTE con motivo) y eliminar.
  *  - El stock se descuenta por ventas SOLO desde Facturación (movimiento VENTA).

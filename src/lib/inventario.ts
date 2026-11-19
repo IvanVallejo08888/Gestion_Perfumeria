@@ -6,7 +6,7 @@
  *
  * Sin imports con "@/": lo usa también src/db/schema.ts (drizzle-kit).
  */
-import { GENEROS, PUBLICOS, TAMANOS, TIPOS_PRODUCTO, type Genero, type Publico, type Tamano, type TipoProducto } from "./clasificacion";
+import { CATEGORIAS, GENEROS, PUBLICOS, TIPOS_PRODUCTO, type Categoria, type Genero, type Publico, type TipoProducto } from "./clasificacion";
 
 /* ------------------------------ Movimientos ------------------------------ */
 
@@ -45,12 +45,12 @@ export interface FiltrosInventario {
   publico?: Publico;
   marcaId?: string;
   tipo?: TipoProducto;
-  tamano?: Tamano;
+  categoria?: Categoria;
   stock?: EstadoStock;
 }
 
 /** Orden fijo de los parámetros en la URL. */
-const CLAVES = ["q", "genero", "publico", "marcaId", "tipo", "tamano", "stock"] as const;
+const CLAVES = ["q", "genero", "publico", "marcaId", "tipo", "categoria", "stock"] as const;
 
 const deLista = <T extends string>(lista: readonly T[], valor: string | null | undefined): T | undefined =>
   valor && (lista as readonly string[]).includes(valor) ? (valor as T) : undefined;
@@ -66,7 +66,7 @@ export function leerFiltros(parametros: { get(clave: string): string | null }): 
     publico: genero ? deLista(PUBLICOS, parametros.get("publico")) : undefined,
     marcaId: parametros.get("marcaId")?.trim() || undefined,
     tipo: deLista(TIPOS_PRODUCTO, parametros.get("tipo")),
-    tamano: deLista(TAMANOS, parametros.get("tamano")),
+    categoria: deLista(CATEGORIAS, parametros.get("categoria")),
     stock: deLista(ESTADOS_STOCK, parametros.get("stock")),
   });
 }
@@ -86,7 +86,7 @@ export function filtrosAUrl(f: FiltrosInventario): string {
   return texto ? `?${texto}` : "";
 }
 
-/** Filtros del panel (marca, tipo, tamaño y stock). La pestaña, los chips y el buscador se ven aparte. */
+/** Filtros del panel (marca, tipo, categoría y stock). La pestaña, los chips y el buscador se ven aparte. */
 export function contarFiltros(f: FiltrosInventario): number {
-  return [f.marcaId, f.tipo, f.tamano, f.stock].filter(Boolean).length;
+  return [f.marcaId, f.tipo, f.categoria, f.stock].filter(Boolean).length;
 }

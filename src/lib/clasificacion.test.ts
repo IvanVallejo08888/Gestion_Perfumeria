@@ -1,43 +1,49 @@
 /** Pruebas de las etiquetas de clasificación de perfumes. Ejecutar con: npm test */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { describirClasificacion, ETIQUETA_TAMANO, ETIQUETA_TIPO, etiquetaPara, GRUPOS_TAMANO, SIN_CATEGORIA, TAMANOS } from "./clasificacion";
+import { CATEGORIAS_FORMULARIO, describirClasificacion, ETIQUETA_TIPO, etiquetaPara, GRUPOS_MILILITROS, SIN_CATEGORIA, textoMl, textoMlConOz, textoOz } from "./clasificacion";
 
 describe("etiquetas de clasificación", () => {
   it("los tipos se muestran como en el local", () => {
     assert.equal(ETIQUETA_TIPO.UNO_UNO, "1.1");
     assert.equal(ETIQUETA_TIPO.IMITACION, "Imitación");
   });
-  it("todos los tamaños muestran onzas y mililitros", () => {
-    assert.equal(ETIQUETA_TAMANO.OZ_3_4, "100 ml (3.4 oz)");
-    for (const t of TAMANOS) assert.match(ETIQUETA_TAMANO[t], /^\d+ ml \(\d(\.\d)? oz\)$/);
+  it("el contenido se muestra en mililitros", () => {
+    assert.equal(textoMl(100), "100 ml");
   });
-  it("los grupos del selector traen todos los tamaños, una vez y en orden", () => {
-    assert.deepEqual(GRUPOS_TAMANO.flatMap((g) => g.tamanos), [...TAMANOS]);
+  it("muestra los ml con su equivalente comercial en onzas", () => {
+    assert.equal(textoMlConOz(100), "100 ml (3.4 oz)");
+    assert.equal(textoMlConOz(120), "120 ml (4 oz)");
+    assert.equal(textoMlConOz(40), "40 ml (1 oz)");
+    assert.equal(textoOz(250), "8.4 oz");
+    assert.equal(textoOz(35), "1.2 oz", "un tamaño poco común se calcula");
   });
-  it("incluye los tamaños de esencias, cremas y frascos pequeños", () => {
-    assert.equal(ETIQUETA_TAMANO.OZ_1, "30 ml (1 oz)");
-    assert.equal(ETIQUETA_TAMANO.OZ_1_40ML, "40 ml (1 oz)");
-    assert.equal(ETIQUETA_TAMANO.OZ_6_8, "200 ml (6.8 oz)");
-    assert.equal(ETIQUETA_TAMANO.OZ_8_4, "250 ml (8.4 oz)");
-    assert.equal(new Set(Object.values(ETIQUETA_TAMANO)).size, TAMANOS.length, "las etiquetas no se repiten");
+  it("el selector trae cada tamaño una sola vez y de menor a mayor", () => {
+    const todos = GRUPOS_MILILITROS.flatMap((g) => g.mililitros);
+    assert.deepEqual(todos, [...todos].sort((a, b) => a - b));
+    assert.equal(new Set(todos).size, todos.length);
+  });
+  it("el formulario no ofrece Body Mist, Desodorante, Decant ni Accesorio", () => {
+    assert.deepEqual([...CATEGORIAS_FORMULARIO], ["PERFUME", "ESTUCHE", "CREMA", "OTRO"]);
   });
   it("Hombre/Mujer + Infantil = Niño/Niña", () => {
     assert.equal(etiquetaPara("HOMBRE", "INFANTIL"), "Niño");
     assert.equal(etiquetaPara("MUJER", "INFANTIL"), "Niña");
     assert.equal(etiquetaPara("MUJER", "ADULTO"), "Mujer");
+    assert.equal(etiquetaPara("UNISEX", "ADULTO"), "Unisex");
+    assert.equal(etiquetaPara("UNISEX", "INFANTIL"), "Infantil unisex");
   });
 });
 
 describe("describirClasificacion", () => {
-  it("une los datos en orden: marca · tipo · género · tamaño", () => {
+  it("une los datos en orden: marca · tipo · género · concentración · ml", () => {
     assert.equal(
-      describirClasificacion({ marcaNombre: "Dior", tipo: "ORIGINAL", genero: "HOMBRE", publico: "ADULTO", tamano: "OZ_3_4" }),
-      "Dior · Original · Hombre · 100 ml (3.4 oz)",
+      describirClasificacion({ marcaNombre: "Dior", tipo: "ORIGINAL", genero: "HOMBRE", publico: "ADULTO", concentracion: "EDT", contenidoMl: 100 }),
+      "Dior · Original · Hombre · EDT · 100 ml",
     );
   });
   it("sin ningún dato (facturas o productos antiguos) → Sin categoría", () => {
     assert.equal(describirClasificacion({}), SIN_CATEGORIA);
-    assert.equal(describirClasificacion({ marcaNombre: null, tipo: null, genero: null, publico: null, tamano: null }), SIN_CATEGORIA);
+    assert.equal(describirClasificacion({ marcaNombre: null, tipo: null, genero: null, publico: null, contenidoMl: null }), SIN_CATEGORIA);
   });
 });

@@ -2,21 +2,10 @@
  * Reglas del dashboard de reportes compartidas por el servidor, el Excel y las pantallas.
  * Son funciones puras (sin base de datos) para poder probarlas con `npm test`.
  *
- * Un "corte" es una forma de repartir las ventas: por público, tipo, marca o tamaño.
+ * Un "corte" es una forma de repartir las ventas: por público, tipo, marca o contenido (ml).
  * Las ventas sin clasificación (facturas anteriores) se agrupan como "Sin categoría".
  */
-import {
-  ETIQUETA_TAMANO,
-  ETIQUETA_TIPO,
-  etiquetaPara,
-  GENEROS,
-  PUBLICOS,
-  SIN_CATEGORIA,
-  TAMANOS,
-  TIPOS_PRODUCTO,
-  type Genero,
-  type Publico,
-} from "./clasificacion";
+import { ETIQUETA_TIPO, etiquetaPara, GENEROS, PUBLICOS, SIN_CATEGORIA, textoMl, TIPOS_PRODUCTO, type Genero, type Publico } from "./clasificacion";
 
 /** Una barra de una gráfica de ventas. */
 export interface CorteVenta {
@@ -47,10 +36,9 @@ export const CORTES_PUBLICO: { clave: string; etiqueta: string }[] = GENEROS.fla
   PUBLICOS.map((publico) => ({ clave: clavePublico(genero, publico), etiqueta: etiquetaPara(genero, publico) })),
 );
 export const CORTES_TIPO = TIPOS_PRODUCTO.map((clave) => ({ clave: clave as string, etiqueta: ETIQUETA_TIPO[clave] }));
-export const CORTES_TAMANO = TAMANOS.map((clave) => ({ clave: clave as string, etiqueta: ETIQUETA_TAMANO[clave] }));
 
 /**
- * Categorías de lista fija (público, tipo, tamaño): siempre salen todas y en el mismo orden,
+ * Categorías de lista fija (público, tipo): siempre salen todas y en el mismo orden,
  * con cero las que no tuvieron ventas. "Sin categoría" va al final y solo si tiene datos.
  */
 export function completarCortes(orden: { clave: string; etiqueta: string }[], filas: FilaCorte[]): CorteVenta[] {
@@ -62,6 +50,23 @@ export function completarCortes(orden: { clave: string; etiqueta: string }[], fi
     valor: porClave.get(clave)?.valor ?? 0,
   }));
   const sin = porClave.get(CLAVE_SIN_CATEGORIA);
+  if (sin && (sin.unidades > 0 || sin.valor > 0)) {
+    cortes.push({ clave: CLAVE_SIN_CATEGORIA, etiqueta: SIN_CATEGORIA, unidades: sin.unidades, valor: sin.valor });
+  }
+  return cortes;
+}
+
+/**
+ * Contenido en ml (lista abierta: cada local vende los tamaños que quiera).
+ * La clave es el número de ml como texto ("100"); se ordena de menor a mayor
+ * y "Sin categoría" (productos sin ml) va al final.
+ */
+export function cortesPorMl(filas: FilaCorte[]): CorteVenta[] {
+  const cortes = filas
+    .filter((f) => f.clave !== null && Number(f.clave) > 0)
+    .map((f) => ({ clave: f.clave as string, etiqueta: textoMl(Number(f.clave)), unidades: f.unidades, valor: f.valor }))
+    .sort((a, b) => Number(a.clave) - Number(b.clave));
+  const sin = filas.find((f) => f.clave === null);
   if (sin && (sin.unidades > 0 || sin.valor > 0)) {
     cortes.push({ clave: CLAVE_SIN_CATEGORIA, etiqueta: SIN_CATEGORIA, unidades: sin.unidades, valor: sin.valor });
   }

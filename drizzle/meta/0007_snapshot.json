@@ -1,5 +1,5 @@
 {
-  "id": "49a2af68-460b-47e9-981f-7abc11fceeab",
+  "id": "6c31cedb-4720-4f75-92c6-3c4462cd78ee",
   "prevId": "569b0058-d1b7-4b9a-98e3-dec75a817b90",
   "version": "7",
   "dialect": "postgresql",
@@ -67,6 +67,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "anulado": {
+          "name": "anulado",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         }
       },
       "indexes": {
@@ -376,6 +383,27 @@
           "primaryKey": false,
           "notNull": true
         },
+        "nombre_busqueda": {
+          "name": "nombre_busqueda",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "nombre_compacto": {
+          "name": "nombre_compacto",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "telefono_digitos": {
+          "name": "telefono_digitos",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
         "creado_en": {
           "name": "creado_en",
           "type": "timestamp with time zone",
@@ -409,6 +437,48 @@
             }
           ],
           "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "clientes_local_nombre_busqueda_idx": {
+          "name": "clientes_local_nombre_busqueda_idx",
+          "columns": [
+            {
+              "expression": "local_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "nombre_busqueda",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "clientes_local_telefono_idx": {
+          "name": "clientes_local_telefono_idx",
+          "columns": [
+            {
+              "expression": "local_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "telefono_digitos",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -700,6 +770,13 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
+        },
+        "anulada": {
+          "name": "anulada",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         }
       },
       "indexes": {
@@ -1027,6 +1104,37 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
+        },
+        "anulada": {
+          "name": "anulada",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "anulada_en": {
+          "name": "anulada_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "anulada_por_id": {
+          "name": "anulada_por_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "anulada_por_nombre": {
+          "name": "anulada_por_nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "motivo_anulacion": {
+          "name": "motivo_anulacion",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -1047,6 +1155,42 @@
             }
           ],
           "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "facturas_local_anulada_idx": {
+          "name": "facturas_local_anulada_idx",
+          "columns": [
+            {
+              "expression": "local_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "anulada",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "facturas_cliente_idx": {
+          "name": "facturas_cliente_idx",
+          "columns": [
+            {
+              "expression": "cliente_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -1148,6 +1292,19 @@
           ],
           "onDelete": "restrict",
           "onUpdate": "no action"
+        },
+        "facturas_anulada_por_id_usuarios_id_fk": {
+          "name": "facturas_anulada_por_id_usuarios_id_fk",
+          "tableFrom": "facturas",
+          "tableTo": "usuarios",
+          "columnsFrom": [
+            "anulada_por_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1197,13 +1354,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "personal": {
-          "name": "personal",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
         "descripcion": {
           "name": "descripcion",
           "type": "text",
@@ -1235,6 +1385,44 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "anulado": {
+          "name": "anulado",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "anulado_en": {
+          "name": "anulado_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "anulado_por_id": {
+          "name": "anulado_por_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "anulado_por_nombre": {
+          "name": "anulado_por_nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "motivo_anulacion": {
+          "name": "motivo_anulacion",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "personal": {
+          "name": "personal",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         }
       },
       "indexes": {
@@ -1249,6 +1437,27 @@
             },
             {
               "expression": "fecha",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "gastos_local_anulado_idx": {
+          "name": "gastos_local_anulado_idx",
+          "columns": [
+            {
+              "expression": "local_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "anulado",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1293,6 +1502,19 @@
           "tableTo": "categorias_gasto",
           "columnsFrom": [
             "categoria_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "gastos_anulado_por_id_usuarios_id_fk": {
+          "name": "gastos_anulado_por_id_usuarios_id_fk",
+          "tableFrom": "gastos",
+          "tableTo": "usuarios",
+          "columnsFrom": [
+            "anulado_por_id"
           ],
           "columnsTo": [
             "id"
@@ -2230,15 +2452,6 @@
         "MUJER"
       ]
     },
-    "public.medio_pago_compra": {
-      "name": "medio_pago_compra",
-      "schema": "public",
-      "values": [
-        "EFECTIVO",
-        "TRANSFERENCIA",
-        "CREDITO"
-      ]
-    },
     "public.medio_pago": {
       "name": "medio_pago",
       "schema": "public",
@@ -2246,6 +2459,15 @@
         "EFECTIVO",
         "TRANSFERENCIA",
         "MIXTO"
+      ]
+    },
+    "public.medio_pago_compra": {
+      "name": "medio_pago_compra",
+      "schema": "public",
+      "values": [
+        "EFECTIVO",
+        "TRANSFERENCIA",
+        "CREDITO"
       ]
     },
     "public.medio_pago_gasto": {
@@ -2276,19 +2498,11 @@
       "name": "tamano_producto",
       "schema": "public",
       "values": [
-        "OZ_1",
-        "OZ_1_40ML",
-        "OZ_1_6",
-        "OZ_1_7",
         "OZ_2",
-        "OZ_2_2",
         "OZ_2_5",
-        "OZ_2_7",
         "OZ_3_4",
         "OZ_4",
-        "OZ_4_2",
-        "OZ_6_8",
-        "OZ_8_4"
+        "OZ_4_2"
       ]
     },
     "public.tipo_factura": {

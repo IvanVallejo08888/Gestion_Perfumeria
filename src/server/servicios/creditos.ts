@@ -5,13 +5,15 @@
  *  - El valor se aplica a las cuotas en orden (primero la más antigua).
  *  - Cuando el saldo llega a 0, el crédito pasa de PENDIENTE a COMPLETADA
  *    y aparece en el historial de ventas completadas.
+ *
+ * Las ventas anuladas ("Eliminar venta") no aparecen aquí y no admiten abonos ni cambios de fecha.
  */
 import "server-only";
-import { and, asc, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { abonos, cuotas, facturas } from "@/db/schema";
+import { abonos, clientes, cuotas, facturas } from "@/db/schema";
 import { ApiError, type VendedorSesion } from "@/lib/api";
-import { escaparLike, normalizarTexto } from "@/lib/formato";
+import { escaparLike, normalizarTelefono, normalizarTexto } from "@/lib/formato";
 import { obtenerFactura } from "./facturas";
 import { resolverPago, type DatosPago } from "./pagos";
 
@@ -19,25 +21,41 @@ import { resolverPago, type DatosPago } from "./pagos";
  * Condición de búsqueda del cliente: coincidencia parcial, sin distinguir mayúsculas ni tildes.
  *  - Identificación o celular: se comparan solo los dígitos ("300 123" encuentra "3001234567").
  *  - Nombre: cada palabra debe aparecer, en cualquier orden ("perez maria" encuentra "María Pérez").
+ * Se busca en la copia guardada en la factura Y en los datos ACTUALES del cliente (por clienteId):
+ * así sus créditos se siguen encontrando aunque la cédula, el nombre o el teléfono se corrijan
+ * después de la venta (la factura conserva los datos del día de la venta).
  */
-function condicionBusquedaCliente(texto: string): SQL | undefined {
+function condicionBusquedaCliente(localId: string, texto: string): SQL | undefined {
   const opciones: SQL[] = [ilike(facturas.clienteNombre, `%${escaparLike(texto)}%`)];
+  const delCliente: SQL[] = [];
   const digitos = texto.replace(/\D/g, "");
   if (digitos) {
     const parecido = `%${digitos}%`;
     opciones.push(ilike(facturas.clienteIdentificacion, parecido));
     opciones.push(sql`regexp_replace(${facturas.clienteTelefono}, '\\D', '', 'g') like ${parecido}`);
+    delCliente.push(ilike(clientes.identificacion, parecido), ilike(clientes.telefonoDigitos, `%${normalizarTelefono(texto)}%`));
   }
   const palabras = normalizarTexto(texto).split(" ").filter(Boolean);
-  if (palabras.length) opciones.push(and(...palabras.map((p) => ilike(facturas.clienteNombreBusqueda, `%${escaparLike(p)}%`)))!);
+  if (palabras.length) {
+    opciones.push(and(...palabras.map((p) => ilike(facturas.clienteNombreBusqueda, `%${escaparLike(p)}%`)))!);
+    delCliente.push(and(...palabras.map((p) => ilike(clientes.nombreBusqueda, `%${escaparLike(p)}%`)))!);
+  }
+  if (delCliente.length) {
+    opciones.push(
+      inArray(
+        facturas.clienteId,
+        db.select({ id: clientes.id }).from(clientes).where(and(eq(clientes.localId, localId), or(...delCliente))),
+      ),
+    );
+  }
   return or(...opciones);
 }
 
 export async function listarCreditos(localId: string, busqueda?: string) {
-  const condiciones = [eq(facturas.localId, localId), eq(facturas.tipo, "CREDITO")];
+  const condiciones = [eq(facturas.localId, localId), eq(facturas.tipo, "CREDITO"), eq(facturas.anulada, false)];
   // Sin búsqueda: solo los créditos pendientes. Con búsqueda: todos los créditos de los clientes que coinciden.
   const texto = busqueda?.trim();
-  const condicionCliente = texto ? condicionBusquedaCliente(texto) : undefined;
+  const condicionCliente = texto ? condicionBusquedaCliente(localId, texto) : undefined;
   if (condicionCliente) condiciones.push(condicionCliente);
   else condiciones.push(eq(facturas.estado, "PENDIENTE"));
 
@@ -88,6 +106,8 @@ export async function registrarAbono(vendedor: VendedorSesion, facturaId: string
       .for("update");
 
     if (!factura || factura.tipo !== "CREDITO") throw new ApiError(404, "El crédito no existe.");
+    // La anulación también bloquea esta fila: si llega primero, el abono se rechaza aquí
+    if (factura.anulada) throw new ApiError(400, "Esta venta fue eliminada: no se pueden registrar abonos.");
     if (factura.estado === "COMPLETADA") throw new ApiError(400, "Este crédito ya está pagado en su totalidad.");
     if (valor > factura.saldo) {
       throw new ApiError(400, `El abono no puede ser mayor que el saldo pendiente (${factura.saldo.toLocaleString("es-CO")}).`);
@@ -134,9 +154,10 @@ export async function registrarAbono(vendedor: VendedorSesion, facturaId: string
 export async function cambiarFechaCuota(localId: string, cuotaId: string, fechaVencimiento: Date) {
   const cuota = await db.query.cuotas.findFirst({
     where: eq(cuotas.id, cuotaId),
-    with: { factura: { columns: { localId: true } } },
+    with: { factura: { columns: { localId: true, anulada: true } } },
   });
   if (!cuota || cuota.factura.localId !== localId) throw new ApiError(404, "La cuota no existe.");
+  if (cuota.factura.anulada) throw new ApiError(400, "Esta venta fue eliminada: ya no se pueden cambiar sus fechas de cobro.");
   if (cuota.estado === "PAGADA") throw new ApiError(400, "No se puede cambiar la fecha de una cuota ya pagada.");
   await db.update(cuotas).set({ fechaVencimiento }).where(eq(cuotas.id, cuotaId));
 }

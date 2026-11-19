@@ -1,7 +1,8 @@
 /**
  * Lista del inventario en dos formatos (mismos datos, mismas acciones):
  *  - Celular y tablet: tarjetas apiladas con los 2 botones grandes a lo ancho.
- *  - Escritorio (≥1280px): tabla Marca | Nombre | Tipo | Género | Tamaño | Precio | Stock | Acciones.
+ *  - Escritorio (≥1280px): tabla Marca | Fragancia | Características | Género | Tipo | Precio | Stock | Acciones.
+ *  - La marca va en grande; las características (EDP · 100 ml · categoría) como insignias.
  * "Vender" es un enlace a Facturación con el perfume ya cargado (?producto=id).
  */
 "use client";
@@ -10,7 +11,7 @@ import Link from "next/link";
 import { Insignia } from "@/components/ui/Basicos";
 import { Boton } from "@/components/ui/Boton";
 import { Icono } from "@/components/ui/Icono";
-import { ETIQUETA_TAMANO, ETIQUETA_TIPO, etiquetaPara, SIN_CATEGORIA } from "@/lib/clasificacion";
+import { ETIQUETA_CATEGORIA, ETIQUETA_GENERO, ETIQUETA_TIPO, etiquetaPara, SIGLA_CONCENTRACION, SIN_CATEGORIA, textoMl } from "@/lib/clasificacion";
 import { pesos } from "@/lib/formato";
 import { estadoStock } from "@/lib/inventario";
 import type { Producto } from "@/tipos";
@@ -39,7 +40,20 @@ function EstadoCorto({ stock, stockMinimo }: Pick<Producto, "stock" | "stockMini
   return <span className="text-sm text-exito-800">Disponible</span>;
 }
 
-const publicoDe = (p: Producto) => (p.genero && p.publico ? etiquetaPara(p.genero, p.publico) : null);
+const publicoDe = (p: Producto) => (p.genero ? (p.publico ? etiquetaPara(p.genero, p.publico) : ETIQUETA_GENERO[p.genero]) : null);
+
+/** "EDP · 100 ml" (lo que no se llenó no aparece). */
+export function caracteristicasDe(p: Pick<Producto, "concentracion" | "contenidoMl">): string {
+  return [p.concentracion && p.concentracion !== "OTRO" ? SIGLA_CONCENTRACION[p.concentracion] : "", p.contenidoMl ? textoMl(p.contenidoMl) : ""]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** Fragancia con su variante: "Good Girl Blush". */
+const fraganciaDe = (p: Producto) => [p.fragancia, p.variante].filter(Boolean).join(" ");
+
+/** Sin ninguna característica (productos anteriores a la clasificación). */
+const sinDatos = (p: Producto) => !p.tipo && !p.genero && !p.concentracion && !p.contenidoMl && !p.categoria;
 
 /** Botón grande "Vender" (enlace). Si está agotado, se muestra deshabilitado y con el motivo. */
 function BotonVender({ producto, compacto = false }: { producto: Producto; compacto?: boolean }) {
@@ -71,20 +85,25 @@ export function ListaProductos({ productos, onAgregarUnidades, onDetalle }: Prop
       <ul className="grid gap-4 sm:grid-cols-2 xl:hidden">
         {productos.map((p) => {
           const publico = publicoDe(p);
-          const sinCategoria = !p.tipo && !p.tamano && !publico;
+          const caracteristicas = caracteristicasDe(p);
           return (
             <li key={p.id} className="flex flex-col rounded-2xl border-2 border-linea bg-tarjeta p-4 shadow-sm">
-              <p className="text-base font-bold tracking-wide text-texto-suave uppercase">{p.marcaNombre ?? "Sin marca"}</p>
-              <h2 className="text-xl font-bold break-words">{p.nombre}</h2>
+              {/* Marca en grande; el nombre completo queda para lectores de pantalla */}
+              <p className="text-2xl font-bold break-words text-acento">{p.marcaNombre ?? "Sin marca"}</p>
+              <h2 className="text-xl font-bold break-words">
+                {fraganciaDe(p)}
+                <span className="sr-only"> ({p.nombre})</span>
+              </h2>
               {p.codigo && <p className="text-base text-texto-suave">Código: {p.codigo}</p>}
               <div className="mt-2 flex flex-wrap gap-2">
-                {sinCategoria ? (
+                {sinDatos(p) ? (
                   <Insignia tono="alerta">{SIN_CATEGORIA}</Insignia>
                 ) : (
                   <>
-                    {p.tipo && <Insignia tono="marca">{ETIQUETA_TIPO[p.tipo]}</Insignia>}
-                    {p.tamano && <Insignia>{ETIQUETA_TAMANO[p.tamano]}</Insignia>}
+                    {caracteristicas && <Insignia tono="marca">{caracteristicas}</Insignia>}
                     {publico && <Insignia tono="info">{publico}</Insignia>}
+                    {p.categoria && p.categoria !== "PERFUME" && <Insignia>{ETIQUETA_CATEGORIA[p.categoria]}</Insignia>}
+                    {p.tipo && <Insignia>{ETIQUETA_TIPO[p.tipo]}</Insignia>}
                   </>
                 )}
               </div>
@@ -127,10 +146,10 @@ export function ListaProductos({ productos, onAgregarUnidades, onDetalle }: Prop
           <thead className="bg-superficie">
             <tr className="border-b-2 border-linea-fuerte">
               <th scope="col" className="px-2 py-3 font-bold">Marca</th>
-              <th scope="col" className="px-2 py-3 font-bold">Nombre</th>
-              <th scope="col" className="px-2 py-3 font-bold">Tipo</th>
+              <th scope="col" className="px-2 py-3 font-bold">Fragancia</th>
+              <th scope="col" className="px-2 py-3 font-bold">Características</th>
               <th scope="col" className="px-2 py-3 font-bold">Género</th>
-              <th scope="col" className="px-2 py-3 font-bold">Tamaño</th>
+              <th scope="col" className="px-2 py-3 font-bold">Tipo</th>
               <th scope="col" className="px-2 py-3 font-bold">Precio</th>
               <th scope="col" className="px-2 py-3 font-bold">Stock</th>
               <th scope="col" className="px-2 py-3 font-bold">Acciones</th>
@@ -139,32 +158,26 @@ export function ListaProductos({ productos, onAgregarUnidades, onDetalle }: Prop
           <tbody>
             {productos.map((p) => {
               const publico = publicoDe(p);
-              // "100 ml (3.4 oz)" → ml arriba y "(3.4 oz)" debajo, más pequeño
-              const [ml, oz] = p.tamano ? ETIQUETA_TAMANO[p.tamano].split(" (") : [];
+              const caracteristicas = caracteristicasDe(p);
               return (
                 <tr key={p.id} className="border-b border-linea align-top last:border-b-0">
-                  <td className="px-2 py-3">{p.marcaNombre ?? <span className="text-texto-suave">—</span>}</td>
+                  <td className="px-2 py-3 font-bold">{p.marcaNombre ?? <span className="font-normal text-texto-suave">—</span>}</td>
                   <th scope="row" className="px-2 py-3 font-normal">
-                    {p.nombre}
+                    {fraganciaDe(p)}
+                    <span className="sr-only"> ({p.nombre})</span>
                     {p.codigo && <span className="block text-sm text-texto-suave">{p.codigo}</span>}
-                    {!p.tipo && !p.tamano && !publico && (
+                    {sinDatos(p) && (
                       <span className="mt-1 block">
                         <Insignia tono="alerta">{SIN_CATEGORIA}</Insignia>
                       </span>
                     )}
                   </th>
-                  <td className="px-2 py-3">{p.tipo ? ETIQUETA_TIPO[p.tipo] : "—"}</td>
-                  <td className="px-2 py-3">{publico ?? "—"}</td>
-                  <td className="px-2 py-3 whitespace-nowrap">
-                    {ml ? (
-                      <>
-                        {ml}
-                        <span className="block text-sm text-texto-suave">({oz}</span>
-                      </>
-                    ) : (
-                      "—"
-                    )}
+                  <td className="px-2 py-3">
+                    {caracteristicas || "—"}
+                    {p.categoria && p.categoria !== "PERFUME" && <span className="block text-sm text-texto-suave">{ETIQUETA_CATEGORIA[p.categoria]}</span>}
                   </td>
+                  <td className="px-2 py-3">{publico ?? "—"}</td>
+                  <td className="px-2 py-3">{p.tipo ? ETIQUETA_TIPO[p.tipo] : "—"}</td>
                   <td className="px-2 py-3 whitespace-nowrap">{pesos(p.precio)}</td>
                   <td className="px-2 py-3">
                     <span className="block text-lg">{p.stock}</span>
