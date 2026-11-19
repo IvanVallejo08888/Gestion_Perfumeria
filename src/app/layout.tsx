@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import { RegistroPWA } from "@/components/pwa/RegistroPWA";
 import { ProveedorAvisos } from "@/components/ui/Avisos";
 import "./globals.css";
@@ -30,7 +31,9 @@ const scriptInstalacion = `(function(){function c(e){window.__eventoInstalacion=
  */
 const scriptPreferencias = `(function(){var h=document.documentElement;try{var t=localStorage.getItem("tamano-texto");if(t&&t!=="normal")h.dataset.texto=t}catch(e){}var m=window.matchMedia("(prefers-color-scheme: dark)");function p(){try{return localStorage.getItem("tema")||"claro"}catch(e){return"claro"}}function a(){var v=p();h.dataset.tema=v==="oscuro"||(v==="sistema"&&m.matches)?"oscuro":"claro"}a();m.addEventListener("change",function(){if(p()==="sistema")a()})})()`;
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Nonce de la CSP (lo genera middleware.ts): sin él, el navegador bloquea estos scripts en línea
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="es-CO" suppressHydrationWarning>
       <head>
@@ -41,8 +44,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Cinzel:wght@500;600;700&display=swap"
         />
-        <script dangerouslySetInnerHTML={{ __html: scriptPreferencias }} />
-        <script dangerouslySetInnerHTML={{ __html: scriptInstalacion }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: scriptPreferencias }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: scriptInstalacion }} />
       </head>
       <body className="min-h-dvh antialiased">
         {/* Enlace para saltar al contenido (lectores de pantalla y teclado) */}

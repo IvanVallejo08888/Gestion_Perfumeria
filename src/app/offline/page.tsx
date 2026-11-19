@@ -4,8 +4,9 @@ import { BotonReintentar } from "./BotonReintentar";
 
 export const metadata: Metadata = { title: "Sin conexión", robots: { index: false } };
 
-// Página fija y sin datos de nadie: es la única que guarda el service worker
-export const dynamic = "force-static";
+// Página sin datos de nadie: es la única que guarda el service worker (la descarga sin cookies).
+// No es estática porque cada respuesta lleva el nonce de la CSP (ver middleware.ts); la copia
+// guardada conserva su propio encabezado CSP, que coincide con el nonce de su HTML.
 
 export default function PaginaSinConexion() {
   return (

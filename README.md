@@ -84,6 +84,11 @@ Se puede ejecutar varias veces sin duplicar: las marcas que ya existen y los có
 ### Seguridad de sesión
 Cada petición se valida contra la base de datos: si el administrador **pausa, elimina o cambia la contraseña** de un usuario, su sesión se cierra al instante.
 
+### Protecciones adicionales
+- **Límite de intentos** (`src/server/servicios/limite-intentos.ts`, tabla `limite_intentos`): 5 contraseñas equivocadas para una cuenta → 15 min de bloqueo; 20 fallos desde una misma IP → 30 min; 5 registros por hora por IP; 5 intentos de «contraseña actual» al cambiarla → 15 min. El límite por IP usa `x-forwarded-for`, así que solo es confiable detrás de un proxy o hosting (Vercel, Nginx, Cloudflare).
+- **Encabezados de seguridad** en todas las respuestas (`next.config.ts`) y **CSP con nonce** en cada página (`src/middleware.ts`). Si agregas un servicio externo (otra fuente, un script, una API), hay que permitirlo en la CSP.
+- **Protección CSRF**: `manejador` rechaza los POST/PUT/PATCH/DELETE que no vienen de la propia aplicación.
+
 ### Facturación
 1. Datos del cliente (si ya compró antes, se autocompletan con la identificación). El **sector** se elige de la lista del local; si el local no tiene sectores, no se puede registrar la factura.
 2. Lista de productos siempre visible, con filtro desde la primera letra: ignora mayúsculas, tildes, ñ y signos, y acepta palabras en cualquier orden. Muestra el stock; si no hay, **advierte y no deja vender**.

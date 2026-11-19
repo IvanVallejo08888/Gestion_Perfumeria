@@ -537,6 +537,20 @@ export const limpiezas = pgTable(
   (t) => [index("limpiezas_local_fecha_idx").on(t.localId, t.creadoEn)],
 );
 
+/**
+ * Límite de intentos (protección contra ataques de fuerza bruta y registros masivos).
+ * Cada fila es un contador: "login:id:<identificación>", "login:ip:<ip>", "registro:ip:<ip>"...
+ * Se guarda en la base de datos (y no en memoria) para que funcione con varios servidores.
+ */
+export const limiteIntentos = pgTable("limite_intentos", {
+  clave: text("clave").primaryKey(),
+  intentos: integer("intentos").notNull().default(0),
+  /** Inicio de la ventana de tiempo en la que se cuentan los intentos. */
+  desde: timestamp("desde", { withTimezone: true }).notNull().defaultNow(),
+  /** Mientras esta fecha no pase, la acción está bloqueada para esa clave. */
+  bloqueadoHasta: timestamp("bloqueado_hasta", { withTimezone: true }),
+});
+
 /* ------------------------------ Relaciones ------------------------------ */
 /* Permiten consultas anidadas con db.query.<tabla>.findMany({ with: {...} }) */
 

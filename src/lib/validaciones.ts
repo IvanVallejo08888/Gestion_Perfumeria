@@ -76,8 +76,9 @@ export const dineroSchema = (campo: string) =>
 /* ------------------------------- Autenticación ------------------------------ */
 
 export const loginSchema = z.object({
-  identificacion: z.string().trim().min(1, "Escribe tu número de identificación."),
-  password: z.string().min(1, "Escribe tu contraseña."),
+  // Con límite de largo: la identificación forma parte de la clave del límite de intentos
+  identificacion: z.string().trim().min(1, "Escribe tu número de identificación.").max(20, "La identificación es demasiado larga."),
+  password: z.string().min(1, "Escribe tu contraseña.").max(200, "La contraseña es demasiado larga."),
 });
 
 export const registroSchema = z

@@ -78,6 +78,13 @@
       "when": 1795068007943,
       "tag": "0010_limpiezas",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795069689760,
+      "tag": "0011_limite_intentos",
+      "breakpoints": true
     }
   ]
 }
