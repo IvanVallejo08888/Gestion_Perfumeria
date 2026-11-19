@@ -2,7 +2,7 @@
  * Generación de reportes en Excel (.xlsx).
  *
  * Reporte POR LOCAL (anual o mensual):
- *  - Resumen, Facturas, Productos vendidos, Ventas por categoría, Abonos, Ventas por vendedor y Gastos → datos del periodo elegido.
+ *  - Resumen, Facturas, Productos vendidos, Ventas por categoría, Abonos, Ventas por vendedor, Gastos y Gastos personales → datos del periodo elegido.
  *  - Cartera e Inventario → foto del momento en que se genera (lo que se debe y lo que hay hoy).
  *
  * Reporte CONSOLIDADO (solo administrador): todos los locales comparados + ventas por categoría + cartera de todos los locales.
@@ -319,8 +319,9 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
     { header: "Total recaudado", key: "totalRecaudado", width: 20, style: { numFmt: FORMATO_PESOS } },
     { header: "Recibido en efectivo", key: "recibidoEfectivo", width: 20, style: { numFmt: FORMATO_PESOS } },
     { header: "Recibido en transferencia", key: "recibidoTransferencia", width: 20, style: { numFmt: FORMATO_PESOS } },
-    { header: "Gastos", key: "gastos", width: 20, style: { numFmt: FORMATO_PESOS } },
-    { header: "Utilidad (recibido − gastos)", key: "utilidad", width: 20, style: { numFmt: FORMATO_PESOS } },
+    { header: "Gastos del negocio", key: "gastos", width: 20, style: { numFmt: FORMATO_PESOS } },
+    { header: "Utilidad (recibido − gastos del negocio)", key: "utilidad", width: 22, style: { numFmt: FORMATO_PESOS } },
+    { header: "Gastos personales (no se restan)", key: "gastosPersonales", width: 22, style: { numFmt: FORMATO_PESOS } },
   ];
   const mesesIncluidos = mes ? estadisticas.meses.filter((m) => m.mes === mes) : estadisticas.meses;
   resumen.addRows(mesesIncluidos);
@@ -460,35 +461,42 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
     });
   }
 
-  /* ---------- Hoja 6: Gastos ---------- */
-  const hojaGastos = libro.addWorksheet("Gastos");
-  hojaGastos.columns = [
-    { header: "Fecha", key: "fecha", width: 14 },
-    { header: "Categoría", key: "categoria", width: 26 },
-    { header: "Descripción", key: "descripcion", width: 36 },
-    { header: "Medio de pago", key: "medioPago", width: 16 },
-    { header: "Valor", key: "valor", width: 16, style: { numFmt: FORMATO_PESOS } },
-    { header: "Registrado por", key: "usuario", width: 24 },
-  ];
-  hojaGastos.addRows(
-    listaGastos.map((g) => ({
-      fecha: fechaDia(g.fecha),
-      categoria: g.categoriaNombre,
-      descripcion: g.descripcion ?? "",
-      medioPago: textoMedioPago(g.medioPago),
-      valor: g.valor,
-      usuario: g.usuarioNombre,
-    })),
+  /* ---------- Hojas 6 y 7: Gastos del negocio y Gastos personales (estos no se restan de la utilidad) ---------- */
+  const hojaDeGastos = (nombre: string, lista: typeof listaGastos, textoNota: string) => {
+    const hoja = libro.addWorksheet(nombre);
+    hoja.columns = [
+      { header: "Fecha", key: "fecha", width: 14 },
+      { header: "Categoría", key: "categoria", width: 26 },
+      { header: "Descripción", key: "descripcion", width: 36 },
+      { header: "Medio de pago", key: "medioPago", width: 16 },
+      { header: "Valor", key: "valor", width: 16, style: { numFmt: FORMATO_PESOS } },
+      { header: "Registrado por", key: "usuario", width: 24 },
+    ];
+    hoja.addRows(
+      lista.map((g) => ({
+        fecha: fechaDia(g.fecha),
+        categoria: g.categoriaNombre,
+        descripcion: g.descripcion ?? "",
+        medioPago: textoMedioPago(g.medioPago),
+        valor: g.valor,
+        usuario: g.usuarioNombre,
+      })),
+    );
+    estilizarEncabezado(hoja);
+    if (lista.length) agregarTotal(hoja, { fecha: `TOTAL (${lista.length})`, valor: sumarCampo(lista, (g) => g.valor) });
+    nota(hoja, textoNota);
+  };
+  hojaDeGastos("Gastos", listaGastos.filter((g) => !g.personal), `Periodo: ${periodo} · Gastos del negocio: se restan de la utilidad`);
+  hojaDeGastos(
+    "Gastos personales",
+    listaGastos.filter((g) => g.personal),
+    `Periodo: ${periodo} · Gastos propios de la dueña: se muestran aparte y NO se restan de la utilidad`,
   );
-  estilizarEncabezado(hojaGastos);
-  if (listaGastos.length) {
-    agregarTotal(hojaGastos, { fecha: `TOTAL (${listaGastos.length})`, valor: sumarCampo(listaGastos, (g) => g.valor) });
-  }
 
-  /* ---------- Hoja 7: Cartera (hoy) ---------- */
+  /* ---------- Hoja 8: Cartera (hoy) ---------- */
   hojaCartera(libro, cartera, false);
 
-  /* ---------- Hoja 8: Inventario (hoy) ---------- */
+  /* ---------- Hoja 9: Inventario (hoy) ---------- */
   const hojaInventario = libro.addWorksheet("Inventario");
   hojaInventario.columns = [
     { header: "Código", key: "codigo", width: 14 },

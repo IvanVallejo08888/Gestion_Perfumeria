@@ -5,6 +5,7 @@ import "server-only";
 import { asc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { categoriasGasto, locales } from "@/db/schema";
+import { NOMBRE_CATEGORIA_PERSONAL } from "@/lib/gastos";
 import { ApiError } from "@/lib/api";
 
 /** Categorías de gastos con las que empieza cada local nuevo. */
@@ -49,7 +50,11 @@ export async function crearLocal(datos: { nombre: string; direccion: string; tel
       .insert(locales)
       .values({ nombre: datos.nombre, direccion: datos.direccion || null, telefono: datos.telefono || null, activo: datos.activo })
       .returning();
-    await tx.insert(categoriasGasto).values(CATEGORIAS_INICIALES.map((nombre) => ({ localId: local.id, nombre })));
+    await tx.insert(categoriasGasto).values([
+      ...CATEGORIAS_INICIALES.map((nombre) => ({ localId: local.id, nombre })),
+      // Gastos propios de la dueña: se ven aparte y no se restan de la utilidad
+      { localId: local.id, nombre: NOMBRE_CATEGORIA_PERSONAL, personal: true },
+    ]);
     return local;
   });
 }

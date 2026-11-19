@@ -2,10 +2,13 @@
  * Manual de usuario (pantalla Ajustes → Manual de usuario).
  * Fuente: «Manual de usuario — Gestión de Perfumerías» (11 nov 2026), con el texto ajustado a como se ve hoy la app:
  *  - El menú dice «Ajustes» (antes «Mi cuenta») y el tamaño de letra se cambia en Ajustes → Apariencia.
- *  - Cada rol ve solo sus secciones; las referencias «(sección N)» solo apuntan a secciones que ese rol ve
- *    (lo comprueba manual.test.ts). Un bloque con `roles` solo se muestra a esos roles.
+ *  - Cada rol ve solo sus secciones, numeradas 1, 2, 3… sin saltos (seccionesPara). Aquí se escriben con el
+ *    número del manual completo; las referencias «(sección N)» se cambian solas al número que ve cada rol
+ *    y solo deben apuntar a secciones que ese rol ve (lo comprueba manual.test.ts).
+ *    Un bloque con `roles` solo se muestra a esos roles.
  * Formato del texto: **negrita** entre dos asteriscos dobles; `tramos()` lo separa para dibujarlo.
  */
+import { GRUPOS_MILILITROS, textoMlConOz } from "./clasificacion";
 
 export type RolManual = "ADMIN" | "VENDEDOR";
 
@@ -386,25 +389,25 @@ export const MANUAL: SeccionManual[] = [
         tipo: "numerada",
         items: [
           "Toca **Agregar producto**.",
-          "Escribe la **Marca**: al escribir aparecen las del local. Si es nueva, se agrega sola al guardar.",
-          "Escribe el **Nombre de la fragancia** (por ejemplo «Aventus») y, si tiene, la **Variante** («Intense», «Tester»).",
-          "Elige la **Concentración** y escribe el **Contenido en ml**. Si no se mide en ml (estuche, accesorio), déjalo vacío.",
-          "Elige el **Género**, la **Categoría** y el **Tipo** (opciones en la tabla de abajo). Son opcionales.",
-          "Revisa el recuadro **Así se verá en la factura**: es el nombre completo, por ejemplo «Creed Aventus · EDP 100 ml · Hombre».",
-          "Escribe el **Precio de venta** y las **Unidades iniciales**. El **Código** es opcional (sirve el código de barras).",
-          "En **Avisar cuando queden** escribe desde cuántas unidades quieres el aviso de stock bajo. El sistema propone 3.",
-          "Toca **Guardar**. Si ya hay un producto igual (misma marca, nombre, variante, concentración y ml), el sistema avisa y puedes guardarlo de todos modos.",
+          "Escribe el **Nombre del perfume** (por ejemplo «Aventus»). Debajo va el **Código**, que es opcional (sirve el código de barras).",
+          "Elige la **Marca**. Si no está en la lista, toca **Agregar marca**, escribe el nombre y toca **Guardar marca**.",
+          "Si tiene, escribe la **Variante** («Intense», «Tester»).",
+          "Elige el **Tipo**, el **Género**, el **Público** y la **Categoría** (opciones en la tabla de abajo).",
+          "Elige el **Tamaño**: se muestra en ml con su equivalente en oz, por ejemplo «100 ml (3.4 oz)». Si no está en la lista, elige **Otro tamaño** y escribe los ml.",
+          "Escribe el **Precio de venta** y las **Unidades iniciales**.",
+          "En **Avisar cuando queden** escribe desde cuántas unidades quieres el aviso de stock bajo. El sistema propone 0, es decir, avisa cuando se agota.",
+          "Toca **Guardar**. Si ya hay un producto igual (misma marca, nombre, variante y ml), el sistema avisa y puedes guardarlo de todos modos.",
         ],
       },
       {
         tipo: "tabla",
         columnas: ["Dato", "Opciones"],
         filas: [
-          ["Concentración", "Extrait de Parfum, Parfum, Eau de Parfum (EDP), Eau de Toilette (EDT), Eau de Cologne (EDC), Body Mist, Splash, Otro"],
           ["Género", "Hombre, Mujer, Unisex"],
           ["Público", "Adulto, Infantil (Hombre + Infantil aparece como Niño; Mujer + Infantil, como Niña)"],
-          ["Categoría", "Perfume, Estuche / Set, Body Mist, Crema, Desodorante, Decant, Accesorio, Otro"],
+          ["Categoría", "Perfume, Estuche / Set, Crema, Otro"],
           ["Tipo", "Original, 1.1, Imitación, Versión, Esencia"],
+          ["Tamaño", GRUPOS_MILILITROS.flatMap((g) => g.mililitros).map(textoMlConOz).join(", ") + " u otro en ml"],
         ],
       },
       { tipo: "subtitulo", texto: "Llegó mercancía" },
@@ -776,11 +779,40 @@ export const MANUAL: SeccionManual[] = [
   },
 ];
 
-/** Secciones que ve un rol, con solo los bloques que le corresponden. */
+/** Cambia cada «sección N» del texto por su número nuevo (si N está en el mapa). */
+function renumerarReferencias(texto: string, mapa: Map<number, number>): string {
+  return texto.replace(/(secci[oó]n )(\d+)/gi, (todo, palabra: string, n: string) => {
+    const nuevo = mapa.get(Number(n));
+    return nuevo === undefined ? todo : `${palabra}${nuevo}`;
+  });
+}
+
+function renumerarBloque(b: BloqueManual, mapa: Map<number, number>): BloqueManual {
+  const r = (t: string) => renumerarReferencias(t, mapa);
+  switch (b.tipo) {
+    case "parrafo":
+    case "subtitulo":
+      return { ...b, texto: r(b.texto) };
+    case "numerada":
+    case "vinetas":
+      return { ...b, items: b.items.map(r) };
+    case "tabla":
+      return { ...b, columnas: b.columnas.map(r), filas: b.filas.map((f) => f.map(r)) };
+  }
+}
+
+/**
+ * Secciones que ve un rol, con solo los bloques que le corresponden.
+ * Se numeran de nuevo 1, 2, 3… para ese rol (sin saltos por las secciones que no ve),
+ * y las referencias «(sección N)» del texto se cambian al número nuevo.
+ */
 export function seccionesPara(rol: RolManual): SeccionManual[] {
-  return MANUAL.filter((s) => s.roles.includes(rol)).map((s) => ({
+  const visibles = MANUAL.filter((s) => s.roles.includes(rol));
+  const mapa = new Map(visibles.map((s, i) => [s.numero, i + 1]));
+  return visibles.map((s, i) => ({
     ...s,
-    bloques: s.bloques.filter((b) => !b.roles || b.roles.includes(rol)),
+    numero: i + 1,
+    bloques: s.bloques.filter((b) => !b.roles || b.roles.includes(rol)).map((b) => renumerarBloque(b, mapa)),
   }));
 }
 

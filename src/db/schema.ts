@@ -63,6 +63,12 @@ export const categoriaProductoEnum = pgEnum("categoria_producto", CATEGORIAS);
 /** INGRESO = llegó mercancía · VENTA = salió en una factura · AJUSTE = corrección manual (con motivo). */
 export const tipoMovimientoEnum = pgEnum("tipo_movimiento", TIPOS_MOVIMIENTO);
 
+/** Cómo se pagó una compra de mercancía. CREDITO = queda debiéndole al proveedor (cuenta por pagar). */
+export const medioPagoCompraEnum = pgEnum("medio_pago_compra", ["EFECTIVO", "TRANSFERENCIA", "CREDITO"]);
+
+/** PENDIENTE = se le debe algo al proveedor · SALDADA = pagada en su totalidad. */
+export const estadoCuentaPagarEnum = pgEnum("estado_cuenta_pagar", ["PENDIENTE", "SALDADA"]);
+
 /* Columnas de fecha reutilizables (con zona horaria) */
 const creadoEn = () => timestamp("creado_en", { withTimezone: true }).notNull().defaultNow();
 const actualizadoEn = () =>
@@ -116,7 +122,10 @@ export const marcas = pgTable(
   (t) => [uniqueIndex("marcas_local_nombre_uq").on(t.localId, sql`lower(${t.nombre})`)],
 );
 
-/** Categorías de gastos de cada local (Nómina, Servicios públicos…). */
+/**
+ * Categorías de gastos de cada local (Nómina, Servicios públicos…).
+ * "personal" = gastos propios de la dueña: se ven aparte y NO se restan de la utilidad.
+ */
 export const categoriasGasto = pgTable(
   "categorias_gasto",
   {
@@ -126,6 +135,7 @@ export const categoriasGasto = pgTable(
       .references(() => locales.id, { onDelete: "cascade" }),
     nombre: text("nombre").notNull(),
     activo: boolean("activo").notNull().default(true),
+    personal: boolean("personal").notNull().default(false),
   },
   (t) => [uniqueIndex("categorias_gasto_local_nombre_uq").on(t.localId, sql`lower(${t.nombre})`)],
 );
@@ -361,6 +371,8 @@ export const gastos = pgTable(
     usuarioNombre: text("usuario_nombre").notNull(),
     categoriaId: uuid("categoria_id").references(() => categoriasGasto.id, { onDelete: "set null" }),
     categoriaNombre: text("categoria_nombre").notNull(),
+    /** Copia de categoría.personal: un gasto personal no se resta de la utilidad. */
+    personal: boolean("personal").notNull().default(false),
     descripcion: text("descripcion"),
     valor: integer("valor").notNull(),
     medioPago: medioPagoGastoEnum("medio_pago").notNull(),
@@ -408,6 +420,86 @@ export const movimientosInventario = pgTable(
     index("movimientos_producto_fecha_idx").on(t.productoId, t.creadoEn),
     index("movimientos_local_fecha_idx").on(t.localId, t.creadoEn),
   ],
+);
+
+/**
+ * Proveedores de mercancía de cada local. Un proveedor con compras registradas no se borra: solo se desactiva.
+ * "productosSurte" es texto libre (por ejemplo: «Perfumes árabes, réplicas 1.1»).
+ */
+export const proveedores = pgTable(
+  "proveedores",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    localId: uuid("local_id")
+      .notNull()
+      .references(() => locales.id, { onDelete: "cascade" }),
+    nombre: text("nombre").notNull(),
+    contacto: text("contacto"),
+    telefono: text("telefono"),
+    productosSurte: text("productos_surte"),
+    activo: boolean("activo").notNull().default(true),
+    creadoEn: creadoEn(),
+    actualizadoEn: actualizadoEn(),
+  },
+  (t) => [uniqueIndex("proveedores_local_nombre_uq").on(t.localId, sql`lower(${t.nombre})`)],
+);
+
+/**
+ * Compra de mercancía a un proveedor (se registra al «Agregar unidades» de un perfume).
+ * De contado: saldo 0 y estado SALDADA. A crédito: el saldo es lo que se le debe al proveedor
+ * y baja con cada abono; al llegar a 0 pasa a SALDADA.
+ * Copia (snapshot) los nombres del proveedor, del producto y del usuario.
+ */
+export const comprasMercancia = pgTable(
+  "compras_mercancia",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    localId: uuid("local_id")
+      .notNull()
+      .references(() => locales.id, { onDelete: "cascade" }),
+    proveedorId: uuid("proveedor_id")
+      .notNull()
+      .references(() => proveedores.id, { onDelete: "restrict" }),
+    proveedorNombre: text("proveedor_nombre").notNull(),
+    productoId: uuid("producto_id").references(() => productos.id, { onDelete: "set null" }),
+    productoNombre: text("producto_nombre").notNull(),
+    cantidad: integer("cantidad").notNull(),
+    total: integer("total").notNull(),
+    medioPago: medioPagoCompraEnum("medio_pago").notNull(),
+    saldo: integer("saldo").notNull().default(0),
+    estado: estadoCuentaPagarEnum("estado").notNull(),
+    usuarioId: uuid("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
+    usuarioNombre: text("usuario_nombre").notNull(),
+    nota: text("nota"),
+    creadoEn: creadoEn(),
+    saldadaEn: timestamp("saldada_en", { withTimezone: true }),
+  },
+  (t) => [
+    index("compras_local_proveedor_idx").on(t.localId, t.proveedorId),
+    index("compras_local_estado_idx").on(t.localId, t.estado),
+  ],
+);
+
+/** Abonos a una compra a crédito (pago al proveedor). El nombre del usuario se copia (snapshot). */
+export const abonosProveedor = pgTable(
+  "abonos_proveedor",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    compraId: uuid("compra_id")
+      .notNull()
+      .references(() => comprasMercancia.id, { onDelete: "cascade" }),
+    valor: integer("valor").notNull(),
+    medioPago: medioPagoEnum("medio_pago").notNull(),
+    valorEfectivo: integer("valor_efectivo").notNull().default(0),
+    valorTransferencia: integer("valor_transferencia").notNull().default(0),
+    /** Día en que se le pagó al proveedor (AAAA-MM-DD). */
+    fecha: date("fecha", { mode: "string" }).notNull(),
+    usuarioId: uuid("usuario_id").references(() => usuarios.id, { onDelete: "set null" }),
+    usuarioNombre: text("usuario_nombre").notNull(),
+    nota: text("nota"),
+    creadoEn: creadoEn(),
+  },
+  (t) => [index("abonos_proveedor_compra_idx").on(t.compraId)],
 );
 
 /* ------------------------------ Relaciones ------------------------------ */
@@ -496,3 +588,6 @@ export type Marca = typeof marcas.$inferSelect;
 export type CategoriaGasto = typeof categoriasGasto.$inferSelect;
 export type Gasto = typeof gastos.$inferSelect;
 export type MovimientoInventarioFila = typeof movimientosInventario.$inferSelect;
+export type ProveedorFila = typeof proveedores.$inferSelect;
+export type CompraMercancia = typeof comprasMercancia.$inferSelect;
+export type AbonoProveedor = typeof abonosProveedor.$inferSelect;

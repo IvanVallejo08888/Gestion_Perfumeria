@@ -12,7 +12,6 @@ import { z } from "zod";
 z.config(z.locales.es());
 import { CATEGORIAS, CONCENTRACIONES, GENEROS, PUBLICOS, TIPOS_PRODUCTO } from "./clasificacion";
 import { ESTADOS_STOCK } from "./inventario";
-import { MODULOS } from "./guia-usuario";
 
 /* --------------------------- Reglas de contraseña --------------------------- */
 
@@ -168,7 +167,7 @@ export const productoSchema = z.object({
   codigo: z.string().trim().max(40).optional().default(""),
   precio: dineroSchema("El precio").refine((v) => v > 0, "El precio debe ser mayor que cero."),
   stock: z.coerce.number().int("El stock debe ser un número entero.").min(0, "El stock no puede ser negativo."),
-  stockMinimo: z.coerce.number().int().min(0).default(3),
+  stockMinimo: z.coerce.number().int().min(0).default(0),
 });
 
 /** Consulta de posible duplicado (misma marca, nombre, variante, concentración y ml). */
@@ -188,6 +187,16 @@ export const ajusteStockSchema = z.object({
 });
 
 /** Llegó mercancía: solo suma unidades. La nota es opcional. */
+/**
+ * Compra al proveedor (opcional al agregar unidades): quién la surtió, cuánto costó y cómo se pagó.
+ * Con «Crédito» queda una cuenta por pagar a ese proveedor.
+ */
+export const compraMercanciaSchema = z.object({
+  proveedorId: z.uuid("Elige el proveedor."),
+  total: dineroSchema("El valor de la compra").refine((v) => v > 0, "Escribe el valor total de la compra."),
+  medioPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "CREDITO"], { error: "Elige cómo se pagó la compra." }),
+});
+
 export const ingresoStockSchema = z.object({
   cantidad: z.coerce
     .number({ error: "Escribe la cantidad de unidades." })
@@ -195,6 +204,7 @@ export const ingresoStockSchema = z.object({
     .min(1, "Escribe una cantidad mayor que cero.")
     .max(100_000, "La cantidad es demasiado alta."),
   nota: notaMovimiento.optional().default(""),
+  compra: compraMercanciaSchema.optional(),
 });
 
 /** Filtros del inventario (query params). Se valida en el servidor; el navegador ignora valores raros. */
@@ -267,6 +277,29 @@ export const abonoSchema = z.object({
   nota: z.string().trim().max(200).optional(),
   medioPago: medioPagoSchema,
   ...valoresPago,
+});
+
+/* -------------------------------- Proveedores ------------------------------- */
+
+/** Texto opcional: vacío se guarda como «sin dato». */
+const textoOpcionalProveedor = (campo: string, max: number) =>
+  z.string().trim().max(max, `${campo} es demasiado largo (máximo ${max} caracteres).`).optional().default("");
+
+export const proveedorSchema = z.object({
+  nombre: texto("El nombre del proveedor", 80),
+  contacto: textoOpcionalProveedor("El contacto", 80),
+  telefono: z.union([z.literal(""), telefonoSchema]).optional().default(""),
+  productosSurte: textoOpcionalProveedor("La lista de productos", 300),
+  activo: z.boolean().optional().default(true),
+});
+
+/** Abono a una compra a crédito (pago al proveedor). */
+export const abonoProveedorSchema = z.object({
+  valor: dineroSchema("El valor del abono").refine((v) => v > 0, "El abono debe ser mayor que cero."),
+  medioPago: medioPagoSchema,
+  ...valoresPago,
+  fecha: z.iso.date("Escribe una fecha válida."),
+  nota: z.string().trim().max(200, "La nota es demasiado larga.").optional(),
 });
 
 /* --------------------------------- Sectores -------------------------------- */
@@ -370,6 +403,18 @@ export const filtroCreditosSchema = z.object({
   identificacion: z.string().trim().max(30).optional(),
 });
 
+/** Mínimo de letras para empezar a sugerir clientes por nombre. */
+export const MIN_LETRAS_BUSQUEDA_CLIENTE = 2;
+
+/** GET /api/clientes/sugerencias?nombre= — búsqueda de clientes por nombre en la factura. */
+export const busquedaClienteSchema = z.object({
+  nombre: z
+    .string({ error: "Escribe el nombre del cliente." })
+    .trim()
+    .min(MIN_LETRAS_BUSQUEDA_CLIENTE, `Escribe al menos ${MIN_LETRAS_BUSQUEDA_CLIENTE} letras del nombre.`)
+    .max(100, "La búsqueda es demasiado larga."),
+});
+
 /** Convierte los parámetros de la dirección en objeto y descarta los vacíos. */
 export function parametros(url: URLSearchParams): Record<string, string> {
   return Object.fromEntries([...url].filter(([, valor]) => valor !== ""));
@@ -386,6 +431,18 @@ export const TIPOS_QUEJA = [
   { valor: "ERROR", texto: "Error" },
   { valor: "SUGERENCIA", texto: "Sugerencia" },
   { valor: "DUDA", texto: "Duda" },
+] as const;
+
+/** Módulos de la aplicación (Usuarios y Locales son solo del administrador). */
+export const MODULOS = [
+  { id: "facturacion", nombre: "Facturación" },
+  { id: "creditos", nombre: "Créditos y abonos" },
+  { id: "gastos", nombre: "Gastos" },
+  { id: "inventario", nombre: "Inventario" },
+  { id: "notificaciones", nombre: "Notificaciones" },
+  { id: "reportes", nombre: "Reportes" },
+  { id: "usuarios", nombre: "Usuarios", soloAdmin: true },
+  { id: "locales", nombre: "Locales", soloAdmin: true },
 ] as const;
 
 /** Pantallas que se pueden elegir en «¿En qué pantalla pasó?»: los módulos + Ajustes + Otra. */

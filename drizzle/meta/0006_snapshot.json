@@ -1,6 +1,6 @@
 {
-  "id": "cb65ff04-86e3-4cde-8f80-3877612c4fde",
-  "prevId": "f4b99485-7f85-44fc-bfd7-509e599795f8",
+  "id": "569b0058-d1b7-4b9a-98e3-dec75a817b90",
+  "prevId": "4bd42b34-5c4a-4c44-8e3f-f1f18ef07df0",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -67,13 +67,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "anulado": {
-          "name": "anulado",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
         }
       },
       "indexes": {
@@ -127,6 +120,133 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.abonos_proveedor": {
+      "name": "abonos_proveedor",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "compra_id": {
+          "name": "compra_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "valor": {
+          "name": "valor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "medio_pago": {
+          "name": "medio_pago",
+          "type": "medio_pago",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "valor_efectivo": {
+          "name": "valor_efectivo",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "valor_transferencia": {
+          "name": "valor_transferencia",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "fecha": {
+          "name": "fecha",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "usuario_id": {
+          "name": "usuario_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "usuario_nombre": {
+          "name": "usuario_nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nota": {
+          "name": "nota",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "creado_en": {
+          "name": "creado_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "abonos_proveedor_compra_idx": {
+          "name": "abonos_proveedor_compra_idx",
+          "columns": [
+            {
+              "expression": "compra_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "abonos_proveedor_compra_id_compras_mercancia_id_fk": {
+          "name": "abonos_proveedor_compra_id_compras_mercancia_id_fk",
+          "tableFrom": "abonos_proveedor",
+          "tableTo": "compras_mercancia",
+          "columnsFrom": [
+            "compra_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "abonos_proveedor_usuario_id_usuarios_id_fk": {
+          "name": "abonos_proveedor_usuario_id_usuarios_id_fk",
+          "tableFrom": "abonos_proveedor",
+          "tableTo": "usuarios",
+          "columnsFrom": [
+            "usuario_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.categorias_gasto": {
       "name": "categorias_gasto",
       "schema": "",
@@ -156,6 +276,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": true
+        },
+        "personal": {
+          "name": "personal",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         }
       },
       "indexes": {
@@ -249,27 +376,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "nombre_busqueda": {
-          "name": "nombre_busqueda",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "nombre_compacto": {
-          "name": "nombre_compacto",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "telefono_digitos": {
-          "name": "telefono_digitos",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
         "creado_en": {
           "name": "creado_en",
           "type": "timestamp with time zone",
@@ -306,48 +412,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "clientes_local_nombre_busqueda_idx": {
-          "name": "clientes_local_nombre_busqueda_idx",
-          "columns": [
-            {
-              "expression": "local_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "nombre_busqueda",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "clientes_local_telefono_idx": {
-          "name": "clientes_local_telefono_idx",
-          "columns": [
-            {
-              "expression": "local_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "telefono_digitos",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -362,6 +426,216 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.compras_mercancia": {
+      "name": "compras_mercancia",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "local_id": {
+          "name": "local_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "proveedor_id": {
+          "name": "proveedor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "proveedor_nombre": {
+          "name": "proveedor_nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "producto_id": {
+          "name": "producto_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "producto_nombre": {
+          "name": "producto_nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cantidad": {
+          "name": "cantidad",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total": {
+          "name": "total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "medio_pago": {
+          "name": "medio_pago",
+          "type": "medio_pago_compra",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "saldo": {
+          "name": "saldo",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "estado": {
+          "name": "estado",
+          "type": "estado_cuenta_pagar",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "usuario_id": {
+          "name": "usuario_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "usuario_nombre": {
+          "name": "usuario_nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nota": {
+          "name": "nota",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "creado_en": {
+          "name": "creado_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "saldada_en": {
+          "name": "saldada_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "compras_local_proveedor_idx": {
+          "name": "compras_local_proveedor_idx",
+          "columns": [
+            {
+              "expression": "local_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "proveedor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "compras_local_estado_idx": {
+          "name": "compras_local_estado_idx",
+          "columns": [
+            {
+              "expression": "local_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "estado",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "compras_mercancia_local_id_locales_id_fk": {
+          "name": "compras_mercancia_local_id_locales_id_fk",
+          "tableFrom": "compras_mercancia",
+          "tableTo": "locales",
+          "columnsFrom": [
+            "local_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "compras_mercancia_proveedor_id_proveedores_id_fk": {
+          "name": "compras_mercancia_proveedor_id_proveedores_id_fk",
+          "tableFrom": "compras_mercancia",
+          "tableTo": "proveedores",
+          "columnsFrom": [
+            "proveedor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "compras_mercancia_producto_id_productos_id_fk": {
+          "name": "compras_mercancia_producto_id_productos_id_fk",
+          "tableFrom": "compras_mercancia",
+          "tableTo": "productos",
+          "columnsFrom": [
+            "producto_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "compras_mercancia_usuario_id_usuarios_id_fk": {
+          "name": "compras_mercancia_usuario_id_usuarios_id_fk",
+          "tableFrom": "compras_mercancia",
+          "tableTo": "usuarios",
+          "columnsFrom": [
+            "usuario_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -426,13 +700,6 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
-        },
-        "anulada": {
-          "name": "anulada",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
         }
       },
       "indexes": {
@@ -553,22 +820,9 @@
           "primaryKey": false,
           "notNull": false
         },
-        "contenido_ml": {
-          "name": "contenido_ml",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "concentracion": {
-          "name": "concentracion",
-          "type": "concentracion",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "categoria": {
-          "name": "categoria",
-          "type": "categoria_producto",
+        "tamano": {
+          "name": "tamano",
+          "type": "tamano_producto",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": false
@@ -773,37 +1027,6 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
-        },
-        "anulada": {
-          "name": "anulada",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "anulada_en": {
-          "name": "anulada_en",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "anulada_por_id": {
-          "name": "anulada_por_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "anulada_por_nombre": {
-          "name": "anulada_por_nombre",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "motivo_anulacion": {
-          "name": "motivo_anulacion",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -824,42 +1047,6 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "facturas_local_anulada_idx": {
-          "name": "facturas_local_anulada_idx",
-          "columns": [
-            {
-              "expression": "local_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "anulada",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "facturas_cliente_idx": {
-          "name": "facturas_cliente_idx",
-          "columns": [
-            {
-              "expression": "cliente_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -961,19 +1148,6 @@
           ],
           "onDelete": "restrict",
           "onUpdate": "no action"
-        },
-        "facturas_anulada_por_id_usuarios_id_fk": {
-          "name": "facturas_anulada_por_id_usuarios_id_fk",
-          "tableFrom": "facturas",
-          "tableTo": "usuarios",
-          "columnsFrom": [
-            "anulada_por_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1023,6 +1197,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "personal": {
+          "name": "personal",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "descripcion": {
           "name": "descripcion",
           "type": "text",
@@ -1054,37 +1235,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "anulado": {
-          "name": "anulado",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "anulado_en": {
-          "name": "anulado_en",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "anulado_por_id": {
-          "name": "anulado_por_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "anulado_por_nombre": {
-          "name": "anulado_por_nombre",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "motivo_anulacion": {
-          "name": "motivo_anulacion",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -1099,27 +1249,6 @@
             },
             {
               "expression": "fecha",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "gastos_local_anulado_idx": {
-          "name": "gastos_local_anulado_idx",
-          "columns": [
-            {
-              "expression": "local_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "anulado",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1164,19 +1293,6 @@
           "tableTo": "categorias_gasto",
           "columnsFrom": [
             "categoria_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "gastos_anulado_por_id_usuarios_id_fk": {
-          "name": "gastos_anulado_por_id_usuarios_id_fk",
-          "tableFrom": "gastos",
-          "tableTo": "usuarios",
-          "columnsFrom": [
-            "anulado_por_id"
           ],
           "columnsTo": [
             "id"
@@ -1607,38 +1723,12 @@
           "primaryKey": false,
           "notNull": false
         },
-        "variante": {
-          "name": "variante",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "concentracion": {
-          "name": "concentracion",
-          "type": "concentracion",
+        "tamano": {
+          "name": "tamano",
+          "type": "tamano_producto",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": false
-        },
-        "contenido_ml": {
-          "name": "contenido_ml",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "categoria": {
-          "name": "categoria",
-          "type": "categoria_producto",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "nombre_completo": {
-          "name": "nombre_completo",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
         },
         "activo": {
           "name": "activo",
@@ -1746,6 +1836,113 @@
             "id"
           ],
           "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.proveedores": {
+      "name": "proveedores",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "local_id": {
+          "name": "local_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nombre": {
+          "name": "nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contacto": {
+          "name": "contacto",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "telefono": {
+          "name": "telefono",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "productos_surte": {
+          "name": "productos_surte",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "activo": {
+          "name": "activo",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "creado_en": {
+          "name": "creado_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "actualizado_en": {
+          "name": "actualizado_en",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "proveedores_local_nombre_uq": {
+          "name": "proveedores_local_nombre_uq",
+          "columns": [
+            {
+              "expression": "local_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lower(\"nombre\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "proveedores_local_id_locales_id_fk": {
+          "name": "proveedores_local_id_locales_id_fk",
+          "tableFrom": "proveedores",
+          "tableTo": "locales",
+          "columnsFrom": [
+            "local_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -1992,32 +2189,12 @@
     }
   },
   "enums": {
-    "public.categoria_producto": {
-      "name": "categoria_producto",
+    "public.estado_cuenta_pagar": {
+      "name": "estado_cuenta_pagar",
       "schema": "public",
       "values": [
-        "PERFUME",
-        "ESTUCHE",
-        "BODY_MIST",
-        "CREMA",
-        "DESODORANTE",
-        "DECANT",
-        "ACCESORIO",
-        "OTRO"
-      ]
-    },
-    "public.concentracion": {
-      "name": "concentracion",
-      "schema": "public",
-      "values": [
-        "EXTRAIT",
-        "PARFUM",
-        "EDP",
-        "EDT",
-        "EDC",
-        "BODY_MIST",
-        "SPLASH",
-        "OTRO"
+        "PENDIENTE",
+        "SALDADA"
       ]
     },
     "public.estado_cuota": {
@@ -2050,8 +2227,16 @@
       "schema": "public",
       "values": [
         "HOMBRE",
-        "MUJER",
-        "UNISEX"
+        "MUJER"
+      ]
+    },
+    "public.medio_pago_compra": {
+      "name": "medio_pago_compra",
+      "schema": "public",
+      "values": [
+        "EFECTIVO",
+        "TRANSFERENCIA",
+        "CREDITO"
       ]
     },
     "public.medio_pago": {
@@ -2085,6 +2270,17 @@
       "values": [
         "ADMIN",
         "VENDEDOR"
+      ]
+    },
+    "public.tamano_producto": {
+      "name": "tamano_producto",
+      "schema": "public",
+      "values": [
+        "OZ_2",
+        "OZ_2_5",
+        "OZ_3_4",
+        "OZ_4",
+        "OZ_4_2"
       ]
     },
     "public.tipo_factura": {

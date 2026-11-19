@@ -3,6 +3,7 @@
  * reciben el localId del vendedor y nunca devuelven datos de otro local.
  *
  *  - Autocompletar la factura al escribir la identificación.
+ *  - Sugerencias por nombre mientras se escribe «Nombre del cliente» en la factura.
  *  - Lista paginada con buscador tolerante (tildes, espacios, orden, números con signos
  *    y, si la base tiene pg_trgm, errores de escritura pequeños).
  *  - Récord del cliente: resumen y todas sus facturas (por clienteId, no por la cédula
@@ -25,6 +26,21 @@ import type {
 } from "@/tipos";
 import { COLUMNAS_RESUMEN, serializarResumen } from "./facturas";
 
+/** Columnas que se devuelven para llenar la factura. */
+const COLUMNAS_CLIENTE = {
+  identificacion: clientes.identificacion,
+  nombre: clientes.nombre,
+  telefono: clientes.telefono,
+  direccion: clientes.direccion,
+  sector: clientes.sector,
+};
+
+/** Máximo de sugerencias por búsqueda: suficientes para elegir sin llenar la pantalla. */
+export const MAX_SUGERENCIAS_CLIENTE = 8;
+
+/** Solo clientes con al menos una venta vigente (si su única venta se anuló, no se sugieren). */
+const conVentaVigente = sql`exists (select 1 from ${facturas} where ${facturas.clienteId} = ${clientes.id} and ${facturas.anulada} = false)`;
+
 const POR_PAGINA = 10;
 
 /* ----------------------------- Autocompletado ----------------------------- */
@@ -36,23 +52,29 @@ const POR_PAGINA = 10;
  */
 export async function buscarClientePorIdentificacion(localId: string, identificacion: string) {
   const [cliente] = await db
-    .select({
-      identificacion: clientes.identificacion,
-      nombre: clientes.nombre,
-      telefono: clientes.telefono,
-      direccion: clientes.direccion,
-      sector: clientes.sector,
-    })
+    .select(COLUMNAS_CLIENTE)
     .from(clientes)
-    .where(
-      and(
-        eq(clientes.localId, localId),
-        eq(clientes.identificacion, identificacion.trim()),
-        sql`exists (select 1 from ${facturas} where ${facturas.clienteId} = ${clientes.id} and ${facturas.anulada} = false)`,
-      ),
-    )
+    .where(and(eq(clientes.localId, localId), eq(clientes.identificacion, identificacion.trim()), conVentaVigente))
     .limit(1);
   return cliente ?? null;
+}
+
+/**
+ * Clientes cuyo nombre contiene TODAS las palabras escritas, en cualquier orden,
+ * sin distinguir mayúsculas ni tildes ("perez maria" encuentra a "María Pérez").
+ * Usa la columna nombre_busqueda (el nombre ya normalizado con normalizarTexto).
+ */
+export async function buscarClientesPorNombre(localId: string, texto: string) {
+  const palabras = normalizarTexto(texto).split(" ").filter(Boolean);
+  if (palabras.length === 0) return [];
+  return db
+    .select(COLUMNAS_CLIENTE)
+    .from(clientes)
+    .where(
+      and(eq(clientes.localId, localId), conVentaVigente, ...palabras.map((p) => ilike(clientes.nombreBusqueda, `%${escaparLike(p)}%`))),
+    )
+    .orderBy(asc(clientes.nombre))
+    .limit(MAX_SUGERENCIAS_CLIENTE);
 }
 
 /* ------------------------------ Lista y buscador ------------------------------ */

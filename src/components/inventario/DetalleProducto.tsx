@@ -9,7 +9,7 @@ import { Cargando, Dato, Insignia, Mensaje } from "@/components/ui/Basicos";
 import { Boton } from "@/components/ui/Boton";
 import { Modal } from "@/components/ui/Modal";
 import { useConsulta } from "@/hooks/useConsulta";
-import { ETIQUETA_CATEGORIA, ETIQUETA_CONCENTRACION, ETIQUETA_GENERO, ETIQUETA_TIPO, etiquetaPara, textoMl } from "@/lib/clasificacion";
+import { ETIQUETA_CATEGORIA, ETIQUETA_CONCENTRACION, ETIQUETA_GENERO, ETIQUETA_TIPO, etiquetaPara, textoMlConOz } from "@/lib/clasificacion";
 import { fechaHora, pesos } from "@/lib/formato";
 import { ETIQUETA_MOVIMIENTO, type TipoMovimiento } from "@/lib/inventario";
 import type { MovimientoInventario, Producto } from "@/tipos";
@@ -44,7 +44,7 @@ export function DetalleProducto({ producto: p, onCerrar, onAgregarUnidades, onEd
           <Dato etiqueta="Marca">{p.marcaNombre ?? "Sin marca"}</Dato>
           <Dato etiqueta="Fragancia">{[p.fragancia, p.variante].filter(Boolean).join(" ")}</Dato>
           <Dato etiqueta="Concentración">{p.concentracion ? ETIQUETA_CONCENTRACION[p.concentracion] : "—"}</Dato>
-          <Dato etiqueta="Contenido">{p.contenidoMl ? textoMl(p.contenidoMl) : "—"}</Dato>
+          <Dato etiqueta="Contenido">{p.contenidoMl ? textoMlConOz(p.contenidoMl) : "—"}</Dato>
           <Dato etiqueta="Para">{p.genero ? (p.publico ? etiquetaPara(p.genero, p.publico) : ETIQUETA_GENERO[p.genero]) : "—"}</Dato>
           <Dato etiqueta="Categoría">{p.categoria ? ETIQUETA_CATEGORIA[p.categoria] : "—"}</Dato>
           <Dato etiqueta="Tipo">{p.tipo ? ETIQUETA_TIPO[p.tipo] : "—"}</Dato>

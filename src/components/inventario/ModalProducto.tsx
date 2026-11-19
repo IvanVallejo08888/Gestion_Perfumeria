@@ -1,17 +1,19 @@
 /**
- * Crear o editar un producto con todas sus características.
- * Orden de los campos: marca, fragancia, variante, concentración, ml, género (y público), categoría,
- * tipo, código, precio, stock y aviso de stock bajo.
- *  - Marca: se escribe con sugerencias de las marcas del local. Si no existe, se crea al guardar.
- *  - Vista previa en vivo del nombre completo, el mismo que irá en la factura.
- *  - Si ya existe un producto igual (marca + nombre + variante + concentración + ml),
- *    se advierte y se puede continuar con confirmación.
+ * Crear o editar un producto.
+ * Orden del formulario: nombre del perfume → código → marca → variante → tipo, género, público,
+ * categoría y tamaño → precio, unidades y aviso de stock bajo.
+ *  - Marca: se elige de las del local o se agrega ahí mismo («Agregar marca»).
+ *  - Tamaño en ml con su equivalente en oz; si no está en la lista, «Otro tamaño» deja escribir los ml.
+ *  - Vista previa del nombre completo, el mismo que irá en la factura.
+ *  - Si ya existe un producto igual (marca + nombre + variante + ml), se advierte y se puede continuar.
  *  - Al crear, las unidades iniciales quedan como INGRESO "Stock inicial".
- *  - Al editar, el stock NO se cambia aquí: se usa «Agregar unidades» o «Ajustar stock».
+ *  - Al editar, el stock NO se cambia aquí: se usa «Agregar unidades» o «Ajustar stock»
+ *    para que cada cambio quede registrado.
+ *  - La concentración ya no se pide; si un producto antiguo la tiene, se conserva al editarlo.
  */
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { BotonesMedioPago } from "@/components/facturacion/MedioPago";
 import { Mensaje } from "@/components/ui/Basicos";
 import { Boton } from "@/components/ui/Boton";
@@ -19,70 +21,75 @@ import { Campo, CampoDinero, Selector } from "@/components/ui/Campo";
 import { Confirmar, Modal } from "@/components/ui/Modal";
 import { useConsulta } from "@/hooks/useConsulta";
 import {
-  CATEGORIAS,
-  CONCENTRACIONES,
+  CATEGORIAS_FORMULARIO,
   ETIQUETA_CATEGORIA,
-  ETIQUETA_CONCENTRACION,
   ETIQUETA_GENERO,
   ETIQUETA_PUBLICO,
   ETIQUETA_TIPO,
   GENEROS,
-  MILILITROS_SUGERIDOS,
+  GRUPOS_MILILITROS,
   opcionesDe,
   PUBLICOS,
+  textoMlConOz,
   TIPOS_PRODUCTO,
 } from "@/lib/clasificacion";
 import { api } from "@/lib/http";
 import { armarNombreProducto } from "@/lib/productos";
 import type { Categoria, Concentracion, Genero, NombreActivo, Producto, Publico, TipoProducto } from "@/tipos";
 
+/** Valor del selector de tamaño que muestra el campo para escribir los ml. */
+const OTRO_TAMANO = "otro";
+const TAMANOS_LISTA: number[] = GRUPOS_MILILITROS.flatMap((g) => g.mililitros);
+
 interface FormProducto {
-  marca: string;
   nombre: string;
+  codigo: string;
+  marca: string;
   variante: string;
-  concentracion: Concentracion | null;
-  /** Texto del campo (vacío = sin ml). */
-  contenidoMl: string;
+  tipo: TipoProducto | null;
   genero: Genero | null;
   publico: Publico | null;
   categoria: Categoria | null;
-  tipo: TipoProducto | null;
-  codigo: string;
+  /** Texto con los ml (vacío = sin tamaño, por ejemplo un estuche). */
+  contenidoMl: string;
   precio: number;
   stock: number;
   stockMinimo: number;
+  /** No se pide en el formulario: solo se conserva la de los productos antiguos. */
+  concentracion: Concentracion | null;
 }
 
 const FORM_VACIO: FormProducto = {
-  marca: "",
   nombre: "",
+  codigo: "",
+  marca: "",
   variante: "",
-  concentracion: null,
-  contenidoMl: "",
+  tipo: null,
   genero: null,
   publico: null,
   categoria: "PERFUME",
-  tipo: null,
-  codigo: "",
+  contenidoMl: "",
   precio: 0,
   stock: 0,
-  stockMinimo: 3,
+  // Por defecto avisa cuando se agota (0 unidades); se puede subir si se quiere el aviso antes
+  stockMinimo: 0,
+  concentracion: null,
 };
 
 const desdeProducto = (p: Producto): FormProducto => ({
-  marca: p.marcaNombre ?? "",
   nombre: p.fragancia,
+  codigo: p.codigo ?? "",
+  marca: p.marcaNombre ?? "",
   variante: p.variante ?? "",
-  concentracion: p.concentracion,
-  contenidoMl: p.contenidoMl ? String(p.contenidoMl) : "",
+  tipo: p.tipo,
   genero: p.genero,
   publico: p.publico,
   categoria: p.categoria,
-  tipo: p.tipo,
-  codigo: p.codigo ?? "",
+  contenidoMl: p.contenidoMl ? String(p.contenidoMl) : "",
   precio: p.precio,
   stock: p.stock,
   stockMinimo: p.stockMinimo,
+  concentracion: p.concentracion,
 });
 
 /** Lo que se envía al servidor (el nombre completo lo arma el servidor, no el navegador). */
@@ -105,22 +112,26 @@ export function ModalProducto({ producto, onCerrar, onListo }: Props) {
   const [cargando, setCargando] = useState(false);
   /** Producto parecido encontrado: se pide confirmación antes de guardar. */
   const [duplicado, setDuplicado] = useState<string | null>(null);
-  const idMarcas = useId();
-  const idMl = useId();
+  // "Otro tamaño" abierto: el producto tiene unos ml que no están en la lista, o la persona lo eligió
+  const [otroTamano, setOtroTamano] = useState(() => form.contenidoMl !== "" && !TAMANOS_LISTA.includes(Number(form.contenidoMl)));
 
   const consultaMarcas = useConsulta<{ marcas: NombreActivo[] }>("/api/marcas");
-  const marcas = consultaMarcas.datos?.marcas ?? [];
+  const marcas = consultaMarcas.datos?.marcas ?? null;
+  // Si el producto tiene una marca que el administrador desactivó, se muestra igual para poder conservarla
+  const marcaDesactivada = producto?.marcaNombre && marcas && !marcas.some((m) => m.nombre === producto.marcaNombre) ? producto.marcaNombre : null;
+  const sinMarcas = marcas?.length === 0 && !marcaDesactivada;
 
   const cambiar = <K extends keyof FormProducto>(campo: K, valor: FormProducto[K]) => setForm((f) => ({ ...f, [campo]: valor }));
 
   // Vista previa: la MISMA función que usa el servidor al guardar
   const datos = aEnviar(form);
-  const nombreCompleto = form.nombre.trim() ? armarNombreProducto(datos) : "";
+  const nombreCompleto = form.nombre.trim() && form.marca ? armarNombreProducto(datos) : "";
+  const ml = Number(form.contenidoMl);
 
   function validar(): string {
-    if (!form.marca.trim()) return "Escribe la marca.";
-    if (!form.nombre.trim()) return "Escribe el nombre de la fragancia.";
-    if (form.contenidoMl && (!/^\d+$/.test(form.contenidoMl) || Number(form.contenidoMl) <= 0)) return "El contenido debe ser un número entero de mililitros.";
+    if (!form.nombre.trim()) return "Escribe el nombre del perfume.";
+    if (!form.marca.trim()) return "Elige la marca.";
+    if (form.contenidoMl && (!/^\d+$/.test(form.contenidoMl) || ml <= 0)) return "El tamaño debe ser un número entero de mililitros.";
     if (form.precio <= 0) return "Escribe el precio de venta.";
     return "";
   }
@@ -157,111 +168,112 @@ export function ModalProducto({ producto, onCerrar, onListo }: Props) {
     void guardar();
   }
 
+  function elegirTamano(valor: string) {
+    if (valor === OTRO_TAMANO) {
+      setOtroTamano(true);
+      cambiar("contenidoMl", "");
+      return;
+    }
+    setOtroTamano(false);
+    cambiar("contenidoMl", valor);
+  }
+
   return (
-    <Modal abierto onCerrar={onCerrar} titulo={producto ? "Editar producto" : "Agregar producto"} tamano="lg">
+    <Modal abierto onCerrar={onCerrar} titulo={producto ? "Editar producto" : "Agregar producto"}>
       <form onSubmit={enviar} className="space-y-5" noValidate>
         {error && <Mensaje tono="peligro">{error}</Mensaje>}
 
-        {/* 1-3. Qué es */}
-        <div className="grid gap-5 sm:grid-cols-2">
-          <div>
-            <Campo
-              etiqueta="Marca"
-              list={idMarcas}
-              autoComplete="off"
-              maxLength={80}
-              value={form.marca}
-              onChange={(e) => cambiar("marca", e.target.value)}
-              ayuda="Elige una de la lista o escribe una nueva."
-              placeholder="Ej. Creed, Dior, Carolina Herrera"
-              obligatorio
-              autoFocus
-            />
-            <datalist id={idMarcas}>
-              {marcas.map((m) => (
-                <option key={m.id} value={m.nombre} />
-              ))}
-            </datalist>
-          </div>
-          <Campo
-            etiqueta="Nombre de la fragancia"
-            maxLength={120}
-            value={form.nombre}
-            onChange={(e) => cambiar("nombre", e.target.value)}
-            placeholder="Ej. Aventus, Sauvage, Good Girl"
-            obligatorio
-          />
-        </div>
+        <Campo
+          etiqueta="Nombre del perfume"
+          maxLength={120}
+          value={form.nombre}
+          onChange={(e) => cambiar("nombre", e.target.value)}
+          placeholder="Ej. Aventus, Sauvage, Good Girl"
+          obligatorio
+          autoFocus
+        />
+        <Campo etiqueta="Código (opcional)" value={form.codigo} onChange={(e) => cambiar("codigo", e.target.value)} ayuda="Por ejemplo, el código de barras." />
+
+        <SelectorMarca
+          marcas={marcas}
+          marcaDesactivada={marcaDesactivada}
+          sinMarcas={sinMarcas}
+          valor={form.marca}
+          onCambio={(marca) => cambiar("marca", marca)}
+          onMarcaCreada={async (marca) => {
+            await consultaMarcas.recargar();
+            cambiar("marca", marca);
+          }}
+        />
+        {consultaMarcas.error && <Mensaje tono="peligro">{consultaMarcas.error}</Mensaje>}
+
         <Campo
           etiqueta="Variante (opcional)"
           maxLength={60}
           value={form.variante}
           onChange={(e) => cambiar("variante", e.target.value)}
-          placeholder="Ej. Intense, Blush, Tester, Edición limitada"
+          placeholder="Ej. Intense, Blush, Tester"
           ayuda="En un estuche, escribe lo que trae con «+»: «+ gel» (va al final del nombre)."
         />
 
-        {/* 4-5. Cómo es */}
-        <div className="grid gap-5 sm:grid-cols-2">
-          <Selector etiqueta="Concentración" value={form.concentracion ?? ""} onChange={(e) => cambiar("concentracion", (e.target.value || null) as Concentracion | null)}>
-            <option value="">Sin especificar</option>
-            {CONCENTRACIONES.map((c) => (
-              <option key={c} value={c}>
-                {ETIQUETA_CONCENTRACION[c]}
-              </option>
-            ))}
-          </Selector>
-          <div>
-            <Campo
-              etiqueta="Contenido en ml"
-              inputMode="numeric"
-              list={idMl}
-              autoComplete="off"
-              value={form.contenidoMl}
-              onChange={(e) => cambiar("contenidoMl", e.target.value.replace(/\D/g, "").slice(0, 4))}
-              placeholder="Ej. 100"
-              ayuda="Déjalo vacío si no se mide en ml (estuche, accesorio)."
-            />
-            <datalist id={idMl}>
-              {MILILITROS_SUGERIDOS.map((ml) => (
-                <option key={ml} value={ml} />
-              ))}
-            </datalist>
-          </div>
-        </div>
-
-        {/* 6. Para quién */}
-        <OpcionalBotones
+        <BotonesMedioPago titulo="Tipo" opciones={opcionesDe(TIPOS_PRODUCTO, ETIQUETA_TIPO)} valor={form.tipo} onCambio={(tipo) => cambiar("tipo", tipo)} />
+        <BotonesMedioPago
           titulo="Género"
           opciones={opcionesDe(GENEROS, ETIQUETA_GENERO)}
           valor={form.genero}
-          onCambio={(genero) => setForm((f) => ({ ...f, genero, publico: genero ? (f.publico ?? "ADULTO") : null }))}
+          onCambio={(genero) => setForm((f) => ({ ...f, genero, publico: f.publico ?? "ADULTO" }))}
         />
         {form.genero && (
           <BotonesMedioPago titulo="Público" opciones={opcionesDe(PUBLICOS, ETIQUETA_PUBLICO)} valor={form.publico} onCambio={(publico) => cambiar("publico", publico)} />
         )}
 
-        {/* 7. Categoría y tipo */}
         <Selector etiqueta="Categoría" value={form.categoria ?? ""} onChange={(e) => cambiar("categoria", (e.target.value || null) as Categoria | null)}>
           <option value="">Sin especificar</option>
-          {CATEGORIAS.map((c) => (
+          {CATEGORIAS_FORMULARIO.map((c) => (
             <option key={c} value={c}>
               {ETIQUETA_CATEGORIA[c]}
             </option>
           ))}
+          {/* Un producto antiguo con una categoría que ya no se ofrece la conserva */}
+          {form.categoria && !(CATEGORIAS_FORMULARIO as readonly string[]).includes(form.categoria) && (
+            <option value={form.categoria}>{ETIQUETA_CATEGORIA[form.categoria]}</option>
+          )}
         </Selector>
-        <OpcionalBotones titulo="Tipo" opciones={opcionesDe(TIPOS_PRODUCTO, ETIQUETA_TIPO)} valor={form.tipo} onCambio={(tipo) => cambiar("tipo", tipo)} />
 
-        {/* Vista previa en vivo */}
-        <div aria-live="polite" className="rounded-xl border-2 border-marca-700 bg-marca-50 p-4 text-lg">
-          <p className="text-base font-bold text-texto-suave">Así se verá en la factura:</p>
-          <p className="mt-1 text-xl font-bold break-words text-acento">{nombreCompleto || "Escribe la marca y el nombre de la fragancia"}</p>
-        </div>
+        <Selector
+          etiqueta="Tamaño"
+          value={otroTamano ? OTRO_TAMANO : form.contenidoMl}
+          onChange={(e) => elegirTamano(e.target.value)}
+          ayuda="En ml, con su equivalente en onzas."
+        >
+          <option value="">Sin tamaño (estuche u otro)</option>
+          {GRUPOS_MILILITROS.map((g) => (
+            <optgroup key={g.titulo} label={g.titulo}>
+              {g.mililitros.map((m) => (
+                <option key={m} value={String(m)}>
+                  {textoMlConOz(m)}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+          <option value={OTRO_TAMANO}>Otro tamaño…</option>
+        </Selector>
+        {otroTamano && (
+          <Campo
+            etiqueta="Tamaño en ml"
+            inputMode="numeric"
+            autoComplete="off"
+            value={form.contenidoMl}
+            onChange={(e) => cambiar("contenidoMl", e.target.value.replace(/\D/g, "").slice(0, 4))}
+            placeholder="Ej. 35"
+            ayuda={ml > 0 ? `Equivale a ${textoMlConOz(ml)}.` : "Escribe los mililitros: se mostrará su equivalente en onzas."}
+            obligatorio
+          />
+        )}
 
-        {/* 8-11. Venta y stock */}
+        <CampoDinero etiqueta="Precio de venta" valor={form.precio} onCambio={(v) => cambiar("precio", v)} obligatorio />
+
         <div className="grid gap-5 sm:grid-cols-2">
-          <Campo etiqueta="Código (opcional)" value={form.codigo} onChange={(e) => cambiar("codigo", e.target.value)} ayuda="Por ejemplo, el código de barras." />
-          <CampoDinero etiqueta="Precio de venta" valor={form.precio} onCambio={(v) => cambiar("precio", v)} obligatorio />
           {producto ? (
             <div>
               <p className="mb-1.5 text-lg font-bold">Unidades en stock</p>
@@ -287,10 +299,16 @@ export function ModalProducto({ producto, onCerrar, onListo }: Props) {
             min={0}
             value={form.stockMinimo}
             onChange={(e) => cambiar("stockMinimo", Math.max(0, Math.floor(Number(e.target.value) || 0)))}
-            ayuda="Recibirás una notificación de stock bajo."
+            ayuda="Recibirás una notificación de stock bajo. Con 0, cuando se agote."
           />
         </div>
-        {consultaMarcas.error && <Mensaje tono="alerta">No se pudieron cargar las marcas sugeridas: {consultaMarcas.error}</Mensaje>}
+
+        {/* Vista previa en vivo */}
+        <div aria-live="polite" className="rounded-xl border-2 border-marca-700 bg-marca-50 p-4 text-lg">
+          <p className="text-base font-bold text-texto-suave">Así se verá en la factura:</p>
+          <p className="mt-1 text-xl font-bold break-words text-acento">{nombreCompleto || "Escribe el nombre del perfume y elige la marca"}</p>
+        </div>
+
         <Boton type="submit" ancho cargando={cargando} icono="check">
           Guardar
         </Boton>
@@ -318,25 +336,103 @@ export function ModalProducto({ producto, onCerrar, onListo }: Props) {
   );
 }
 
-/** Botones de opción para un dato OPCIONAL: muestra «Quitar» para dejarlo vacío. */
-function OpcionalBotones<T extends string>({
-  titulo,
-  opciones,
+/* ----------------------- Marca: elegir o agregar nueva ----------------------- */
+
+function SelectorMarca({
+  marcas,
+  marcaDesactivada,
+  sinMarcas,
   valor,
   onCambio,
+  onMarcaCreada,
 }: {
-  titulo: string;
-  opciones: { valor: T; texto: string }[];
-  valor: T | null;
-  onCambio: (valor: T | null) => void;
+  marcas: NombreActivo[] | null;
+  marcaDesactivada: string | null;
+  sinMarcas: boolean;
+  /** Nombre de la marca elegida. */
+  valor: string;
+  onCambio: (marca: string) => void;
+  onMarcaCreada: (marca: string) => Promise<void>;
 }) {
+  const [agregando, setAgregando] = useState(false);
+  const [nombre, setNombre] = useState("");
+  const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const mostrarCampo = agregando || sinMarcas;
+
+  async function crear() {
+    if (!nombre.trim()) return setError("Escribe el nombre de la marca.");
+    setGuardando(true);
+    setError("");
+    try {
+      // Es un botón (no un submit): este bloque está dentro del formulario del producto
+      const { marca } = await api<{ marca: { id: string; nombre: string; existia: boolean } }>("/api/marcas", {
+        method: "POST",
+        json: { nombre },
+      });
+      await onMarcaCreada(marca.nombre);
+      setAviso(marca.existia ? `«${marca.nombre}» ya existía: quedó elegida.` : `Marca «${marca.nombre}» agregada y elegida.`);
+      setNombre("");
+      setAgregando(false);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setGuardando(false);
+    }
+  }
+
   return (
-    <div>
-      <BotonesMedioPago titulo={`${titulo} (opcional)`} opciones={opciones} valor={valor} onCambio={onCambio} />
-      {valor && (
-        <Boton pequeno variante="fantasma" icono="cerrar" className="mt-2" onClick={() => onCambio(null)}>
-          {`Quitar ${titulo.toLowerCase()}`}
-        </Boton>
+    <div className="space-y-3">
+      {!sinMarcas && (
+        <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+          <Selector etiqueta="Marca" value={valor} onChange={(e) => onCambio(e.target.value)} disabled={!marcas} obligatorio>
+            <option value="">{marcas ? "Elige la marca" : "Cargando marcas…"}</option>
+            {marcaDesactivada && <option value={marcaDesactivada}>{`${marcaDesactivada} (desactivada)`}</option>}
+            {marcas?.map((m) => (
+              <option key={m.id} value={m.nombre}>
+                {m.nombre}
+              </option>
+            ))}
+          </Selector>
+          {!agregando && (
+            <Boton variante="secundario" icono="mas" onClick={() => (setAgregando(true), setAviso(""))}>
+              Agregar marca
+            </Boton>
+          )}
+        </div>
+      )}
+      {aviso && <Mensaje tono="exito">{aviso}</Mensaje>}
+
+      {mostrarCampo && (
+        <div className="space-y-3 rounded-xl border-2 border-marca-700 bg-marca-50 p-4">
+          {sinMarcas && <p className="text-lg font-bold">Tu local aún no tiene marcas. Agrega la primera:</p>}
+          <Campo
+            etiqueta="Nombre de la marca nueva"
+            value={nombre}
+            maxLength={80}
+            onChange={(e) => setNombre(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter guarda la marca, no el producto
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void crear();
+              }
+            }}
+            error={error || undefined}
+            obligatorio
+          />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Boton icono="check" cargando={guardando} onClick={crear}>
+              Guardar marca
+            </Boton>
+            {!sinMarcas && (
+              <Boton variante="fantasma" onClick={() => (setAgregando(false), setNombre(""), setError(""))}>
+                Cancelar
+              </Boton>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

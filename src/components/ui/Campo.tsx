@@ -117,16 +117,23 @@ export function Selector({
   return (
     <div className={className}>
       <Etiqueta htmlFor={campoId} texto={etiqueta} obligatorio={obligatorio} />
-      <select
-        id={campoId}
-        required={obligatorio}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy(campoId, error, ayuda)}
-        className={`${claseCampo} ${error ? "border-peligro-700" : "border-borde"} cursor-pointer`}
-        {...resto}
-      >
-        {children}
-      </select>
+      {/*
+        Sin la apariencia nativa: Chrome fuerza su propio alto de línea en <select> y el selector quedaba
+        más bajo que los campos de texto vecinos. Así mide lo mismo que un <Campo> y la flecha es la del tema.
+      */}
+      <div className="relative">
+        <select
+          id={campoId}
+          required={obligatorio}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy(campoId, error, ayuda)}
+          className={`${claseCampo} ${error ? "border-peligro-700" : "border-borde"} cursor-pointer appearance-none pr-12`}
+          {...resto}
+        >
+          {children}
+        </select>
+        <Icono nombre="flechaAbajo" className="pointer-events-none absolute inset-y-0 right-4 my-auto size-6 text-texto-suave" />
+      </div>
       <Mensajes id={campoId} error={error} ayuda={ayuda} />
     </div>
   );

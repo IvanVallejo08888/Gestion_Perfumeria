@@ -7,7 +7,8 @@
  *  - Total recaudado = contado + abonos (el dinero que realmente entró).
  *  - Recibido en efectivo / transferencia = ese mismo dinero, separado por medio de pago.
  *  - Gastos: se agrupan por el día del gasto (no por el día en que se registró).
- *  - Utilidad = total recaudado − gastos.
+ *  - Gastos personales (de la dueña): se informan aparte y NO se restan.
+ *  - Utilidad = total recaudado − gastos del negocio.
  *
  * Nada de lo anulado cuenta: ni las ventas eliminadas (con sus ítems y abonos) ni los gastos eliminados.
  */
@@ -16,6 +17,7 @@ import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { abonos, facturaItems, facturas, gastos } from "@/db/schema";
 import { anioMesColombia, MESES, rangoDias, rangoPeriodo } from "@/lib/formato";
+import { calcularUtilidad } from "@/lib/gastos";
 import type { Estadisticas, MesEstadistica } from "@/tipos";
 import { obtenerLocal } from "./locales";
 
@@ -61,7 +63,7 @@ export async function obtenerEstadisticas(localId: string, anio: number): Promis
         ),
       ),
     db
-      .select({ valor: gastos.valor, fecha: gastos.fecha })
+      .select({ valor: gastos.valor, fecha: gastos.fecha, personal: gastos.personal })
       .from(gastos)
       .where(
         and(eq(gastos.localId, localId), eq(gastos.anulado, false), gte(gastos.fecha, dias.desde), lt(gastos.fecha, dias.hasta)),
@@ -105,6 +107,7 @@ export async function obtenerEstadisticas(localId: string, anio: number): Promis
     recibidoEfectivo: 0,
     recibidoTransferencia: 0,
     gastos: 0,
+    gastosPersonales: 0,
     utilidad: 0,
   }));
 
@@ -127,11 +130,15 @@ export async function obtenerEstadisticas(localId: string, anio: number): Promis
     m.recibidoTransferencia += a.valorTransferencia;
   }
   // La fecha del gasto es "AAAA-MM-DD": el mes se lee directamente del texto
-  for (const g of listaGastos) meses[Number(g.fecha.slice(5, 7)) - 1].gastos += g.valor;
+  for (const g of listaGastos) {
+    const m = meses[Number(g.fecha.slice(5, 7)) - 1];
+    if (g.personal) m.gastosPersonales += g.valor;
+    else m.gastos += g.valor;
+  }
   for (const m of meses) {
     m.totalVentas = m.ventasContado + m.ventasCredito;
     m.totalRecaudado = m.ventasContado + m.recaudoAbonos;
-    m.utilidad = m.totalRecaudado - m.gastos;
+    m.utilidad = calcularUtilidad(m.totalRecaudado, m.gastos);
   }
 
   const sumar = (campo: keyof Omit<MesEstadistica, "mes" | "nombre">) => meses.reduce((acc, m) => acc + m[campo], 0);
@@ -151,6 +158,7 @@ export async function obtenerEstadisticas(localId: string, anio: number): Promis
       recibidoEfectivo: sumar("recibidoEfectivo"),
       recibidoTransferencia: sumar("recibidoTransferencia"),
       gastos: sumar("gastos"),
+      gastosPersonales: sumar("gastosPersonales"),
       utilidad: sumar("utilidad"),
     },
     topProductos,

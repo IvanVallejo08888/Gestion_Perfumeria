@@ -18,6 +18,9 @@ export type TipoFactura = "NORMAL" | "CREDITO";
 export type EstadoFactura = "PENDIENTE" | "COMPLETADA";
 export type MedioPago = "EFECTIVO" | "TRANSFERENCIA" | "MIXTO";
 export type MedioPagoGasto = "EFECTIVO" | "TRANSFERENCIA";
+/** Cómo se pagó una compra de mercancía. CREDITO = cuenta por pagar al proveedor. */
+export type MedioPagoCompra = "EFECTIVO" | "TRANSFERENCIA" | "CREDITO";
+export type EstadoCuentaPagar = "PENDIENTE" | "SALDADA";
 
 export interface ClienteDatos {
   identificacion: string;
@@ -142,9 +145,16 @@ export interface NombreActivo {
   activo: boolean;
 }
 
+/** Categoría de gasto: "personal" = gastos de la dueña (aparte, no se restan de la utilidad). */
+export interface CategoriaGastoOpcion extends NombreActivo {
+  personal: boolean;
+}
+
 export interface GastoFila {
   id: string;
   categoriaNombre: string;
+  /** Gasto personal de la dueña: se muestra aparte y no se resta de la utilidad. */
+  personal: boolean;
   descripcion: string | null;
   valor: number;
   medioPago: MedioPagoGasto;
@@ -161,10 +171,12 @@ export interface GastoFila {
 export interface ListaGastos {
   /** Según el filtro: los gastos vigentes o los eliminados. */
   gastos: GastoFila[];
-  /** Los totales SIEMPRE son de los gastos vigentes del periodo (nunca suman los eliminados). */
+  /** Total de gastos del negocio (sin los personales). Los totales SIEMPRE son de los gastos vigentes del periodo (nunca suman los eliminados). */
   total: number;
   totalEfectivo: number;
   totalTransferencia: number;
+  /** Total de gastos personales (no se restan de la utilidad). */
+  totalPersonales: number;
 }
 
 export interface Notificacion {
@@ -191,8 +203,11 @@ export interface MesEstadistica {
   /** Dinero recibido por medio de pago (contado + abonos). */
   recibidoEfectivo: number;
   recibidoTransferencia: number;
+  /** Gastos del negocio (sin los personales). */
   gastos: number;
-  /** Recibido − gastos. */
+  /** Gastos personales de la dueña: se informan aparte y no se restan. */
+  gastosPersonales: number;
+  /** Recibido − gastos del negocio. */
   utilidad: number;
 }
 
@@ -317,4 +332,52 @@ export interface Dashboard {
     /** Total de perfumes agotados o en stock bajo (la lista muestra solo los más urgentes). */
     totalCriticos: number;
   };
+}
+
+/* ------------------------- Proveedores y cuentas por pagar ------------------------- */
+
+export interface Proveedor {
+  id: string;
+  nombre: string;
+  contacto: string | null;
+  telefono: string | null;
+  /** Texto libre: qué productos surte. */
+  productosSurte: string | null;
+  activo: boolean;
+  /** Lo que se le debe hoy (suma de saldos de compras a crédito pendientes). */
+  deuda: number;
+  comprasPendientes: number;
+}
+
+export interface AbonoProveedorDetalle {
+  id: string;
+  valor: number;
+  medioPago: MedioPago;
+  valorEfectivo: number;
+  valorTransferencia: number;
+  /** Día del pago, "AAAA-MM-DD". */
+  fecha: string;
+  usuarioNombre: string;
+  nota: string | null;
+}
+
+export interface CompraProveedor {
+  id: string;
+  productoNombre: string;
+  cantidad: number;
+  total: number;
+  medioPago: MedioPagoCompra;
+  saldo: number;
+  estado: EstadoCuentaPagar;
+  usuarioNombre: string;
+  nota: string | null;
+  creadoEn: string;
+  saldadaEn: string | null;
+  abonos: AbonoProveedorDetalle[];
+}
+
+export interface ProveedorDetalle extends Proveedor {
+  compras: CompraProveedor[];
+  /** Total pagado en abonos a compras a crédito. */
+  totalAbonado: number;
 }

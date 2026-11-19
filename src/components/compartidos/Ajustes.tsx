@@ -1,10 +1,9 @@
 /**
  * Pantalla "Ajustes" (vendedor y administrador): lo que cada usuario puede personalizar o consultar.
  *  1. Apariencia: tamaño de letra (barra deslizante) y tema claro / oscuro / según el dispositivo.
- *  2. Guía de usuario: un desplegable por módulo (textos en src/lib/guia-usuario.ts).
- *  3. Quejas e inquietudes: arma un mensaje para el desarrollador por WhatsApp o correo (no se guarda nada).
- *  4. Cuenta: cambiar contraseña y cerrar sesión.
- *  5. Manual de usuario: botón que despliega una pestaña por sección (ver ManualUsuario.tsx).
+ *  2. Quejas e inquietudes: arma un mensaje para el desarrollador por WhatsApp o correo (no se guarda nada).
+ *  3. Cuenta: cambiar contraseña y cerrar sesión.
+ *  4. Manual de usuario: botón que despliega una pestaña por sección (ver ManualUsuario.tsx).
  * Las preferencias se guardan en este dispositivo (ver hooks/usePreferencias.ts).
  */
 "use client";
@@ -14,13 +13,11 @@ import { CambiarMiPassword } from "@/components/compartidos/CambiarMiPassword";
 import { ManualUsuario } from "@/components/compartidos/ManualUsuario";
 import { Boton } from "@/components/ui/Boton";
 import { AreaTexto, Selector } from "@/components/ui/Campo";
-import { Desplegable } from "@/components/ui/Desplegable";
 import { GrupoOpciones } from "@/components/ui/GrupoOpciones";
 import { Confirmar } from "@/components/ui/Modal";
 import { EncabezadoPagina, Mensaje, Tarjeta } from "@/components/ui/Basicos";
 import { NIVELES_TEXTO, useTamanoTexto, useTema, type PreferenciaTema } from "@/hooks/usePreferencias";
 import { cerrarSesion } from "@/lib/cerrar-sesion";
-import { GUIA_USUARIO, modulosPara } from "@/lib/guia-usuario";
 import { asuntoSoporte, enlaceCorreoSoporte, enlaceWhatsAppSoporte, mensajeSoporte } from "@/lib/soporte";
 import { PANTALLAS_QUEJA, quejaSchema, TIPOS_QUEJA, type Queja } from "@/lib/validaciones";
 
@@ -43,13 +40,10 @@ const OPCIONES_TEMA: { valor: PreferenciaTema; texto: string }[] = [
 export function Ajustes({ usuario }: { usuario: UsuarioAjustes }) {
   return (
     <>
-      <EncabezadoPagina titulo="Ajustes" descripcion="Personaliza cómo se ve la aplicación, consulta la guía y escríbenos si algo falla." />
+      <EncabezadoPagina titulo="Ajustes" descripcion="Personaliza cómo se ve la aplicación, consulta el manual y escríbenos si algo falla." />
       <div className="max-w-3xl space-y-10">
         <Seccion titulo="Apariencia">
           <Apariencia />
-        </Seccion>
-        <Seccion titulo="Guía de usuario">
-          <GuiaUsuario rol={usuario.rol} />
         </Seccion>
         <Seccion titulo="Quejas e inquietudes">
           <FormularioQueja usuario={usuario} />
@@ -128,25 +122,7 @@ function Apariencia() {
   );
 }
 
-/* -------------------------------- 2. Guía de usuario -------------------------------- */
-
-function GuiaUsuario({ rol }: { rol: UsuarioAjustes["rol"] }) {
-  return (
-    <div className="space-y-3">
-      {modulosPara(rol).map((m) => (
-        <Desplegable key={m.id} titulo={m.nombre}>
-          <div className="space-y-3 text-lg text-texto">
-            {GUIA_USUARIO[m.id].split(/\n\s*\n/).map((parrafo) => (
-              <p key={parrafo}>{parrafo}</p>
-            ))}
-          </div>
-        </Desplegable>
-      ))}
-    </div>
-  );
-}
-
-/* ---------------------------- 3. Quejas e inquietudes ---------------------------- */
+/* ---------------------------- 2. Quejas e inquietudes ---------------------------- */
 
 type Errores = Partial<Record<keyof Queja, string>>;
 
@@ -261,7 +237,7 @@ function FormularioQueja({ usuario }: { usuario: UsuarioAjustes }) {
   );
 }
 
-/* ------------------------------------- 4. Cuenta ------------------------------------- */
+/* ------------------------------------- 3. Cuenta ------------------------------------- */
 
 function Cuenta() {
   const [confirmar, setConfirmar] = useState(false);

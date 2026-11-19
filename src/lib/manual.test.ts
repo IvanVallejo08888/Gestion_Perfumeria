@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { MANUAL, seccionesPara, textosDe, tramos, type RolManual } from "./manual";
 
-const ESPERADAS: Record<RolManual, number[]> = {
+/** Secciones del manual completo que ve cada rol (con su número original). */
+const ORIGINALES: Record<RolManual, number[]> = {
   VENDEDOR: [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16],
   ADMIN: [1, 2, 3, 12, 13, 14, 15, 16],
 };
@@ -17,15 +18,23 @@ describe("manual de usuario", () => {
   });
 
   for (const rol of ["VENDEDOR", "ADMIN"] as const) {
-    it(`${rol} ve solo sus secciones`, () => {
+    it(`${rol} ve solo sus secciones, en orden`, () => {
+      const titulos = new Map(MANUAL.map((s) => [s.numero, s.titulo]));
       assert.deepEqual(
-        seccionesPara(rol).map((s) => s.numero),
-        ESPERADAS[rol],
+        seccionesPara(rol).map((s) => s.titulo),
+        ORIGINALES[rol].map((n) => titulos.get(n)),
       );
     });
 
-    it(`${rol}: ninguna «sección N» apunta a una sección oculta`, () => {
-      const visibles = new Set(ESPERADAS[rol]);
+    it(`${rol}: las secciones van numeradas 1, 2, 3… sin saltos`, () => {
+      assert.deepEqual(
+        seccionesPara(rol).map((s) => s.numero),
+        ORIGINALES[rol].map((_, i) => i + 1),
+      );
+    });
+
+    it(`${rol}: toda «sección N» apunta a una sección que ve, con su número nuevo`, () => {
+      const visibles = new Set(seccionesPara(rol).map((s) => s.numero));
       for (const seccion of seccionesPara(rol)) {
         for (const texto of textosDe(seccion)) {
           for (const [, n] of texto.matchAll(/secci[oó]n (\d+)/gi)) {
@@ -51,6 +60,24 @@ describe("manual de usuario", () => {
         assert.equal(texto.split("**").length % 2, 1, `Negrita sin cerrar: «${texto}»`);
       }
     }
+  });
+});
+
+describe("referencias renumeradas", () => {
+  const textoDe = (rol: RolManual, titulo: string) =>
+    textosDe(seccionesPara(rol).find((s) => s.titulo === titulo)!).join(" ");
+
+  it("el vendedor ve «Mi cuenta y tamaño de letra» como sección 12 (en el manual completo es la 14)", () => {
+    assert.match(textoDe("VENDEDOR", "Entrar y moverse por el sistema"), /\(sección 12\)/);
+  });
+
+  it("el administrador la ve como sección 6", () => {
+    assert.match(textoDe("ADMIN", "Entrar y moverse por el sistema"), /\(sección 6\)/);
+  });
+
+  it("el manual completo no se modifica", () => {
+    const original = MANUAL.find((s) => s.numero === 3)!;
+    assert.match(textosDe(original).join(" "), /\(sección 14\)/);
   });
 });
 

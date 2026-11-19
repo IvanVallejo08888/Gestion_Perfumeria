@@ -22,13 +22,14 @@ export function VistaEstadisticas({ datos, mes }: { datos: Estadisticas; mes?: n
     { titulo: "Dinero recibido", valor: pesos(base.totalRecaudado), detalle: "Contado + abonos recibidos" },
     { titulo: "Recibido en efectivo", valor: pesos(base.recibidoEfectivo), detalle: "Contado + abonos en efectivo" },
     { titulo: "Recibido en transferencia", valor: pesos(base.recibidoTransferencia), detalle: "Contado + abonos por transferencia" },
-    { titulo: "Gastos", valor: pesos(base.gastos), detalle: `Gastos del local · ${periodo}` },
+    { titulo: "Gastos del negocio", valor: pesos(base.gastos), detalle: `Gastos del local · ${periodo}` },
     {
       titulo: "Utilidad (recibido − gastos)",
       valor: pesos(base.utilidad),
-      detalle: base.utilidad < 0 ? "Pérdida: los gastos superan lo recibido" : "Lo que queda después de los gastos",
+      detalle: base.utilidad < 0 ? "Pérdida: los gastos superan lo recibido" : "Lo que queda después de los gastos del negocio",
       peligro: base.utilidad < 0,
     },
+    { titulo: "Gastos personales", valor: pesos(base.gastosPersonales), detalle: "Aparte: no se restan de la utilidad" },
     { titulo: "Ventas de contado", valor: pesos(base.ventasContado), detalle: `${base.cantidadContado} facturas` },
     { titulo: "Créditos otorgados", valor: pesos(base.ventasCredito), detalle: `${base.cantidadCredito} créditos` },
     { titulo: "Abonos recibidos", valor: pesos(base.recaudoAbonos), detalle: "Pagos a créditos" },
@@ -75,7 +76,7 @@ export function VistaEstadisticas({ datos, mes }: { datos: Estadisticas; mes?: n
       <Tarjeta>
         <h2 className="mb-3 text-2xl font-bold">Detalle mensual</h2>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] text-left text-base">
+          <table className="w-full min-w-[1100px] text-left text-base">
             <caption className="sr-only">Detalle de ventas por mes del año {datos.anio}</caption>
             <thead>
               <tr className="border-b-2 border-linea-fuerte">
@@ -85,8 +86,9 @@ export function VistaEstadisticas({ datos, mes }: { datos: Estadisticas; mes?: n
                 <th scope="col" className="py-2 pr-3 text-right">Abonos</th>
                 <th scope="col" className="py-2 pr-3 text-right">Total vendido</th>
                 <th scope="col" className="py-2 pr-3 text-right">Recibido</th>
-                <th scope="col" className="py-2 pr-3 text-right">Gastos</th>
-                <th scope="col" className="py-2 text-right">Utilidad</th>
+                <th scope="col" className="py-2 pr-3 text-right">Gastos del negocio</th>
+                <th scope="col" className="py-2 pr-3 text-right">Utilidad</th>
+                <th scope="col" className="py-2 text-right">Gastos personales (no se restan)</th>
               </tr>
             </thead>
             <tbody>
@@ -99,7 +101,8 @@ export function VistaEstadisticas({ datos, mes }: { datos: Estadisticas; mes?: n
                   <td className="py-2 pr-3 text-right">{pesos(m.totalVentas)}</td>
                   <td className="py-2 pr-3 text-right">{pesos(m.totalRecaudado)}</td>
                   <td className="py-2 pr-3 text-right">{pesos(m.gastos)}</td>
-                  <td className={`py-2 text-right ${m.utilidad < 0 ? "font-bold text-peligro-800" : ""}`}>{pesos(m.utilidad)}</td>
+                  <td className={`py-2 pr-3 text-right ${m.utilidad < 0 ? "font-bold text-peligro-800" : ""}`}>{pesos(m.utilidad)}</td>
+                  <td className="py-2 text-right">{pesos(m.gastosPersonales)}</td>
                 </tr>
               ))}
             </tbody>
@@ -112,7 +115,8 @@ export function VistaEstadisticas({ datos, mes }: { datos: Estadisticas; mes?: n
                 <td className="py-2 pr-3 text-right">{pesos(datos.totales.totalVentas)}</td>
                 <td className="py-2 pr-3 text-right">{pesos(datos.totales.totalRecaudado)}</td>
                 <td className="py-2 pr-3 text-right">{pesos(datos.totales.gastos)}</td>
-                <td className={`py-2 text-right ${datos.totales.utilidad < 0 ? "text-peligro-800" : ""}`}>{pesos(datos.totales.utilidad)}</td>
+                <td className={`py-2 pr-3 text-right ${datos.totales.utilidad < 0 ? "text-peligro-800" : ""}`}>{pesos(datos.totales.utilidad)}</td>
+                <td className="py-2 text-right">{pesos(datos.totales.gastosPersonales)}</td>
               </tr>
             </tfoot>
           </table>

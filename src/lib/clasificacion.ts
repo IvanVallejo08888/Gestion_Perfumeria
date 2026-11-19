@@ -26,6 +26,31 @@ export const ETIQUETA_PUBLICO: Record<Publico, string> = { ADULTO: "Adulto", INF
 /** Contenido para mostrar: 100 → "100 ml". (Antes se guardaba en onzas; la migración 0005 lo pasó a ml.) */
 export const textoMl = (ml: number) => `${ml} ml`;
 
+/**
+ * Onzas con las que se venden comercialmente los tamaños más comunes (como dicen las etiquetas):
+ * 120 ml se vende como "4 oz" aunque la cuenta exacta dé 4.1. Las esencias de 40 ml se venden como "1 oz".
+ */
+const ONZAS_COMERCIALES: Record<number, string> = {
+  30: "1", 40: "1", 47: "1.6", 50: "1.7", 60: "2", 65: "2.2", 75: "2.5", 80: "2.7", 90: "3",
+  100: "3.4", 120: "4", 125: "4.2", 150: "5", 200: "6.8", 250: "8.4",
+};
+
+/** Equivalente en onzas: 100 → "3.4 oz". Si no es un tamaño común, se calcula (1 oz = 29,5735 ml) con un decimal. */
+export function textoOz(ml: number): string {
+  const oz = ONZAS_COMERCIALES[ml] ?? String(Math.round((ml / 29.5735) * 10) / 10);
+  return `${oz} oz`;
+}
+
+/** Contenido en ml con su equivalente en onzas: 100 → "100 ml (3.4 oz)". */
+export const textoMlConOz = (ml: number) => `${textoMl(ml)} (${textoOz(ml)})`;
+
+/** Tamaños del selector del formulario, agrupados (<optgroup>) para encontrarlos rápido. Se puede escribir otro. */
+export const GRUPOS_MILILITROS: { titulo: string; mililitros: readonly number[] }[] = [
+  { titulo: "Frascos pequeños (10–50 ml)", mililitros: [10, 30, 40, 47, 50] },
+  { titulo: "Frascos (60–150 ml)", mililitros: [60, 65, 75, 80, 90, 100, 120, 125, 150] },
+  { titulo: "Cremas y splash (200–250 ml)", mililitros: [200, 250] },
+];
+
 export const SIN_CATEGORIA = "Sin categoría";
 
 /* ------------------------- Concentración y categoría ------------------------- */
@@ -61,6 +86,9 @@ export const SIGLA_CONCENTRACION: Record<Concentracion, string> = {
 /** Qué clase de artículo es. */
 export const CATEGORIAS = ["PERFUME", "ESTUCHE", "BODY_MIST", "CREMA", "DESODORANTE", "DECANT", "ACCESORIO", "OTRO"] as const;
 export type Categoria = (typeof CATEGORIAS)[number];
+
+/** Categorías que se ofrecen al agregar un producto (Body Mist, Desodorante, Decant y Accesorio, de momento no). */
+export const CATEGORIAS_FORMULARIO = ["PERFUME", "ESTUCHE", "CREMA", "OTRO"] as const satisfies readonly Categoria[];
 
 export const ETIQUETA_CATEGORIA: Record<Categoria, string> = {
   PERFUME: "Perfume",

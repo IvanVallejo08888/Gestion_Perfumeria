@@ -33,22 +33,43 @@
     {
       "idx": 4,
       "version": "7",
-      "when": 1795043617979,
-      "tag": "0004_anulaciones_clientes",
+      "when": 1794595580295,
+      "tag": "0004_gastos_personales",
       "breakpoints": true
     },
     {
       "idx": 5,
       "version": "7",
-      "when": 1795046602175,
-      "tag": "0005_caracteristicas_productos",
+      "when": 1794595761483,
+      "tag": "0005_proveedores",
       "breakpoints": true
     },
     {
       "idx": 6,
       "version": "7",
+      "when": 1794595763100,
+      "tag": "0006_compras_credito_proveedores",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795043617979,
+      "tag": "0007_anulaciones_clientes",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795046602175,
+      "tag": "0008_caracteristicas_productos",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
       "when": 1795046855599,
-      "tag": "0006_quitar_tamano",
+      "tag": "0009_quitar_tamano",
       "breakpoints": true
     }
   ]

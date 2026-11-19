@@ -13,6 +13,7 @@
 import { useRef, useState } from "react";
 import { describirClasificacion, ETIQUETA_TIPO } from "@/lib/clasificacion";
 import { fecha, fechaHora, numeroFactura, pesos } from "@/lib/formato";
+import { escalaImagenFactura } from "@/lib/imagen-factura";
 import { textoMedioPago } from "@/lib/pagos";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
 import type { FacturaDetalle } from "@/tipos";
@@ -27,10 +28,27 @@ export function VistaFactura({ factura }: { factura: FacturaDetalle }) {
   const esCredito = factura.tipo === "CREDITO";
   const nombreBase = `Factura_${numeroFactura(factura.numero)}_${factura.clienteNombre.replace(/[^\p{L}\p{N}]+/gu, "_")}`;
 
-  /** Convierte la factura en imagen PNG (alta resolución). */
+  /**
+   * Convierte la factura en imagen PNG (alta resolución).
+   * html-to-image copia a la copia de la factura los estilos ya calculados de cada elemento. El «mx-auto»
+   * que la centra en pantalla se copiaba como un margen izquierdo fijo (por ejemplo 230 px) y la factura
+   * quedaba corrida dentro de una imagen de 440 px de ancho: salía cortada por la derecha.
+   * Por eso se anula el margen y se dan el ancho y el alto completos de forma explícita.
+   */
   async function generarPng(): Promise<string> {
     const { toPng } = await import("html-to-image");
-    return toPng(ref.current!, { pixelRatio: 2.5, backgroundColor: "#ffffff", skipFonts: true, cacheBust: true });
+    const nodo = ref.current!;
+    const ancho = nodo.scrollWidth;
+    const alto = nodo.scrollHeight;
+    return toPng(nodo, {
+      width: ancho,
+      height: alto,
+      style: { margin: "0", maxHeight: "none", overflow: "visible" },
+      pixelRatio: escalaImagenFactura(ancho, alto),
+      backgroundColor: "#ffffff",
+      skipFonts: true,
+      cacheBust: true,
+    });
   }
 
   async function generarPdf(): Promise<Blob> {
