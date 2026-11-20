@@ -3,6 +3,7 @@
  * Todos los mensajes están en español y redactados de forma clara para el usuario.
  */
 import { z } from "zod";
+import { soloDigitos } from "./formato";
 
 /*
  * Mensajes por defecto de Zod en español (por ejemplo «Opción inválida…» en vez de «Invalid option…»).
@@ -223,8 +224,18 @@ export const filtroProductosSchema = z.object({
 
 /* ---------------------------------- Clientes -------------------------------- */
 
+/**
+ * Cédula del cliente: se guarda SOLO con dígitos ("1.080.044.910" → "1080044910"), igual en la
+ * factura y en la pantalla Clientes, para que el índice único (local, identificación) no deje
+ * pasar el mismo cliente dos veces por diferencias de formato.
+ */
+export const identificacionClienteSchema = z
+  .string({ error: "La identificación es obligatoria." })
+  .transform(soloDigitos)
+  .pipe(z.string().regex(/^[0-9]{5,15}$/, "La identificación debe tener solo números (entre 5 y 15 dígitos)."));
+
 export const clienteSchema = z.object({
-  identificacion: identificacionSchema,
+  identificacion: identificacionClienteSchema,
   nombre: texto("El nombre del cliente"),
   telefono: telefonoSchema,
   direccion: texto("La dirección", 160, "f"),
@@ -446,18 +457,6 @@ export const filtroDashboardSchema = z.object({
 export const filtroCreditosSchema = z.object({
   q: z.string().trim().max(100, "La búsqueda es demasiado larga.").optional(),
   identificacion: z.string().trim().max(30).optional(),
-});
-
-/** Mínimo de letras para empezar a sugerir clientes por nombre. */
-export const MIN_LETRAS_BUSQUEDA_CLIENTE = 2;
-
-/** GET /api/clientes/sugerencias?nombre= — búsqueda de clientes por nombre en la factura. */
-export const busquedaClienteSchema = z.object({
-  nombre: z
-    .string({ error: "Escribe el nombre del cliente." })
-    .trim()
-    .min(MIN_LETRAS_BUSQUEDA_CLIENTE, `Escribe al menos ${MIN_LETRAS_BUSQUEDA_CLIENTE} letras del nombre.`)
-    .max(100, "La búsqueda es demasiado larga."),
 });
 
 /** Convierte los parámetros de la dirección en objeto y descarta los vacíos. */

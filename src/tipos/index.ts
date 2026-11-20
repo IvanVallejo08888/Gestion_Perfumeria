@@ -94,6 +94,39 @@ export interface AbonoDetalle {
   creadoEn: string;
 }
 
+/**
+ * Comprobante de un abono (lo que se le comparte al cliente).
+ * totalAbonado y saldo son los de JUSTO DESPUÉS de este abono, no los de hoy:
+ * así un comprobante antiguo sigue mostrando los valores de ese día.
+ */
+export interface ComprobanteAbono {
+  id: string;
+  /** Número del abono dentro de la factura (1, 2, 3…), en orden de fecha. */
+  numero: number;
+  valor: number;
+  medioPago: MedioPago;
+  valorEfectivo: number;
+  valorTransferencia: number;
+  creadoEn: string;
+  /** El abono se anuló junto con la venta: el comprobante ya no vale. */
+  anulado: boolean;
+  /** Nombre de quien recibió el abono (null si ese usuario ya no existe). */
+  recibidoPor: string | null;
+  /** Suma de los abonos hasta este (incluido). */
+  totalAbonado: number;
+  /** Saldo que quedó después de este abono. */
+  saldo: number;
+  factura: {
+    id: string;
+    numero: number;
+    total: number;
+    clienteNombre: string;
+    clienteIdentificacion: string;
+    clienteTelefono: string;
+  };
+  local: { nombre: string; direccion: string | null; telefono: string | null };
+}
+
 export interface FacturaResumen {
   id: string;
   numero: number;

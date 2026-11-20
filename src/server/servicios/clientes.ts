@@ -2,8 +2,7 @@
  * Servicio de clientes. Cada local tiene su propia lista de clientes: TODAS las funciones
  * reciben el localId del vendedor y nunca devuelven datos de otro local.
  *
- *  - Autocompletar la factura al escribir la identificación.
- *  - Sugerencias por nombre mientras se escribe «Nombre del cliente» en la factura.
+ *  - Autocompletar la factura al escribir la cédula (la única forma de buscarlo al facturar).
  *  - Lista paginada con buscador tolerante (tildes, espacios, orden, números con signos
  *    y, si la base tiene pg_trgm, errores de escritura pequeños).
  *  - Récord del cliente: resumen y todas sus facturas (por clienteId, no por la cédula
@@ -15,6 +14,7 @@ import { and, asc, count, desc, eq, ilike, ne, or, sql, type SQL } from "drizzle
 import { db } from "@/db";
 import { clientes, facturaItems, facturas, sectores } from "@/db/schema";
 import { ApiError } from "@/lib/api";
+import { normalizarIdentificacion, puedeBuscarIdentificacion, resultadoBusqueda, type RespuestaBusquedaCliente } from "@/lib/busqueda-cliente";
 import { camposBusquedaCliente, escaparLike, normalizarTelefono, normalizarTexto, soloDigitos } from "@/lib/formato";
 import type {
   ClienteDatos,
@@ -35,46 +35,37 @@ const COLUMNAS_CLIENTE = {
   sector: clientes.sector,
 };
 
-/** Máximo de sugerencias por búsqueda: suficientes para elegir sin llenar la pantalla. */
-export const MAX_SUGERENCIAS_CLIENTE = 8;
-
-/** Solo clientes con al menos una venta vigente (si su única venta se anuló, no se sugieren). */
-const conVentaVigente = sql`exists (select 1 from ${facturas} where ${facturas.clienteId} = ${clientes.id} and ${facturas.anulada} = false)`;
-
 const POR_PAGINA = 10;
 
 /* ----------------------------- Autocompletado ----------------------------- */
 
 /**
- * Datos de un cliente para autocompletar la factura.
- * Solo se ofrecen clientes con al menos una venta vigente: si su única venta se anuló
- * (por ejemplo, porque sus datos estaban mal), el vendedor los escribe de nuevo.
+ * Cliente para autocompletar la factura, buscado SOLO por cédula y directamente en la tabla
+ * clientes: no depende de facturas, compras ni anulaciones (un cliente con 0 compras o con
+ * todas sus ventas anuladas también se encuentra). La cédula se compara solo con dígitos.
+ *
+ * Si no está en el local del vendedor pero sí en otro, se devuelven sus datos marcados con
+ * otroLocal = true (sin id ni historial): al facturar se crea como cliente nuevo de ESTE local.
  */
-export async function buscarClientePorIdentificacion(localId: string, identificacion: string) {
-  const [cliente] = await db
-    .select(COLUMNAS_CLIENTE)
-    .from(clientes)
-    .where(and(eq(clientes.localId, localId), eq(clientes.identificacion, identificacion.trim()), conVentaVigente))
-    .limit(1);
-  return cliente ?? null;
-}
+export async function buscarClientePorIdentificacion(localId: string, identificacion: string): Promise<RespuestaBusquedaCliente> {
+  const ident = normalizarIdentificacion(identificacion);
+  if (!puedeBuscarIdentificacion(ident)) return resultadoBusqueda(null, null);
 
-/**
- * Clientes cuyo nombre contiene TODAS las palabras escritas, en cualquier orden,
- * sin distinguir mayúsculas ni tildes ("perez maria" encuentra a "María Pérez").
- * Usa la columna nombre_busqueda (el nombre ya normalizado con normalizarTexto).
- */
-export async function buscarClientesPorNombre(localId: string, texto: string) {
-  const palabras = normalizarTexto(texto).split(" ").filter(Boolean);
-  if (palabras.length === 0) return [];
-  return db
+  const [delLocal] = await db
     .select(COLUMNAS_CLIENTE)
     .from(clientes)
-    .where(
-      and(eq(clientes.localId, localId), conVentaVigente, ...palabras.map((p) => ilike(clientes.nombreBusqueda, `%${escaparLike(p)}%`))),
-    )
-    .orderBy(asc(clientes.nombre))
-    .limit(MAX_SUGERENCIAS_CLIENTE);
+    .where(and(eq(clientes.localId, localId), eq(clientes.identificacion, ident)))
+    .limit(1);
+  if (delLocal) return resultadoBusqueda(delLocal, null);
+
+  // En otro local: los datos más recientes
+  const [deOtroLocal] = await db
+    .select(COLUMNAS_CLIENTE)
+    .from(clientes)
+    .where(and(ne(clientes.localId, localId), eq(clientes.identificacion, ident)))
+    .orderBy(desc(clientes.actualizadoEn))
+    .limit(1);
+  return resultadoBusqueda(null, deOtroLocal);
 }
 
 /* ------------------------------ Lista y buscador ------------------------------ */
@@ -112,7 +103,7 @@ function prepararBusqueda(q: string) {
 let trigramDisponible: boolean | null = null;
 
 /**
- * Lista paginada de clientes del local (10 por página).
+ * Lista paginada de clientes del local (10 por página). Solo del local del vendedor.
  * Sin búsqueda: ordenados por última compra (los más recientes primero).
  * Con búsqueda, el orden es:
  *   1. cédula o teléfono EXACTOS (comparando solo dígitos);
@@ -326,7 +317,9 @@ export async function facturasDelCliente(
  * Edita los datos del cliente. NO cambia las facturas antiguas: guardan una copia
  * de los datos del día de la venta (es el registro histórico).
  */
-export async function editarCliente(localId: string, id: string, datos: ClienteDatos): Promise<ClienteDetalle> {
+export async function editarCliente(localId: string, id: string, entrada: ClienteDatos): Promise<ClienteDetalle> {
+  // La cédula se guarda solo con dígitos (igual que al facturar)
+  const datos = { ...entrada, identificacion: normalizarIdentificacion(entrada.identificacion) };
   const actual = await obtenerCliente(localId, id);
 
   // La cédula no puede repetirse dentro del mismo local

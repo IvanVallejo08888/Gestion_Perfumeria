@@ -92,6 +92,13 @@
       "when": 1795070667152,
       "tag": "0012_deudas_gastos_credito",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795070668152,
+      "tag": "0013_normalizar_cedulas_clientes",
+      "breakpoints": true
     }
   ]
 }

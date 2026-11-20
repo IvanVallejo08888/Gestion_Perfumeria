@@ -1,7 +1,9 @@
 /**
  * Historial de créditos.
  * - Buscar por IDENTIFICACIÓN del cliente.
- * - Abonar al crédito (se aplica a las cuotas en orden).
+ * - Abonar al crédito (se aplica a las cuotas en orden). Al guardar se abre el comprobante del abono
+ *   para enviarlo al cliente (WhatsApp, imagen, PDF o impresión).
+ * - "Cuotas y abonos": cada abono tiene «Ver comprobante» para volver a compartirlo.
  * - Cuando el saldo llega a 0: pasa de "Pendiente" a "Completado" y aparece en el historial de ventas completadas.
  * - Ver y cambiar las fechas de cobro de las cuotas pendientes.
  * - "Eliminar venta": anula el crédito (con motivo), devuelve los productos y anula sus abonos.
@@ -10,6 +12,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { ListaAbonos, ModalComprobanteAbono } from "@/components/creditos/ComprobanteAbono";
 import { ConfirmarAnulacion } from "@/components/facturacion/ConfirmarAnulacion";
 import { DetalleFactura } from "@/components/facturacion/DetalleFactura";
 import { SelectorMedioPago } from "@/components/facturacion/MedioPago";
@@ -22,8 +25,8 @@ import { useConsulta } from "@/hooks/useConsulta";
 import { avisarCambioNotificaciones } from "@/hooks/useNotificaciones";
 import { aInputFechaHora, fechaHora, numeroFactura, pesos } from "@/lib/formato";
 import { api } from "@/lib/http";
-import { calcularPago, textoMedioPago } from "@/lib/pagos";
-import type { FacturaDetalle, MedioPago } from "@/tipos";
+import { calcularPago } from "@/lib/pagos";
+import type { ComprobanteAbono, FacturaDetalle, MedioPago } from "@/tipos";
 
 interface Credito {
   id: string;
@@ -49,6 +52,8 @@ export function GestionCreditos({ busquedaInicial }: { busquedaInicial: string }
   const [cuotasDe, setCuotasDe] = useState<string | null>(null);
   const [detalleId, setDetalleId] = useState<string | null>(null);
   const [anularId, setAnularId] = useState<string | null>(null);
+  /** Comprobante del abono recién registrado (abre la ventana «¡Abono registrado!»). */
+  const [abonoRegistrado, setAbonoRegistrado] = useState<ComprobanteAbono | null>(null);
 
   const consulta = useConsulta<{ creditos: Credito[] }>(
     `/api/creditos${buscada ? `?q=${encodeURIComponent(buscada)}` : ""}`,
@@ -190,15 +195,20 @@ export function GestionCreditos({ busquedaInicial }: { busquedaInicial: string }
         <ModalAbono
           facturaId={abonando}
           onCerrar={() => setAbonando(null)}
-          onListo={(f) => {
+          onListo={(abono) => {
+            // En vez del aviso flotante se abre el comprobante, listo para enviarlo al cliente
             setAbonando(null);
-            if (f.estado === "COMPLETADA") avisos.exito(`¡Crédito de ${f.clienteNombre} pagado! Pasó a ventas completadas.`);
-            else avisos.exito(`Abono registrado. Saldo pendiente: ${pesos(f.saldo)}`);
+            setAbonoRegistrado(abono);
             avisarCambioNotificaciones();
             cargar();
           }}
         />
       )}
+      <ModalComprobanteAbono
+        abono={abonoRegistrado}
+        titulo={abonoRegistrado?.saldo === 0 ? "¡Abono registrado! Crédito pagado" : "¡Abono registrado!"}
+        onCerrar={() => setAbonoRegistrado(null)}
+      />
       {cuotasDe && <ModalCuotas facturaId={cuotasDe} onCerrar={() => setCuotasDe(null)} onCambio={cargar} />}
       <DetalleFactura facturaId={detalleId} onCerrar={() => setDetalleId(null)} />
       <ConfirmarAnulacion
@@ -215,7 +225,7 @@ export function GestionCreditos({ busquedaInicial }: { busquedaInicial: string }
 
 /* --------------------------------- Abonar --------------------------------- */
 
-function ModalAbono({ facturaId, onCerrar, onListo }: { facturaId: string; onCerrar: () => void; onListo: (f: FacturaDetalle) => void }) {
+function ModalAbono({ facturaId, onCerrar, onListo }: { facturaId: string; onCerrar: () => void; onListo: (abono: ComprobanteAbono) => void }) {
   const consulta = useConsulta<{ factura: FacturaDetalle }>(`/api/facturas/${facturaId}`);
   const factura = consulta.datos?.factura ?? null;
   const [valor, setValor] = useState(0);
@@ -242,7 +252,7 @@ function ModalAbono({ facturaId, onCerrar, onListo }: { facturaId: string; onCer
     setCargando(true);
     setError("");
     try {
-      const { factura: actualizada } = await api<{ factura: FacturaDetalle }>(`/api/creditos/${facturaId}/abonos`, {
+      const { abono } = await api<{ factura: FacturaDetalle; abono: ComprobanteAbono }>(`/api/creditos/${facturaId}/abonos`, {
         method: "POST",
         json: {
           valor,
@@ -252,7 +262,7 @@ function ModalAbono({ facturaId, onCerrar, onListo }: { facturaId: string; onCer
           ...(medioPago === "MIXTO" ? { valorTransferencia: transferencia, valorEfectivo: valor - transferencia } : {}),
         },
       });
-      onListo(actualizada);
+      onListo(abono);
     } catch (err) {
       setError((err as Error).message);
       setCargando(false);
@@ -323,6 +333,7 @@ function ModalCuotas({ facturaId, onCerrar, onCambio }: { facturaId: string; onC
   const avisos = useAvisos();
   const [fechas, setFechas] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState<string | null>(null);
+  const [comprobanteId, setComprobanteId] = useState<string | null>(null);
 
   const consulta = useConsulta<{ factura: FacturaDetalle }>(`/api/facturas/${facturaId}`, {
     alCargar: ({ factura: f }) =>
@@ -401,25 +412,12 @@ function ModalCuotas({ facturaId, onCerrar, onCambio }: { facturaId: string; onC
 
           <section>
             <h3 className="mb-2 text-xl font-bold">Abonos recibidos</h3>
-            {factura.abonos.length === 0 ? (
-              <p className="text-lg text-texto-suave">Aún no hay abonos.</p>
-            ) : (
-              <ul className="space-y-2">
-                {factura.abonos.map((a) => (
-                  <li key={a.id} className="flex flex-wrap justify-between gap-2 rounded-xl bg-superficie px-4 py-3 text-lg">
-                    <span>
-                      {fechaHora(a.creadoEn)} · {textoMedioPago(a.medioPago)}
-                      {a.medioPago === "MIXTO" ? ` (efectivo ${pesos(a.valorEfectivo)} + transferencia ${pesos(a.valorTransferencia)})` : ""}
-                      {a.nota ? ` · ${a.nota}` : ""}
-                    </span>
-                    <strong>{pesos(a.valor)}</strong>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <ListaAbonos abonos={factura.abonos} onVer={setComprobanteId} />
           </section>
         </div>
       )}
+      {/* Comprobante de un abono ya registrado (para volver a compartirlo) */}
+      <ModalComprobanteAbono abonoId={comprobanteId} onCerrar={() => setComprobanteId(null)} />
     </Modal>
   );
 }

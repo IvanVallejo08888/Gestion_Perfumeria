@@ -188,16 +188,23 @@ input[type="number"] {
   }
 }
 
-/* Impresión: solo se imprime la factura */
+/*
+ * Impresión: solo se imprime el documento (factura o comprobante de abono).
+ * El botón «Imprimir» marca el suyo con data-imprimir="si", así sale solo ese aunque haya otro
+ * abierto detrás (por ejemplo, el comprobante encima de la factura). Si se imprime con Ctrl+P,
+ * sin el botón, salen los documentos abiertos.
+ */
 @media print {
   body * {
     visibility: hidden;
   }
-  #factura-imprimible,
-  #factura-imprimible * {
+  [data-imprimir="si"],
+  [data-imprimir="si"] *,
+  body:not(:has([data-imprimir="si"])) .documento-imprimible,
+  body:not(:has([data-imprimir="si"])) .documento-imprimible * {
     visibility: visible;
   }
-  #factura-imprimible {
+  .documento-imprimible {
     position: absolute;
     inset: 0 auto auto 0;
   }
