@@ -1,18 +1,32 @@
 /**
- * Datos del cliente para la factura: nombre, identificación, número, dirección y sector.
- * - Al escribir el nombre aparecen sugerencias de clientes del local (sin importar mayúsculas ni tildes);
- *   al elegir una, sus datos se llenan solos. Si no aparece, se sigue escribiendo: es un cliente nuevo.
- * - Al escribir la identificación de un cliente que ya compró antes, sus datos también se llenan solos.
+ * Datos del cliente para la factura: identificación, nombre, número, dirección y sector.
+ * - El cliente se busca SOLO por cédula (para no confundir clientes con nombres parecidos).
+ *   La búsqueda va directo a los clientes del local: aunque tenga 0 compras o todas sus ventas
+ *   anuladas, sus datos se llenan solos.
+ * - Se busca sola cuando la cédula tiene 6 dígitos o más y la persona deja de escribir 500 ms,
+ *   además de al salir del campo o presionar Enter (en celular "salir del campo" no siempre pasa).
+ * - Si la cédula está en OTRO local, se ofrece copiar sus datos; al facturar queda como cliente
+ *   de este local, con su propio historial.
+ * - Si el servidor falla, se avisa para intentar de nuevo (no se da por "cliente nuevo").
  * El sector se elige de la lista que definió el administrador para el local.
  */
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
-import { useValorDiferido } from "@/hooks/useValorDiferido";
+import { useEffect, useRef, useState } from "react";
+import {
+  AYUDA_IDENTIFICACION,
+  debeBuscarAlEscribir,
+  ESPERA_BUSQUEDA_MS,
+  estadoTrasBuscar,
+  normalizarIdentificacion,
+  puedeBuscarIdentificacion,
+  type EstadoBusquedaCliente,
+  type RespuestaBusquedaCliente,
+} from "@/lib/busqueda-cliente";
 import { api } from "@/lib/http";
-import { MIN_LETRAS_BUSQUEDA_CLIENTE } from "@/lib/validaciones";
 import type { ClienteDatos, NombreActivo } from "@/tipos";
 import { Mensaje } from "../ui/Basicos";
+import { Boton } from "../ui/Boton";
 import { Campo, Selector } from "../ui/Campo";
 
 /** Cada campo ocupa 3 filas de la cuadrícula (etiqueta, campo, ayuda) y se alinea con su vecino. */
@@ -29,181 +43,123 @@ interface Props {
 }
 
 export function DatosCliente({ valor, onCambio, errores, sectores }: Props) {
-  const [estadoBusqueda, setEstadoBusqueda] = useState<"" | "buscando" | "encontrado" | "nuevo">("");
+  const [estado, setEstado] = useState<EstadoBusquedaCliente>("");
+  /** Datos del cliente encontrado en otro local, esperando que el vendedor acepte usarlos. */
+  const [deOtroLocal, setDeOtroLocal] = useState<ClienteDatos | null>(null);
+  /** Solo se busca sola si la cédula la escribió la persona (no al restaurar un borrador). */
+  const escribiendo = useRef(false);
+  /** Última cédula buscada (para no repetir la búsqueda al salir del campo). */
+  const ultimaBuscada = useRef<string | null>(null);
+  /** Número de la búsqueda en curso: las respuestas viejas se ignoran. */
+  const peticion = useRef(0);
 
   const cambiar = (campo: keyof ClienteDatos, v: string) => onCambio({ ...valor, [campo]: v });
 
-  /** Llena la factura con un cliente ya registrado (desde la identificación o desde las sugerencias). */
+  /** Llena la factura con un cliente ya registrado. */
   function aplicarCliente(cliente: ClienteDatos) {
-    // Si su sector ya no está en la lista, el selector queda vacío para que el vendedor elija uno
+    // Si su sector no está en la lista de este local, el selector queda vacío para que el vendedor elija uno
     const sectorVigente = sectores?.some((s) => s.nombre === cliente.sector);
     onCambio({ ...cliente, sector: sectorVigente ? cliente.sector : "" });
-    setEstadoBusqueda("encontrado");
   }
 
-  /* ------------------------- Sugerencias por nombre ------------------------- */
-  const idLista = useId();
-  // Solo se busca mientras la persona escribe el nombre (no al elegir una sugerencia ni al llenar por identificación)
-  const escribiendoNombre = useRef(false);
-  const [sugerencias, setSugerencias] = useState<ClienteDatos[] | null>(null);
-  const [listaAbierta, setListaAbierta] = useState(false);
-  const [activa, setActiva] = useState(-1);
-  const nombreBuscado = useValorDiferido(valor.nombre.trim(), 300);
+  async function buscar(texto: string) {
+    const ident = normalizarIdentificacion(texto);
+    if (!puedeBuscarIdentificacion(ident) || ultimaBuscada.current === ident) return;
+    ultimaBuscada.current = ident;
+    const n = ++peticion.current;
+    setEstado("buscando");
+    setDeOtroLocal(null);
 
-  useEffect(() => {
-    if (!escribiendoNombre.current) return;
-    if (nombreBuscado.length < MIN_LETRAS_BUSQUEDA_CLIENTE) {
-      setSugerencias(null);
+    let respuesta: RespuestaBusquedaCliente;
+    try {
+      respuesta = await api<RespuestaBusquedaCliente>(`/api/clientes/buscar-identificacion?identificacion=${encodeURIComponent(ident)}`);
+    } catch {
+      if (n !== peticion.current) return;
+      ultimaBuscada.current = null; // así, al salir del campo o con Enter, se intenta de nuevo
+      setEstado("error");
       return;
     }
-    let vigente = true;
-    api<{ clientes: ClienteDatos[] }>(`/api/clientes/sugerencias?nombre=${encodeURIComponent(nombreBuscado)}`)
-      .then(({ clientes }) => {
-        if (!vigente || !escribiendoNombre.current) return;
-        setSugerencias(clientes);
-        setActiva(-1);
-        setListaAbierta(true);
-      })
-      .catch(() => vigente && setSugerencias(null));
-    return () => {
-      vigente = false;
-    };
-  }, [nombreBuscado]);
+    if (n !== peticion.current) return;
 
-  function elegirSugerencia(cliente: ClienteDatos) {
-    escribiendoNombre.current = false;
-    setListaAbierta(false);
-    setSugerencias(null);
-    aplicarCliente(cliente);
+    const nuevoEstado = estadoTrasBuscar({ ok: true, respuesta });
+    if (respuesta.cliente && nuevoEstado === "encontrado") aplicarCliente({ ...respuesta.cliente, identificacion: ident });
+    if (respuesta.cliente && nuevoEstado === "otro-local") setDeOtroLocal({ ...respuesta.cliente, identificacion: ident });
+    setEstado(nuevoEstado);
   }
 
-  const mostrarLista = listaAbierta && !!sugerencias && sugerencias.length > 0;
-  const ayudaNombre =
-    estadoBusqueda === "encontrado"
-      ? "✔ Cliente encontrado: revisa que sus datos estén al día."
-      : sugerencias && sugerencias.length === 0
-        ? "No hay clientes con ese nombre: es un cliente nuevo, completa sus datos."
-        : mostrarLista
-          ? "Elige al cliente de la lista, o sigue escribiendo si es nuevo."
-          : "Si el cliente ya compró antes, aparecerá en una lista al escribir su nombre.";
+  // Búsqueda automática: 6 dígitos o más y 500 ms sin escribir
+  useEffect(() => {
+    if (!escribiendo.current || !debeBuscarAlEscribir(valor.identificacion)) return;
+    const espera = setTimeout(() => buscar(valor.identificacion), ESPERA_BUSQUEDA_MS);
+    return () => clearTimeout(espera);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valor.identificacion]);
 
-  /* ------------------------- Búsqueda por identificación ------------------------- */
-
-  /** Busca al cliente cuando la persona termina de escribir la identificación. */
-  async function autocompletar() {
-    const ident = valor.identificacion.trim();
-    if (ident.length < 5) return;
-    setEstadoBusqueda("buscando");
-    try {
-      const { cliente } = await api<{ cliente: ClienteDatos | null }>(`/api/clientes/buscar-identificacion?identificacion=${encodeURIComponent(ident)}`);
-      if (cliente) {
-        escribiendoNombre.current = false;
-        setSugerencias(null);
-        aplicarCliente({ ...cliente, identificacion: ident });
-      } else {
-        setEstadoBusqueda("nuevo");
-      }
-    } catch {
-      setEstadoBusqueda("");
-    }
+  function usarDatosOtroLocal() {
+    if (!deOtroLocal) return;
+    aplicarCliente(deOtroLocal);
+    setDeOtroLocal(null);
+    setEstado("copiado");
   }
 
-  const ayudaIdentificacion =
-    estadoBusqueda === "buscando"
-      ? "Buscando cliente…"
-      : estadoBusqueda === "nuevo"
-        ? "Cliente nuevo: completa sus datos."
-        : "Si el cliente ya compró antes, sus datos se llenan solos.";
+  function noUsarDatosOtroLocal() {
+    setDeOtroLocal(null);
+    setEstado("nuevo");
+  }
 
   return (
     <fieldset className="grid items-start gap-5 md:grid-cols-2">
       <legend className="titulo-seccion mb-3 text-2xl font-bold">1. Datos del cliente</legend>
-      <div className="relative md:col-span-2">
+      <div className="grid gap-3 md:col-span-2">
         <Campo
-          etiqueta="Nombre del cliente"
+          etiqueta="Identificación del cliente"
+          inputMode="numeric"
           autoComplete="off"
-          role="combobox"
-          aria-autocomplete="list"
-          aria-expanded={mostrarLista}
-          aria-controls={idLista}
-          aria-activedescendant={mostrarLista && activa >= 0 ? `${idLista}-${activa}` : undefined}
-          value={valor.nombre}
+          value={valor.identificacion}
           onChange={(e) => {
-            escribiendoNombre.current = true;
-            cambiar("nombre", e.target.value);
-            if (estadoBusqueda === "encontrado") setEstadoBusqueda("");
+            const nueva = normalizarIdentificacion(e.target.value);
+            if (nueva === valor.identificacion) return; // p. ej. escribió una letra o un punto: no cambia nada
+            escribiendo.current = true;
+            peticion.current++; // si había una búsqueda en curso, su respuesta ya no aplica
+            ultimaBuscada.current = null; // cédula distinta: se puede volver a buscar (aunque la borre y la escriba igual)
+            cambiar("identificacion", nueva);
+            setEstado("");
+            setDeOtroLocal(null);
           }}
-          onFocus={() => {
-            if (sugerencias?.length) setListaAbierta(true);
-          }}
-          onBlur={() => setListaAbierta(false)}
+          onBlur={() => buscar(valor.identificacion)}
           onKeyDown={(e) => {
-            if (!mostrarLista) return;
-            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            if (e.key === "Enter") {
               e.preventDefault();
-              const paso = e.key === "ArrowDown" ? 1 : -1;
-              setActiva((a) => (a + paso + sugerencias!.length) % sugerencias!.length);
-            } else if (e.key === "Enter" && activa >= 0) {
-              e.preventDefault();
-              elegirSugerencia(sugerencias![activa]);
-            } else if (e.key === "Escape") {
-              e.preventDefault();
-              setListaAbierta(false);
+              buscar(valor.identificacion);
             }
           }}
-          error={errores.nombre}
-          ayuda={ayudaNombre}
+          error={errores.identificacion ?? (estado === "error" ? AYUDA_IDENTIFICACION.error : undefined)}
+          ayuda={AYUDA_IDENTIFICACION[estado]}
           obligatorio
         />
-        {mostrarLista && (
-          <ul
-            id={idLista}
-            role="listbox"
-            aria-label="Clientes encontrados"
-            className="absolute inset-x-0 z-20 mt-1 max-h-80 overflow-y-auto rounded-xl border-2 border-marca-700 bg-tarjeta shadow-xl"
-          >
-            {sugerencias!.map((c, i) => (
-              <li
-                key={c.identificacion}
-                id={`${idLista}-${i}`}
-                role="option"
-                aria-selected={i === activa}
-                // onMouseDown: elige antes de que el campo pierda el foco y se cierre la lista
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  elegirSugerencia(c);
-                }}
-                className={`flex min-h-12 cursor-pointer flex-col justify-center border-b border-linea px-4 py-2 last:border-b-0 ${
-                  i === activa ? "bg-superficie-apagada outline-2 -outline-offset-2 outline-marca-700" : "hover:bg-superficie-apagada"
-                }`}
-              >
-                <span className="text-lg font-bold text-texto">{c.nombre}</span>
-                <span className="text-base text-texto-suave">
-                  Identificación {c.identificacion} · Tel. {c.telefono}
-                </span>
-              </li>
-            ))}
-          </ul>
+        {deOtroLocal && estado === "otro-local" && (
+          <Mensaje tono="info" titulo="Este cliente está registrado en otro local. ¿Usar sus datos?">
+            <p>
+              {deOtroLocal.nombre} · Tel. {deOtroLocal.telefono}
+            </p>
+            <p className="text-base">Al facturar quedará registrado también en este local, con su propio historial.</p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              <Boton type="button" pequeno onClick={usarDatosOtroLocal}>
+                Usar sus datos
+              </Boton>
+              <Boton type="button" pequeno variante="secundario" onClick={noUsarDatosOtroLocal}>
+                No, escribirlos
+              </Boton>
+            </div>
+          </Mensaje>
         )}
       </div>
       <Campo
-        etiqueta="Identificación del cliente"
-        inputMode="numeric"
+        etiqueta="Nombre del cliente"
         autoComplete="off"
-        value={valor.identificacion}
-        onChange={(e) => {
-          cambiar("identificacion", e.target.value.replace(/\D/g, ""));
-          setEstadoBusqueda("");
-        }}
-        onBlur={autocompletar}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            autocompletar();
-          }
-        }}
-        error={errores.identificacion}
-        ayuda={ayudaIdentificacion}
+        value={valor.nombre}
+        onChange={(e) => cambiar("nombre", e.target.value)}
+        error={errores.nombre}
         obligatorio
       />
       <Campo

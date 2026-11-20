@@ -17,7 +17,7 @@ import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-o
 import { db } from "@/db";
 import { abonos, clientes, cuotas, facturaItems, facturas, locales, marcas, productos, sectores } from "@/db/schema";
 import { ApiError, type VendedorSesion } from "@/lib/api";
-import { camposBusquedaCliente, escaparLike, normalizarTexto } from "@/lib/formato";
+import { camposBusquedaCliente, escaparLike, normalizarTexto, soloDigitos } from "@/lib/formato";
 import type { ClienteDatos, FacturaDetalle, FacturaResumen, MedioPago, ResultadoAnulacion } from "@/tipos";
 import { registrarMovimientos } from "./movimientos";
 import { resolverPago } from "./pagos";
@@ -50,10 +50,14 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
     if (!sector) throw new ApiError(400, "El sector elegido no existe o está desactivado en este local.");
 
     /* 1. Cliente: se crea o se actualizan sus datos (con sus columnas de búsqueda al día) */
+    // La cédula se guarda y se compara solo con dígitos: así el índice único (local, cédula) no deja
+    // crear el mismo cliente dos veces por puntos o espacios. Un cliente copiado de otro local entra
+    // aquí como cliente nuevo de este local (no se mezclan historiales).
+    const identificacion = soloDigitos(datos.cliente.identificacion);
     const busqueda = camposBusquedaCliente(datos.cliente.nombre, datos.cliente.telefono);
     const [cliente] = await tx
       .insert(clientes)
-      .values({ localId, ...datos.cliente, ...busqueda })
+      .values({ localId, ...datos.cliente, identificacion, ...busqueda })
       .onConflictDoUpdate({
         target: [clientes.localId, clientes.identificacion],
         set: {
