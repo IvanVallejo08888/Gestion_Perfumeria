@@ -1,4 +1,7 @@
-/** POST /api/creditos/:id/abonos — Registrar un abono. Si el saldo llega a 0, el crédito queda COMPLETADO. */
+/**
+ * POST /api/creditos/:id/abonos — Registrar un abono. Si el saldo llega a 0, el crédito queda COMPLETADO.
+ * Devuelve { factura, abono }: la factura actualizada y el comprobante del abono recién creado.
+ */
 import { comoVendedor, leerCuerpo, manejador, ok } from "@/lib/api";
 import { abonoSchema } from "@/lib/validaciones";
 import { registrarAbono } from "@/server/servicios/creditos";
@@ -6,5 +9,5 @@ import { registrarAbono } from "@/server/servicios/creditos";
 export const POST = manejador<{ id: string }>("VENDEDOR", async ({ req, usuario, params }) => {
   const vendedor = comoVendedor(usuario);
   const { valor, nota, ...pago } = await leerCuerpo(req, abonoSchema);
-  return ok({ factura: await registrarAbono(vendedor, params.id, valor, pago, nota) }, 201);
+  return ok(await registrarAbono(vendedor, params.id, valor, pago, nota), 201);
 });

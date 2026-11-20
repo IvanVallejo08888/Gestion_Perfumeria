@@ -303,8 +303,14 @@ export const MANUAL: SeccionManual[] = [
           "Escribe el **Valor del abono**.",
           "Elige el **Medio de pago del abono**: Efectivo, Transferencia o Mixto.",
           "Si quieres, escribe una **Nota**.",
-          "Toca **Registrar abono**. El sistema muestra el nuevo saldo.",
+          "Toca **Registrar abono**. Se abre la ventana **¡Abono registrado!** con el comprobante del abono.",
+          "Toca **Enviar por WhatsApp al cliente** para mandarle el comprobante como mensaje, o usa **Compartir imagen**, **Compartir PDF**, **Descargar PDF** o **Imprimir**.",
         ],
+      },
+      {
+        tipo: "parrafo",
+        texto:
+          "El comprobante muestra el valor abonado, el medio de pago, el total abonado y el **Saldo pendiente** que quedó. No muestra las cuotas. Si con ese abono el cliente terminó de pagar, dice **¡CRÉDITO PAGADO POR COMPLETO!** y le agradece por cumplir.",
       },
       {
         tipo: "parrafo",
@@ -318,13 +324,13 @@ export const MANUAL: SeccionManual[] = [
           "En la tarjeta del crédito toca **Cuotas y abonos**.",
           "En **Plan de pagos** cada cuota dice si está **Pagada**, **Pendiente** o cuánto lleva abonado.",
           "Para mover un cobro, cambia la **Fecha y hora de cobro** de esa cuota y toca **Guardar fecha**. No se puede cambiar la fecha de una cuota ya pagada.",
-          "Más abajo, **Abonos recibidos** muestra cada pago que ha hecho el cliente.",
+          "Más abajo, **Abonos recibidos** muestra cada pago que ha hecho el cliente. Con **Ver comprobante** vuelves a abrir el comprobante de ese abono para compartirlo; muestra el saldo que quedó ese día.",
         ],
       },
       {
         tipo: "parrafo",
         texto:
-          "**Ver factura** abre la factura del crédito con el plan de pagos y el saldo al día, lista para enviársela al cliente como estado de cuenta.",
+          "**Ver factura** abre la factura del crédito con lo abonado y el saldo al día (sin las cuotas), lista para enviársela al cliente como estado de cuenta. Las fechas de las cuotas se siguen usando aquí y en los avisos de cobro.",
       },
     ],
   },

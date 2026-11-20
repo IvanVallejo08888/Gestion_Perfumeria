@@ -2,6 +2,8 @@
  * Avisos flotantes ("toasts") que confirman acciones: "Factura registrada", "Error al guardar"…
  * Se anuncian automáticamente a lectores de pantalla (aria-live). Los de éxito e información
  * duran 8 segundos; los de error se quedan hasta que la persona los cierra.
+ * En celular salen ABAJO y más compactos, para no tapar el encabezado ni el contenido;
+ * desde tableta (sm) salen arriba a la derecha, como siempre.
  */
 "use client";
 
@@ -55,21 +57,21 @@ export function ProveedorAvisos({ children }: { children: ReactNode }) {
       {children}
       <div
         aria-live="polite"
-        className="pointer-events-none fixed inset-x-3 top-16 z-[200] flex flex-col items-center gap-2 sm:inset-x-auto sm:right-4 sm:items-end"
+        className="pointer-events-none fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[200] flex flex-col items-center gap-2 sm:inset-x-auto sm:top-16 sm:right-4 sm:bottom-auto sm:items-end"
       >
         {avisos.map((a) => (
           <div
             key={a.id}
             role={a.tipo === "error" ? "alert" : "status"}
-            className={`pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-xl border-2 px-4 py-3 text-lg font-bold shadow-lg ${ESTILOS[a.tipo]}`}
+            className={`pointer-events-auto flex w-full max-w-md items-center gap-2 rounded-xl border-2 py-1 pr-1 pl-3 text-base font-bold shadow-lg sm:items-start sm:gap-3 sm:px-4 sm:py-3 sm:text-lg ${ESTILOS[a.tipo]}`}
           >
-            <Icono nombre={a.tipo === "exito" ? "check" : a.tipo === "error" ? "alerta" : "info"} className="mt-0.5 size-6" />
+            <Icono nombre={a.tipo === "exito" ? "check" : a.tipo === "error" ? "alerta" : "info"} className="size-5 shrink-0 sm:mt-0.5 sm:size-6" />
             <p className="flex-1">{a.texto}</p>
-            {/* Área táctil de 44 px (WCAG 2.5.5), aunque el ícono sea pequeño */}
+            {/* Área táctil de 48 px, aunque el ícono sea pequeño */}
             <button
               type="button"
               onClick={() => cerrar(a.id)}
-              className="-my-1.5 -mr-2 flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-marca-50"
+              className="flex size-12 shrink-0 items-center justify-center rounded-lg hover:bg-marca-50 sm:-my-2 sm:-mr-2"
               aria-label="Cerrar aviso"
             >
               <Icono nombre="cerrar" className="size-6" />
