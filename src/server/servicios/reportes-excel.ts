@@ -4,6 +4,10 @@
  * Reporte POR LOCAL (anual o mensual):
  *  - Resumen, Facturas, Productos vendidos, Ventas por categoría, Abonos, Ventas por vendedor, Gastos y Gastos personales → datos del periodo elegido.
  *  - Cartera e Inventario → foto del momento en que se genera (lo que se debe y lo que hay hoy).
+ *  - Deudas (las adquiridas en el periodo + las pendientes hoy), Pagos de deudas y Caja diaria.
+ *
+ * Regla de las deudas (gastos a crédito): los gastos del periodo = gastos de contado + pagos de deudas del
+ * periodo. En la hoja «Gastos» un gasto a crédito aparece con medio «Crédito» pero NO suma en su total.
  *
  * Reporte CONSOLIDADO (solo administrador): todos los locales comparados + ventas por categoría + cartera de todos los locales.
  *
@@ -18,24 +22,29 @@ import { and, asc, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { abonos, cuotas, facturaItems, facturas, locales, marcas, productos } from "@/db/schema";
 import { ETIQUETA_CATEGORIA, ETIQUETA_CONCENTRACION, ETIQUETA_GENERO } from "@/lib/clasificacion";
-import { fecha, fechaDia, fechaHora, MESES, numeroFactura, rangoPeriodo } from "@/lib/formato";
-import { textoMedioPago } from "@/lib/pagos";
+import { cajaPorDia } from "@/lib/caja";
+import { estaVencida, textoFormaPagoFinal, TEXTO_ESTADO_DEUDA } from "@/lib/deudas";
+import { fecha, fechaDia, fechaHora, MESES, numeroFactura, rangoDias, rangoPeriodo } from "@/lib/formato";
+import { textoMedioPago, textoMedioPagoGasto } from "@/lib/pagos";
+import { movimientosCaja } from "./caja";
+import { deudasParaReporte, pagosDeudasParaReporte } from "./deudas";
 import { ventasPorCategoria, type VentasPorCategoria } from "./dashboard";
 import { obtenerEstadisticas } from "./estadisticas";
 import { gastosDelPeriodo } from "./gastos";
 import { listarLocales, obtenerLocal } from "./locales";
 
-const FORMATO_PESOS = '"$"#,##0';
+export const FORMATO_PESOS = '"$"#,##0';
 const COLOR_ENCABEZADO = "FF1E3A8A"; // azul oscuro
 const COLOR_TOTAL = "FFE0E7FF"; // azul claro
 const COLOR_ALERTA = "FFFEE2E2"; // rojo claro
 const COLOR_AVISO = "FFFEF3C7"; // amarillo claro
+const COLOR_EXITO = "FFD1FAE5"; // verde claro
 const UN_DIA = 24 * 60 * 60 * 1000;
 
 /* ============================== Utilidades ============================== */
 
 /** Aplica estilo a la fila de títulos de una hoja. */
-function estilizarEncabezado(hoja: ExcelJS.Worksheet) {
+export function estilizarEncabezado(hoja: ExcelJS.Worksheet) {
   const fila = hoja.getRow(1);
   fila.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 12 };
   fila.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_ENCABEZADO } };
@@ -57,7 +66,7 @@ function colorear(fila: ExcelJS.Row, argb: string) {
   fila.fill = { type: "pattern", pattern: "solid", fgColor: { argb } };
 }
 
-function nota(hoja: ExcelJS.Worksheet, texto: string) {
+export function nota(hoja: ExcelJS.Worksheet, texto: string) {
   hoja.addRow([]);
   hoja.addRow([texto]).font = { italic: true, color: { argb: "FF4B5563" } };
 }
@@ -66,16 +75,16 @@ function sumarCampo<T>(lista: T[], campo: (x: T) => number) {
   return lista.reduce((acc, x) => acc + campo(x), 0);
 }
 
-function nombreSeguro(texto: string) {
+export function nombreSeguro(texto: string) {
   return texto.replace(/[^\p{L}\p{N}]+/gu, "_");
 }
 
-async function aArchivo(libro: ExcelJS.Workbook, nombreArchivo: string) {
+export async function aArchivo(libro: ExcelJS.Workbook, nombreArchivo: string) {
   const buffer = await libro.xlsx.writeBuffer();
   return { buffer: Buffer.from(buffer as ArrayBuffer), nombreArchivo };
 }
 
-function nuevoLibro() {
+export function nuevoLibro() {
   const libro = new ExcelJS.Workbook();
   libro.creator = "Gestión de Perfumerías";
   libro.created = new Date();
@@ -224,6 +233,9 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
     categorias,
     ventasAnuladas,
     gastosEliminados,
+    deudasReporte,
+    pagosDeudas,
+    caja,
   ] = await Promise.all([
     obtenerEstadisticas(localId, anio),
     db.select().from(facturas).where(enPeriodo).orderBy(asc(facturas.creadoEn)),
@@ -302,6 +314,9 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
     ventasPorCategoria({ localId, anio, mes }),
     db.select().from(facturas).where(and(delPeriodo, eq(facturas.anulada, true))).orderBy(asc(facturas.creadoEn)),
     gastosDelPeriodo(localId, anio, mes, true),
+    deudasParaReporte(localId, rangoDias(anio, mes).desde, rangoDias(anio, mes).hasta),
+    pagosDeudasParaReporte(localId, inicio, fin),
+    movimientosCaja(localId, rangoDias(anio, mes).desde, rangoDias(anio, mes).hasta),
   ]);
 
   const libro = nuevoLibro();
@@ -319,9 +334,11 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
     { header: "Total recaudado", key: "totalRecaudado", width: 20, style: { numFmt: FORMATO_PESOS } },
     { header: "Recibido en efectivo", key: "recibidoEfectivo", width: 20, style: { numFmt: FORMATO_PESOS } },
     { header: "Recibido en transferencia", key: "recibidoTransferencia", width: 20, style: { numFmt: FORMATO_PESOS } },
-    { header: "Gastos del negocio", key: "gastos", width: 20, style: { numFmt: FORMATO_PESOS } },
+    { header: "Gastos del negocio (contado + pagos de deudas)", key: "gastos", width: 22, style: { numFmt: FORMATO_PESOS } },
+    { header: "De eso, pagos de deudas", key: "pagosDeudas", width: 20, style: { numFmt: FORMATO_PESOS } },
     { header: "Utilidad (recibido − gastos del negocio)", key: "utilidad", width: 22, style: { numFmt: FORMATO_PESOS } },
     { header: "Gastos personales (no se restan)", key: "gastosPersonales", width: 22, style: { numFmt: FORMATO_PESOS } },
+    { header: "Deudas adquiridas (informativo, no se restan)", key: "deudasAdquiridas", width: 24, style: { numFmt: FORMATO_PESOS } },
   ];
   const mesesIncluidos = mes ? estadisticas.meses.filter((m) => m.mes === mes) : estadisticas.meses;
   resumen.addRows(mesesIncluidos);
@@ -336,6 +353,10 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
   resumen.addRow([`Periodo: ${periodo}`]);
   resumen.addRow([`Créditos pendientes hoy: ${estadisticas.creditosPendientes.cantidad}`]);
   resumen.addRow([`Saldo por cobrar hoy: $ ${estadisticas.creditosPendientes.saldo.toLocaleString("es-CO")}`]);
+  resumen.addRow([
+    `Deudas por pagar hoy: ${estadisticas.deudasPorPagar.cantidad} · saldo $ ${estadisticas.deudasPorPagar.saldo.toLocaleString("es-CO")}`,
+  ]);
+  resumen.addRow(["Los gastos a crédito no se suman como gasto: se suma cada pago de la deuda, el día en que se hace (ver «Deudas»)."]);
   resumen.addRow([`Generado: ${fechaHora(new Date())}`]);
 
   /* ---------- Hoja 2: Facturas ---------- */
@@ -471,27 +492,42 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
       { header: "Medio de pago", key: "medioPago", width: 16 },
       { header: "Valor", key: "valor", width: 16, style: { numFmt: FORMATO_PESOS } },
       { header: "Registrado por", key: "usuario", width: 24 },
+      { header: "Nota", key: "nota", width: 34 },
     ];
-    hoja.addRows(
-      lista.map((g) => ({
+    for (const g of lista) {
+      const fila = hoja.addRow({
         fecha: fechaDia(g.fecha),
         categoria: g.categoriaNombre,
         descripcion: g.descripcion ?? "",
-        medioPago: textoMedioPago(g.medioPago),
+        medioPago: textoMedioPagoGasto(g.medioPago),
         valor: g.valor,
         usuario: g.usuarioNombre,
-      })),
-    );
+        // Un gasto a crédito no es dinero que salió ese día: no suma en el total de esta hoja
+        nota: g.medioPago === "CREDITO" ? "Se paga en cuotas, ver Deudas (no suma en el total)" : "",
+      });
+      if (g.medioPago === "CREDITO") fila.font = { italic: true, color: { argb: "FF4B5563" } };
+    }
     estilizarEncabezado(hoja);
-    if (lista.length) agregarTotal(hoja, { fecha: `TOTAL (${lista.length})`, valor: sumarCampo(lista, (g) => g.valor) });
+    const deContado = lista.filter((g) => g.medioPago !== "CREDITO");
+    if (lista.length) agregarTotal(hoja, { fecha: `TOTAL DE CONTADO (${deContado.length})`, valor: sumarCampo(deContado, (g) => g.valor) });
     nota(hoja, textoNota);
   };
-  hojaDeGastos("Gastos", listaGastos.filter((g) => !g.personal), `Periodo: ${periodo} · Gastos del negocio: se restan de la utilidad`);
+  const pagosNegocio = sumarCampo(pagosDeudas.filter((p) => !p.anulado && !p.personal), (p) => p.valor);
+  hojaDeGastos(
+    "Gastos",
+    listaGastos.filter((g) => !g.personal),
+    `Periodo: ${periodo} · Gastos del negocio: se restan de la utilidad. Los gastos a crédito no suman aquí; se suman sus pagos ($ ${pagosNegocio.toLocaleString("es-CO")} en el periodo, hoja «Pagos de deudas»).`,
+  );
   hojaDeGastos(
     "Gastos personales",
     listaGastos.filter((g) => g.personal),
     `Periodo: ${periodo} · Gastos propios de la dueña: se muestran aparte y NO se restan de la utilidad`,
   );
+
+  /* ---------- Deudas, Pagos de deudas y Caja diaria ---------- */
+  hojaDeudas(libro, deudasReporte, periodo);
+  hojaPagosDeudas(libro, pagosDeudas, periodo);
+  hojaCajaDiaria(libro, caja, periodo);
 
   /* ---------- Hoja 8: Cartera (hoy) ---------- */
   hojaCartera(libro, cartera, false);
@@ -584,7 +620,7 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
       fecha: fechaDia(g.fecha),
       categoria: g.categoriaNombre,
       valor: g.valor,
-      medioPago: textoMedioPago(g.medioPago),
+      medioPago: textoMedioPagoGasto(g.medioPago),
       motivo: g.motivoAnulacion ?? "",
       eliminadoPor: g.anuladoPorNombre ?? "",
       eliminadoEn: g.anuladoEn ? fechaHora(g.anuladoEn) : "",
@@ -598,6 +634,137 @@ export async function generarReporteExcel(localId: string, anio: number, mes?: n
 /* ====================== Ventas por categoría (dashboard) ====================== */
 
 /** Los mismos cortes del dashboard: público, tipo, marca (todas) y tamaño. */
+/* ======================= Hojas de deudas y caja ======================= */
+
+/** «Deudas»: las adquiridas en el periodo y las pendientes hoy. Amarillo = pendiente, verde = pagada, rojo = vencida o anulada. */
+function hojaDeudas(libro: ExcelJS.Workbook, lista: Awaited<ReturnType<typeof deudasParaReporte>>, periodo: string) {
+  const hoja = libro.addWorksheet("Deudas");
+  hoja.columns = [
+    { header: "Acreedor", key: "acreedor", width: 28 },
+    { header: "Fecha", key: "fecha", width: 13 },
+    { header: "Categoría", key: "categoria", width: 22 },
+    { header: "Descripción", key: "descripcion", width: 30 },
+    { header: "Total", key: "total", width: 15, style: { numFmt: FORMATO_PESOS } },
+    { header: "Pagado", key: "pagado", width: 15, style: { numFmt: FORMATO_PESOS } },
+    { header: "Saldo", key: "saldo", width: 15, style: { numFmt: FORMATO_PESOS } },
+    { header: "Estado", key: "estado", width: 14 },
+    { header: "Cuotas pagadas", key: "cuotas", width: 12 },
+    { header: "Forma de pago final", key: "formaPago", width: 24 },
+    { header: "Próxima fecha", key: "proxima", width: 20 },
+  ];
+  for (const d of lista) {
+    const vencida = d.estado === "PENDIENTE" && !!d.proximaCuota && estaVencida(new Date(d.proximaCuota.fechaVencimiento));
+    const fila = hoja.addRow({
+      acreedor: d.acreedor,
+      fecha: fechaDia(d.fecha),
+      categoria: d.categoriaNombre + (d.personal ? " (personal)" : ""),
+      descripcion: d.descripcion ?? "",
+      total: d.valorTotal,
+      pagado: d.estado === "ANULADA" ? 0 : d.pagado,
+      saldo: d.estado === "PENDIENTE" ? d.saldo : 0,
+      // El estado siempre va escrito (no solo el color)
+      estado: vencida ? "Vencida" : TEXTO_ESTADO_DEUDA[d.estado],
+      cuotas: `${d.cuotasPagadas} de ${d.totalCuotas}`,
+      formaPago: d.estado === "PAGADA" && d.resumenMedioPago ? textoFormaPagoFinal(d.resumenMedioPago) : "—",
+      proxima: d.proximaCuota ? fechaHora(d.proximaCuota.fechaVencimiento) : "—",
+    });
+    colorear(fila, d.estado === "PAGADA" ? COLOR_EXITO : d.estado === "ANULADA" || vencida ? COLOR_ALERTA : COLOR_AVISO);
+  }
+  estilizarEncabezado(hoja);
+  const vigentes = lista.filter((d) => d.estado !== "ANULADA");
+  if (lista.length) {
+    agregarTotal(hoja, {
+      acreedor: `TOTAL (${vigentes.length} deudas, sin anuladas)`,
+      total: sumarCampo(vigentes, (d) => d.valorTotal),
+      pagado: sumarCampo(vigentes, (d) => d.pagado),
+      saldo: sumarCampo(vigentes.filter((d) => d.estado === "PENDIENTE"), (d) => d.saldo),
+    });
+  }
+  nota(
+    hoja,
+    `Deudas adquiridas en ${periodo} y todas las pendientes al ${fechaHora(new Date())} · Amarillo = pendiente · Verde = pagada · Rojo = vencida o anulada · El total de una deuda NO se suma como gasto: se suman sus pagos.`,
+  );
+}
+
+/** «Pagos de deudas»: cada pago del periodo (los anulados, en rojo, no suman). */
+function hojaPagosDeudas(libro: ExcelJS.Workbook, lista: Awaited<ReturnType<typeof pagosDeudasParaReporte>>, periodo: string) {
+  const hoja = libro.addWorksheet("Pagos de deudas");
+  hoja.columns = [
+    { header: "Fecha", key: "fecha", width: 22 },
+    { header: "Acreedor", key: "acreedor", width: 28 },
+    { header: "Valor", key: "valor", width: 15, style: { numFmt: FORMATO_PESOS } },
+    { header: "Medio", key: "medio", width: 15 },
+    { header: "Efectivo", key: "efectivo", width: 15, style: { numFmt: FORMATO_PESOS } },
+    { header: "Transferencia", key: "transferencia", width: 15, style: { numFmt: FORMATO_PESOS } },
+    { header: "Registrado por", key: "usuario", width: 24 },
+    { header: "Estado", key: "estado", width: 30 },
+  ];
+  for (const p of lista) {
+    const fila = hoja.addRow({
+      fecha: fechaHora(p.fecha),
+      acreedor: p.acreedor + (p.personal ? " (personal)" : ""),
+      valor: p.valor,
+      medio: textoMedioPago(p.medioPago),
+      efectivo: p.valorEfectivo,
+      transferencia: p.valorTransferencia,
+      usuario: p.usuarioNombre,
+      estado: p.anulado ? `Anulado: ${p.motivoAnulacion ?? ""}` : "Vigente",
+    });
+    if (p.anulado) colorear(fila, COLOR_ALERTA);
+  }
+  estilizarEncabezado(hoja);
+  const vigentes = lista.filter((p) => !p.anulado);
+  if (lista.length) {
+    agregarTotal(hoja, {
+      fecha: `TOTAL (${vigentes.length} pagos vigentes)`,
+      valor: sumarCampo(vigentes, (p) => p.valor),
+      efectivo: sumarCampo(vigentes, (p) => p.valorEfectivo),
+      transferencia: sumarCampo(vigentes, (p) => p.valorTransferencia),
+    });
+  }
+  nota(hoja, `Periodo: ${periodo} · Cada pago salió de la caja el día del pago y se suma a los gastos (los personales, a gastos personales) · Rojo = anulado, no suma`);
+}
+
+/** «Caja diaria»: un día por fila con entradas, salidas y saldo, en efectivo y transferencia. */
+function hojaCajaDiaria(libro: ExcelJS.Workbook, caja: Awaited<ReturnType<typeof movimientosCaja>>, periodo: string) {
+  const hoja = libro.addWorksheet("Caja diaria");
+  const dinero = (header: string, key: string) => ({ header, key, width: 16, style: { numFmt: FORMATO_PESOS } });
+  hoja.columns = [
+    { header: "Día", key: "dia", width: 13 },
+    dinero("Entradas efectivo", "entradasEfectivo"),
+    dinero("Entradas transferencia", "entradasTransferencia"),
+    dinero("Salidas efectivo", "salidasEfectivo"),
+    dinero("Salidas transferencia", "salidasTransferencia"),
+    dinero("Saldo efectivo", "saldoEfectivo"),
+    dinero("Saldo transferencia", "saldoTransferencia"),
+    dinero("Saldo total", "saldoTotal"),
+  ];
+  const filas = cajaPorDia(caja.movimientos);
+  for (const f of filas) {
+    const fila = hoja.addRow({ ...f, dia: fechaDia(f.dia) });
+    if (f.saldoTotal < 0) colorear(fila, COLOR_ALERTA);
+  }
+  estilizarEncabezado(hoja);
+  if (filas.length) {
+    const suma = (k: Exclude<keyof (typeof filas)[number], "dia">) => sumarCampo(filas, (f) => f[k]);
+    agregarTotal(hoja, {
+      dia: `TOTAL (${filas.length} días)`,
+      entradasEfectivo: suma("entradasEfectivo"),
+      entradasTransferencia: suma("entradasTransferencia"),
+      salidasEfectivo: suma("salidasEfectivo"),
+      salidasTransferencia: suma("salidasTransferencia"),
+      saldoEfectivo: suma("saldoEfectivo"),
+      saldoTransferencia: suma("saldoTransferencia"),
+      saldoTotal: suma("saldoTotal"),
+    });
+  }
+  const proveedores = sumarCampo(caja.pagosProveedores, (p) => p.efectivo + p.transferencia);
+  nota(
+    hoja,
+    `Periodo: ${periodo} · Entradas = ventas de contado + abonos · Salidas = gastos de contado + pagos de deudas (los gastos a crédito no salen de la caja) · Rojo = el día salió más de lo que entró${proveedores ? ` · Pagos a proveedores del periodo (informativo, no se restan): $ ${proveedores.toLocaleString("es-CO")}` : ""}`,
+  );
+}
+
 function hojaVentasPorCategoria(libro: ExcelJS.Workbook, categorias: VentasPorCategoria, periodo: string) {
   const hoja = libro.addWorksheet("Ventas por categoría");
   hoja.columns = [
@@ -655,6 +822,7 @@ export async function generarReporteConsolidado(anio: number, mes?: number) {
     { header: "% de las ventas", key: "porcentaje", width: 12, style: { numFmt: "0.0%" } },
     { header: "Créditos pendientes hoy", key: "creditosPendientes", width: 14 },
     { header: "Saldo por cobrar hoy", key: "saldoPorCobrar", width: 18, style: { numFmt: FORMATO_PESOS } },
+    { header: "Deudas por pagar hoy", key: "deudasPorPagar", width: 18, style: { numFmt: FORMATO_PESOS } },
   ];
   const filas = estadisticas.map((e) => {
     const datos = mes ? e.meses[mes - 1] : e.totales;
@@ -669,6 +837,7 @@ export async function generarReporteConsolidado(anio: number, mes?: number) {
       totalRecaudado: datos.totalRecaudado,
       creditosPendientes: e.creditosPendientes.cantidad,
       saldoPorCobrar: e.creditosPendientes.saldo,
+      deudasPorPagar: e.deudasPorPagar.saldo,
     };
   });
   filas.sort((a, b) => b.totalVentas - a.totalVentas);
@@ -687,8 +856,9 @@ export async function generarReporteConsolidado(anio: number, mes?: number) {
     porcentaje: totalVentas ? 1 : 0,
     creditosPendientes: sumarCampo(filas, (f) => f.creditosPendientes),
     saldoPorCobrar: sumarCampo(filas, (f) => f.saldoPorCobrar),
+    deudasPorPagar: sumarCampo(filas, (f) => f.deudasPorPagar),
   });
-  nota(hoja, `Periodo: ${textoPeriodo(anio, mes)} · Créditos y saldo por cobrar al día de hoy · Generado: ${fechaHora(new Date())}`);
+  nota(hoja, `Periodo: ${textoPeriodo(anio, mes)} · Créditos, saldo por cobrar y deudas por pagar al día de hoy · Generado: ${fechaHora(new Date())}`);
 
   /* ---------- Hoja 2: Ventas por categoría de todos los locales ---------- */
   hojaVentasPorCategoria(libro, categorias, textoPeriodo(anio, mes));

@@ -55,7 +55,7 @@ export const MANUAL: SeccionManual[] = [
           [
             "Vendedor",
             "El trabajo de todos los días: vender, cobrar, manejar inventario y gastos de su local",
-            "Facturación, Historial de ventas, Créditos y abonos, Clientes, Gastos, Notificaciones, Inventario, Reportes y estadísticas, Ajustes",
+            "Facturación, Historial de ventas, Créditos y abonos, Clientes, Gastos, Caja del día, Notificaciones, Inventario, Reportes y estadísticas, Ajustes",
           ],
           [
             "Administrador",
@@ -303,8 +303,14 @@ export const MANUAL: SeccionManual[] = [
           "Escribe el **Valor del abono**.",
           "Elige el **Medio de pago del abono**: Efectivo, Transferencia o Mixto.",
           "Si quieres, escribe una **Nota**.",
-          "Toca **Registrar abono**. El sistema muestra el nuevo saldo.",
+          "Toca **Registrar abono**. Se abre la ventana **¡Abono registrado!** con el comprobante del abono.",
+          "Toca **Enviar por WhatsApp al cliente** para mandarle el comprobante como mensaje, o usa **Compartir imagen**, **Compartir PDF**, **Descargar PDF** o **Imprimir**.",
         ],
+      },
+      {
+        tipo: "parrafo",
+        texto:
+          "El comprobante muestra el valor abonado, el medio de pago, el total abonado y el **Saldo pendiente** que quedó. No muestra las cuotas. Si con ese abono el cliente terminó de pagar, dice **¡CRÉDITO PAGADO POR COMPLETO!** y le agradece por cumplir.",
       },
       {
         tipo: "parrafo",
@@ -318,13 +324,13 @@ export const MANUAL: SeccionManual[] = [
           "En la tarjeta del crédito toca **Cuotas y abonos**.",
           "En **Plan de pagos** cada cuota dice si está **Pagada**, **Pendiente** o cuánto lleva abonado.",
           "Para mover un cobro, cambia la **Fecha y hora de cobro** de esa cuota y toca **Guardar fecha**. No se puede cambiar la fecha de una cuota ya pagada.",
-          "Más abajo, **Abonos recibidos** muestra cada pago que ha hecho el cliente.",
+          "Más abajo, **Abonos recibidos** muestra cada pago que ha hecho el cliente. Con **Ver comprobante** vuelves a abrir el comprobante de ese abono para compartirlo; muestra el saldo que quedó ese día.",
         ],
       },
       {
         tipo: "parrafo",
         texto:
-          "**Ver factura** abre la factura del crédito con el plan de pagos y el saldo al día, lista para enviársela al cliente como estado de cuenta.",
+          "**Ver factura** abre la factura del crédito con lo abonado y el saldo al día (sin las cuotas), lista para enviársela al cliente como estado de cuenta. Las fechas de las cuotas se siguen usando aquí y en los avisos de cobro.",
       },
     ],
   },
@@ -481,7 +487,7 @@ export const MANUAL: SeccionManual[] = [
           "En el menú toca **Gastos**.",
           "En **Registrar gasto** elige la **Categoría**.",
           "Escribe el **Valor**.",
-          "Elige el **Medio de pago**: Efectivo o Transferencia.",
+          "Elige el **Medio de pago**: Efectivo, Transferencia o **Crédito** (si lo vas a pagar después; ver más abajo).",
           "Revisa la **Fecha**. Puede ser de hoy o de días anteriores, nunca futura.",
           "Si quieres, escribe una **Descripción**.",
           "Toca **Registrar gasto**.",
@@ -491,7 +497,52 @@ export const MANUAL: SeccionManual[] = [
       {
         tipo: "parrafo",
         texto:
-          "Elige el **Mes**, el **Año** y, si quieres, una **Categoría**. Arriba aparecen el **Total de gastos**, lo **Pagado en efectivo** y lo **Pagado por transferencia**.",
+          "Elige el **Mes**, el **Año** y, si quieres, una **Categoría**. Arriba aparecen el **Total de gastos**, lo **Pagado en efectivo** y lo **Pagado por transferencia**. Ese total ya incluye lo que pagaste de tus deudas en el mes.",
+      },
+      { tipo: "subtitulo", texto: "Gasto a crédito (una deuda)" },
+      {
+        tipo: "parrafo",
+        texto:
+          "Úsalo cuando compras algo y lo pagas después, por cuotas (por ejemplo, mercancía de una distribuidora). **Ese día no sale plata de la caja**: el gasto se cuenta cuando pagas cada cuota.",
+      },
+      {
+        tipo: "numerada",
+        items: [
+          "En **Registrar gasto** elige la categoría y escribe el **Valor total de la deuda**.",
+          "En **Medio de pago** toca **Crédito**.",
+          "En **¿A quién le debes?** escribe el nombre o toca uno de los nombres que aparecen debajo.",
+          "En **Plan de pagos** elige cuántas cuotas, cada cuánto pagas y la fecha del primer pago. Las fechas y los valores se llenan solos y puedes cambiarlos; las cuotas deben sumar el total.",
+          "Si es una deuda antigua, puedes poner fechas pasadas: verás «Esta cuota ya está vencida».",
+          "Toca **Registrar gasto a crédito**.",
+        ],
+      },
+      { tipo: "subtitulo", texto: "Pagar una deuda" },
+      {
+        tipo: "numerada",
+        items: [
+          "En **Gastos** toca la pestaña **Deudas**. Arriba ves el total que debes, el próximo pago y las cuotas vencidas.",
+          "En la deuda toca **Pagar**.",
+          "Escribe el valor o toca **Pagar cuota** o **Pagar todo**.",
+          "Elige cómo pagaste: Efectivo, Transferencia o Mixto (en Mixto escribes la transferencia y el efectivo se calcula solo).",
+          "Deja la fecha en **Hoy, ahora** o elige **Otra fecha** si olvidaste registrar un pago.",
+          "Toca **Registrar pago**. Ese dinero sale de la caja del día del pago.",
+        ],
+      },
+      {
+        tipo: "parrafo",
+        texto:
+          "Cuando terminas de pagar aparece **¡Deuda pagada por completo!** y la deuda pasa a **Pagadas**, con la fecha y la forma de pago: **Gastos en efectivo**, **Gastos por transferencia** o **Mixto**. **Ver cuotas y pagos** muestra cada pago; si uno se registró por error, tócalo en **Anular pago** y escribe el motivo. **Editar fechas** cambia las fechas de las cuotas que faltan.",
+      },
+      {
+        tipo: "parrafo",
+        texto:
+          "Para eliminar un gasto a crédito que ya tiene pagos, primero anula sus pagos. Así la caja de cada día queda correcta.",
+      },
+      { tipo: "subtitulo", texto: "Caja del día" },
+      {
+        tipo: "parrafo",
+        texto:
+          "En el menú toca **Caja del día** y elige el día. Verás las **Entradas** (ventas de contado y abonos), las **Salidas** (gastos de contado y pagos de deudas) y el **Saldo del día**, separado en efectivo y transferencia. El **Efectivo neto** es lo que debería haber de más en el cajón. Abajo está cada movimiento con su hora.",
       },
       { tipo: "subtitulo", texto: "Eliminar un gasto" },
       {
@@ -509,7 +560,7 @@ export const MANUAL: SeccionManual[] = [
       {
         tipo: "parrafo",
         texto:
-          "**Notificaciones** avisa dos cosas: a quién hay que cobrarle y qué perfumes se están acabando. El número junto a **Notificaciones** en el menú dice cuántos avisos hay y se actualiza cada minuto.",
+          "**Notificaciones** avisa tres cosas: a quién hay que cobrarle, qué deudas te toca pagar y qué perfumes se están acabando. El número junto a **Notificaciones** en el menú dice cuántos avisos hay y se actualiza cada minuto.",
       },
       {
         tipo: "tabla",
@@ -518,6 +569,7 @@ export const MANUAL: SeccionManual[] = [
           ["**Vencido**", "La fecha de cobro de una cuota ya pasó", "Toca **Ir a cobrar** y registra el abono cuando el cliente pague"],
           ["**Hoy**", "Hay una cuota para cobrar hoy", "Igual: **Ir a cobrar**"],
           ["**Próximo**", "Hay una cuota en los próximos 3 días", "Avísale al cliente con tiempo"],
+          ["**Pago de deuda**", "Una cuota de una deuda tuya vence (Vencido, Pagar hoy o Próximo)", "Toca **Ir a pagar**: se abre la ventana para registrar el pago"],
           ["**Agotado**", "Un perfume quedó en cero", "Toca **Ir al inventario** y agrega unidades cuando llegue mercancía"],
           ["**Stock bajo**", "A un perfume le quedan pocas unidades", "Pide más antes de que se agote"],
         ],

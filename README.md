@@ -55,7 +55,7 @@ npm run start
 | `npm run dev` | Servidor de desarrollo |
 | `npm run build` / `npm start` | Compilar y ejecutar en producción |
 | `npm run typecheck` | Revisar errores de TypeScript |
-| `npm test` | Pruebas unitarias (búsqueda de productos y clientes, teléfonos, paginación, medios de pago, mensaje de WhatsApp) |
+| `npm test` | Pruebas unitarias (búsqueda de productos y clientes, teléfonos, paginación, medios de pago, mensaje de WhatsApp, deudas y caja del día) |
 | `npm run iconos` | Regenerar los íconos de la PWA desde `src/app/icon.svg` |
 | `npm run db:migrate` | Aplicar migraciones pendientes |
 | `npm run db:generate` | Crear una migración nueva tras editar `src/db/schema.ts` |
@@ -83,6 +83,11 @@ Se puede ejecutar varias veces sin duplicar: las marcas que ya existen y los có
 
 ### Seguridad de sesión
 Cada petición se valida contra la base de datos: si el administrador **pausa, elimina o cambia la contraseña** de un usuario, su sesión se cierra al instante.
+
+### Protecciones adicionales
+- **Límite de intentos** (`src/server/servicios/limite-intentos.ts`, tabla `limite_intentos`): 5 contraseñas equivocadas para una cuenta → 15 min de bloqueo; 20 fallos desde una misma IP → 30 min; 5 registros por hora por IP; 5 intentos de «contraseña actual» al cambiarla → 15 min. El límite por IP usa `x-forwarded-for`, así que solo es confiable detrás de un proxy o hosting (Vercel, Nginx, Cloudflare).
+- **Encabezados de seguridad** en todas las respuestas (`next.config.ts`) y **CSP con nonce** en cada página (`src/middleware.ts`). Si agregas un servicio externo (otra fuente, un script, una API), hay que permitirlo en la CSP.
+- **Protección CSRF**: `manejador` rechaza los POST/PUT/PATCH/DELETE que no vienen de la propia aplicación.
 
 ### Facturación
 1. Datos del cliente (si ya compró antes, se autocompletan con la identificación). El **sector** se elige de la lista del local; si el local no tiene sectores, no se puede registrar la factura.
@@ -131,6 +136,28 @@ El vendedor los registra en **Gastos** (categoría, valor, medio de pago, fecha 
 
 Las estadísticas y el Excel muestran lo recibido en efectivo y en transferencia, los gastos y la **utilidad (recibido − gastos)**. El Excel incluye las hojas «Gastos» y «Gastos eliminados».
 
+### Gastos a crédito y deudas
+
+Un gasto se puede registrar con el medio de pago **Crédito** cuando se compra algo que se paga después (por ejemplo, mercancía de una distribuidora). El formulario pide **¿A quién le debes?** (con sugerencias de los acreedores ya usados y de los proveedores del local) y el **plan de pagos**: número de cuotas, frecuencia (semanal, cada 15 días, mensual o fechas personalizadas) y fecha del primer pago. Las fechas y los valores se calculan solos (partes iguales; la última cuota ajusta el redondeo) y se pueden editar; las cuotas deben sumar el total (se valida en el navegador y en el servidor). Para registrar deudas antiguas se permiten fechas pasadas, con el aviso «Esta cuota ya está vencida». Gasto, deuda y cuotas se guardan en **una** transacción.
+
+**Regla contable (se aplica en todo el sistema):**
+
+- Un gasto a crédito **no saca dinero de la caja** el día que se registra: solo crea la deuda.
+- El dinero sale de la caja **con cada pago**, el día del pago y con su medio (efectivo, transferencia o mixto).
+- **Gastos del periodo = gastos de contado del periodo + pagos de deudas hechos en el periodo.** El valor total de una deuda **nunca** se suma como gasto, así no se cuenta dos veces. La utilidad usa esta regla.
+- Aparte, solo como información: **deudas adquiridas en el periodo** y **deudas por pagar hoy** (saldo total).
+- Si la categoría es «Gastos personales», los pagos de esa deuda van a gastos personales (no se restan de la utilidad), pero sí salen de la caja.
+
+**Pagar:** en **Gastos → Deudas** (filtros Pendientes, Pagadas y Anuladas; arriba, el total adeudado, el próximo pago y las cuotas vencidas) cada deuda tiene **Pagar**, **Ver cuotas y pagos** y **Editar fechas**. El pago acepta Efectivo, Transferencia o Mixto, atajos «Pagar cuota N» y «Pagar todo», una fecha anterior para un pago olvidado (nunca futura ni anterior a la deuda) y una nota. El servidor bloquea la deuda (`SELECT … FOR UPDATE`), no acepta más que el saldo y aplica el pago a las cuotas en orden. Al llegar a 0 la deuda queda **Pagada**, con su fecha y la forma de pago final: **Gastos en efectivo**, **Gastos por transferencia** o **Mixto** (con el total de cada medio).
+
+**Anular:** un pago hecho por error se anula con motivo; las cuotas y el saldo se recalculan desde los pagos vigentes y, si la deuda estaba pagada, vuelve a pendiente. Un gasto a crédito **con pagos** no se puede eliminar: primero se anula cada pago (cada uno ya salió de la caja de un día concreto, y así queda un motivo por pago). Sin pagos, al eliminar el gasto la deuda queda **Anulada**.
+
+**Notificaciones:** las cuotas de deudas pendientes avisan como los cobros (**Vencido**, **Pagar hoy** y **Próximo**, dentro de 3 días), en la sección «Pagos de deudas», con **Ir a pagar** (abre la ventana de pago). Cuentan en la campana (las vencidas y las de hoy son urgentes) y en el aviso del navegador: «Hoy debes pagar $ X a …». Las deudas pagadas o anuladas no avisan.
+
+**Caja del día** (menú del vendedor): para un día elegido, las **entradas** (ventas de contado y abonos), las **salidas** (gastos de contado y pagos de deudas) y el **saldo** (efectivo neto, transferencia neta y total), con el detalle de cada movimiento. Los pagos a proveedores por compras de mercancía se muestran aparte, **solo como información**: la mercancía también se anota como gasto, y restarlos contaría dos veces el mismo dinero.
+
+**Endpoints:** `GET /api/deudas?estado=`, `GET /api/deudas/:id`, `POST /api/deudas/:id/pagos`, `POST /api/deudas/pagos/:id/anular`, `PUT /api/deudas/cuotas/:id`, `GET /api/deudas/acreedores` y `GET /api/caja?fecha=`. Todos filtran por el local del vendedor: una deuda de otro local responde 404.
+
 ### Créditos
 Búsqueda por identificación, abonos con medio de pago (se aplican a las cuotas en orden) y cambio de fechas de cobro. Al llegar el saldo a 0 pasa de **Pendiente** a **Completado** y aparece en el historial de ventas completadas.
 
@@ -164,7 +191,7 @@ CREATE INDEX IF NOT EXISTS clientes_nombre_trgm_idx ON clientes USING gin (nombr
 y se **reinicia la app**. El índice GIN no está en `schema.ts` (solo en la migración 0004): no uses `npm run db:push`, que lo borraría; usa `npm run db:migrate`.
 
 ### Notificaciones
-Cobros vencidos, del día y de los próximos 3 días (según las fechas de las cuotas) + productos agotados o con stock bajo. El contador del menú se actualiza cada minuto y, si se activan, llegan avisos del navegador.
+Cobros vencidos, del día y de los próximos 3 días (según las fechas de las cuotas) + pagos de deudas del negocio con los mismos niveles (ver *Gastos a crédito y deudas*) + productos agotados o con stock bajo. El contador del menú se actualiza cada minuto y, si se activan, llegan avisos del navegador (uno para cobros y otro para pagos de deudas; al tocar el de una deuda se abre su ventana de pago).
 
 ### Dashboard de reportes
 Arriba de las estadísticas, en **Reportes** (vendedor: su local · administrador: un local o «Todos los locales»), con el año y el mes elegidos:
@@ -187,19 +214,69 @@ Se descargan desde **Reportes**, del año completo o de un mes.
 
 | Hoja | Contenido |
 |---|---|
-| Resumen | Ventas de contado, créditos, abonos, recibido en efectivo/transferencia, gastos y utilidad mes a mes |
+| Resumen | Ventas de contado, créditos, abonos, recibido en efectivo/transferencia, gastos (contado + pagos de deudas), pagos de deudas, utilidad y deudas adquiridas (informativo) mes a mes, más las deudas por pagar hoy |
 | Facturas | Todas las facturas del periodo, con totales |
 | Productos vendidos | Unidades y valor vendido por producto (nombre completo de la venta, marca y ml) |
 | Ventas por categoría | Unidades y valor vendido por público, tipo, marca y contenido en ml (los mismos cortes del dashboard) |
 | Abonos | Cada abono recibido en el periodo |
 | Ventas por vendedor | Lo que vendió cada vendedor y su % del total |
-| Gastos | Cada gasto del periodo, con categoría y medio de pago |
+| Gastos | Cada gasto del periodo, con categoría y medio de pago. Los gastos a crédito aparecen con medio «Crédito» y la nota «se paga en cuotas, ver Deudas», pero **no suman** en el total |
+| Deudas | Deudas adquiridas en el periodo y todas las pendientes hoy: acreedor, fecha, total, pagado, saldo, estado, forma de pago final y próxima fecha (amarillo = pendiente, verde = pagada, rojo = vencida o anulada) |
+| Pagos de deudas | Cada pago del periodo: fecha, acreedor, valor, medio, efectivo, transferencia y quién lo registró (los anulados, en rojo, no suman) |
+| Caja diaria | Un día por fila: entradas, salidas y saldo, en efectivo y transferencia |
 | Cartera | Créditos con saldo **hoy**: valor vencido, días de atraso y próxima cuota (rojo = más de 30 días, amarillo = algo vencido) |
 | Inventario | Stock **hoy** y valor del inventario, con nombre completo, marca, fragancia, variante, concentración, ml, género y categoría (rojo = agotado, amarillo = stock bajo) |
 
-**Consolidado** (solo administrador): hoja *Comparativo locales*, con las cifras de cada local lado a lado y su % de las ventas, hoja *Ventas por categoría* de todos los locales, y hoja *Cartera*, con los créditos pendientes de todos los locales.
+**Consolidado** (solo administrador): hoja *Comparativo locales*, con las cifras de cada local lado a lado, su % de las ventas y sus deudas por pagar hoy, hoja *Ventas por categoría* de todos los locales, y hoja *Cartera*, con los créditos pendientes de todos los locales.
 
 > Las hojas *Cartera* e *Inventario* muestran el estado **al momento de descargar**, sin importar el periodo elegido.
+
+### Limpieza del sistema (solo administrador)
+
+En **Limpieza del sistema** el administrador borra datos de un local **de forma definitiva**. Primero elige el local y ve un resumen de lo que tiene.
+
+**Por periodo** (año y uno o varios meses, o todo el año; nunca meses que no han llegado):
+
+| Borra | Conserva |
+|---|---|
+| Las **ventas de contado** creadas en esos meses (también las anuladas) con sus productos vendidos | **Todos los créditos** con sus cuotas y abonos, aunque se hayan creado o abonado en esos meses. **Todas las deudas** con sus cuotas, sus pagos y su gasto a crédito de origen |
+| Los **gastos de contado** con fecha en esos meses (también los eliminados) | Todos los clientes, todo el inventario (el **stock no cambia**), sectores, categorías, usuarios y la configuración |
+
+Antes de borrar hay que tocar **«Ver qué se va a borrar»** (vista previa: cuántas ventas y gastos, por qué valor, y cuántos créditos y abonos del periodo se conservan).
+
+**Zona de peligro** (borra todo lo de ese tipo, sin importar la fecha):
+
+| Opción | Borra | No toca |
+|---|---|---|
+| Todas las ventas de contado | Facturas de contado y sus productos vendidos | Créditos, clientes, inventario |
+| Todos los créditos | Créditos, cuotas y abonos (avisa cuánto queda por cobrar) | Ventas de contado, clientes, inventario |
+| Todos los gastos | Todos los gastos de contado | Las deudas y sus gastos a crédito |
+| Todas las deudas | Deudas con sus cuotas, sus pagos y su gasto a crédito de origen (avisa el saldo pendiente que se pierde) | Gastos de contado y lo demás |
+| Clientes | Solo los clientes **sin** ventas ni créditos (los demás se conservan y se avisa cuántos) | Facturas |
+| Todo el inventario | Productos y su historial de movimientos | Las facturas conservan el nombre del producto |
+| TODO el local | Ventas, créditos (cuotas y abonos), deudas (cuotas y pagos), gastos, clientes e inventario. Opcional: reiniciar la numeración de facturas a 1 | El local, sus usuarios, sectores, marcas, categorías de gasto, proveedores y compras a proveedores |
+
+**Protecciones** (en todas las opciones):
+1. Resumen exacto de lo que se borra y lo que se conserva.
+2. **Copia de respaldo obligatoria:** se descarga un Excel con una hoja por tabla, con exactamente lo que se va a borrar. Si la descarga falla, no se borra nada.
+3. Escribir `BORRAR <NOMBRE DEL LOCAL>` (no importan las mayúsculas ni los espacios de más).
+4. La contraseña del administrador (el servidor la verifica).
+5. Una cuenta regresiva de 5 segundos antes de habilitar **«Sí, borrar definitivamente»**.
+
+En el servidor todo ocurre en **una transacción**:
+- bloquea el local, así que una factura nueva del mismo local espera a que termine;
+- rechaza otra limpieza del mismo local en menos de 30 segundos;
+- vuelve a contar y, si los datos cambiaron desde que se descargó el respaldo, **no borra nada**;
+- borra en orden: facturas, deudas, gastos, clientes y productos (las deudas antes que los gastos, por la llave foránea);
+- deja el registro en el **Historial de limpiezas** (quién, cuándo, qué y cuántos), que la app no permite borrar.
+
+Si algo falla a mitad, PostgreSQL revierte todo. Para probarlo, se puede arrancar el servidor con `LIMPIEZA_SIMULAR_FALLO=1`: la limpieza falla al final y no se borra nada. **Nunca uses esa variable en producción.**
+
+> **Recomendación:** antes de una limpieza grande, haz también un respaldo completo de la base de datos, además del Excel. En Neon basta con crear una *branch*; en cualquier PostgreSQL:
+> ```bash
+> pg_dump "postgresql://USUARIO:CLAVE@HOST:5432/BASE" -Fc -f respaldo_antes_de_limpiar.dump
+> # Para restaurar: pg_restore --clean -d "postgresql://…" respaldo_antes_de_limpiar.dump
+> ```
 
 ## 5. Instalar como aplicación (PWA)
 
@@ -300,6 +377,30 @@ DROP TYPE concentracion; DROP TYPE categoria_producto;
 DELETE FROM drizzle.__drizzle_migrations WHERE id IN (SELECT id FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 2);
 -- El valor UNISEX del tipo "genero" no se puede quitar en PostgreSQL; si algún producto lo usa, cámbialo antes a HOMBRE o MUJER.
 ```
+
+**Migración 0012 (gastos a crédito y deudas):** agrega `CREDITO` al tipo `medio_pago_gasto`, `DEUDAS` al tipo `alcance_limpieza`, el tipo `estado_deuda` y las tablas `deudas`, `deuda_cuotas` y `deuda_pagos` con sus índices. **No modifica ningún gasto existente** (se comprobó comparando una huella de toda la tabla antes y después) y no necesita completar datos: los gastos actuales siguen siendo de contado. Para revertirla (vuelve primero a la versión anterior del código):
+
+```sql
+DROP TABLE deuda_pagos, deuda_cuotas, deudas;
+DROP TYPE estado_deuda;
+-- Los gastos a crédito no tienen equivalente: se dejan anulados y luego se cambia su medio para poder quitar el valor del tipo
+UPDATE gastos SET anulado = true, anulado_en = now(), motivo_anulacion = 'Reversión de deudas' WHERE medio_pago = 'CREDITO';
+ALTER TYPE medio_pago_gasto RENAME TO medio_pago_gasto_viejo;
+CREATE TYPE medio_pago_gasto AS ENUM ('EFECTIVO', 'TRANSFERENCIA');
+ALTER TABLE gastos ALTER COLUMN medio_pago TYPE medio_pago_gasto
+  USING (CASE WHEN medio_pago::text = 'CREDITO' THEN 'EFECTIVO' ELSE medio_pago::text END)::medio_pago_gasto;
+DROP TYPE medio_pago_gasto_viejo;
+-- Solo si ninguna limpieza usó DEUDAS (si alguna lo usó, omite estas 4 líneas: ese valor de más no molesta a la versión anterior):
+ALTER TYPE alcance_limpieza RENAME TO alcance_limpieza_viejo;
+CREATE TYPE alcance_limpieza AS ENUM ('PERIODO','VENTAS','CREDITOS','GASTOS','CLIENTES','INVENTARIO','TODO');
+ALTER TABLE limpiezas ALTER COLUMN alcance TYPE alcance_limpieza USING alcance::text::alcance_limpieza;
+DROP TYPE alcance_limpieza_viejo;
+DELETE FROM drizzle.__drizzle_migrations WHERE id = (SELECT max(id) FROM drizzle.__drizzle_migrations);
+```
+
+**Migración 0010 (limpieza del sistema):** crea la tabla `limpiezas` (historial de auditoría). Para revertirla: `DROP TABLE limpiezas; DROP TYPE alcance_limpieza;` y borrar su fila de `drizzle.__drizzle_migrations`.
+
+> **Ojo con las migraciones de fechas antiguas.** `npm run db:migrate` solo aplica las migraciones con fecha **posterior** a la última registrada en la base. Si al unir ramas aparece una migración nueva con una fecha anterior (pasó con 0004, 0005 y 0006), `db:migrate` la salta sin avisar. Para comprobarlo, compara `drizzle/meta/_journal.json` con `SELECT created_at FROM drizzle.__drizzle_migrations`: cada `when` del journal debe estar en la base.
 
 **Para agregar una función nueva:** tabla en `src/db/schema.ts` → `npm run db:generate` → lógica en `src/server/servicios/` → endpoint en `src/app/api/` → pantalla en `src/app/panel/` o `src/app/admin/`.
 

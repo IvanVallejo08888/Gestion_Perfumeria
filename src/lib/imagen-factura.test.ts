@@ -1,7 +1,7 @@
-/** Pruebas de la escala de la imagen de la factura: npm test */
+/** Pruebas de la imagen de la factura (escala y conversión a archivo): npm test */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { AREA_MAXIMA_LIENZO, ESCALA_IMAGEN_FACTURA, LADO_MAXIMO_LIENZO, escalaImagenFactura } from "./imagen-factura";
+import { AREA_MAXIMA_LIENZO, ESCALA_IMAGEN_FACTURA, LADO_MAXIMO_LIENZO, dataUrlABlob, escalaImagenFactura } from "./imagen-factura";
 
 describe("escalaImagenFactura", () => {
   it("una factura corta usa la escala completa", () => {
@@ -25,5 +25,17 @@ describe("escalaImagenFactura", () => {
 
   it("si la medida no es válida devuelve la escala pedida", () => {
     assert.equal(escalaImagenFactura(0, 0), ESCALA_IMAGEN_FACTURA);
+  });
+});
+
+describe("dataUrlABlob", () => {
+  it("convierte la imagen en un archivo con su tipo y sus bytes (sin fetch)", async () => {
+    // PNG de 1x1 píxel
+    const base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    const blob = dataUrlABlob(`data:image/png;base64,${base64}`);
+    assert.equal(blob.type, "image/png");
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    assert.deepEqual([...bytes.slice(1, 4)].map((b) => String.fromCharCode(b)).join(""), "PNG");
+    assert.equal(bytes.length, Buffer.from(base64, "base64").length);
   });
 });

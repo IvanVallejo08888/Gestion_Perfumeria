@@ -1,21 +1,9 @@
 /** Pruebas del valor de las cuotas. Ejecutar con: npm test */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ajustarCantidadValores, repartirDespuesDeLaPrimera, repartirEnPartesIguales, resumirCuotas, revisarValoresCuotas } from "./cuotas";
+import { ajustarCantidadValores, repartirDespuesDeLaPrimera, resumirCuotas, revisarValoresCuotas } from "./cuotas";
 
-describe("repartirEnPartesIguales", () => {
-  it("reparte exacto cuando se puede", () => {
-    assert.deepEqual(repartirEnPartesIguales(300_000, 3), [100_000, 100_000, 100_000]);
-  });
-  it("la última cuota absorbe el redondeo y la suma da el total", () => {
-    const v = repartirEnPartesIguales(100_000, 3);
-    assert.deepEqual(v, [33_333, 33_333, 33_334]);
-    assert.equal(v.reduce((s, x) => s + x, 0), 100_000);
-  });
-  it("sin cuotas devuelve lista vacía", () => {
-    assert.deepEqual(repartirEnPartesIguales(100_000, 0), []);
-  });
-});
+// El reparto en partes iguales (repartirEnCuotas) tiene sus pruebas en deudas.test.ts
 
 describe("repartirDespuesDeLaPrimera", () => {
   it("reparte lo que queda entre las cuotas 2..N", () => {

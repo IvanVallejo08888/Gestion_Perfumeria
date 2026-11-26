@@ -12,18 +12,24 @@
 import { useId, useState } from "react";
 import { fechaDia, fechaHora, pesos } from "@/lib/formato";
 import { api } from "@/lib/http";
-import { textoMedioPago } from "@/lib/pagos";
+import { TEXTO_ESTADO_DEUDA } from "@/lib/deudas";
+import { textoMedioPagoGasto } from "@/lib/pagos";
 import { motivoAnulacionSchema } from "@/lib/validaciones";
 import type { GastoFila, ListaGastos } from "@/tipos";
 import { useAvisos } from "../ui/Avisos";
-import { Insignia, Vacio } from "../ui/Basicos";
+import { Insignia, Mensaje, Vacio } from "../ui/Basicos";
 import { Boton } from "../ui/Boton";
 import { Campo } from "../ui/Campo";
-import { Confirmar } from "../ui/Modal";
+import { Confirmar, Modal } from "../ui/Modal";
 
 export function TotalesGastos({ datos }: { datos: ListaGastos }) {
   const totales = [
-    { titulo: "Gastos del negocio", valor: datos.total, detalle: "Se restan de la utilidad" },
+    {
+      titulo: "Gastos del negocio",
+      valor: datos.total,
+      // Los pagos de deudas suman aquí aunque no aparezcan en la lista (están en la pestaña «Deudas»)
+      detalle: datos.totalPagosDeudas > 0 ? `Incluye pagos de deudas: ${pesos(datos.totalPagosDeudas)}` : "Se restan de la utilidad",
+    },
     { titulo: "Pagado en efectivo", valor: datos.totalEfectivo, detalle: "Gastos del negocio" },
     { titulo: "Pagado por transferencia", valor: datos.totalTransferencia, detalle: "Gastos del negocio" },
     { titulo: "Gastos personales", valor: datos.totalPersonales, detalle: "Aparte: no se restan de la utilidad" },
@@ -44,10 +50,13 @@ export function TotalesGastos({ datos }: { datos: ListaGastos }) {
 export function TablaGastos({
   gastos,
   onEliminar,
+  onVerDeuda,
   vacio = "Prueba con otro mes o categoría.",
 }: {
   gastos: GastoFila[];
   onEliminar?: (gasto: GastoFila) => void;
+  /** Si se indica, los gastos a crédito muestran el botón «Ver deuda» (solo el vendedor). */
+  onVerDeuda?: (deudaId: string) => void;
   vacio?: string;
 }) {
   if (gastos.length === 0) {
@@ -63,13 +72,20 @@ export function TablaGastos({
 
   return (
     <div className="space-y-8">
-      <SeccionGastos titulo="Gastos del negocio" vacio="No hay gastos del negocio en este periodo." gastos={delNegocio} onEliminar={onEliminar} />
+      <SeccionGastos
+        titulo="Gastos del negocio"
+        vacio="No hay gastos del negocio en este periodo."
+        gastos={delNegocio}
+        onEliminar={onEliminar}
+        onVerDeuda={onVerDeuda}
+      />
       {personales.length > 0 && (
         <SeccionGastos
           titulo="Gastos personales"
           descripcion="Gastos propios de la dueña: se ven aparte y no se restan de la utilidad."
           gastos={personales}
           onEliminar={onEliminar}
+          onVerDeuda={onVerDeuda}
         />
       )}
     </div>
@@ -82,12 +98,14 @@ function SeccionGastos({
   vacio,
   gastos,
   onEliminar,
+  onVerDeuda,
 }: {
   titulo: string;
   descripcion?: string;
   vacio?: string;
   gastos: GastoFila[];
   onEliminar?: (gasto: GastoFila) => void;
+  onVerDeuda?: (deudaId: string) => void;
 }) {
   const id = useId();
   return (
@@ -114,10 +132,21 @@ function SeccionGastos({
                   {fechaDia(g.fecha)} · Registrado por {g.usuarioNombre}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <Insignia tono={g.medioPago === "EFECTIVO" ? "marca" : "info"}>{textoMedioPago(g.medioPago)}</Insignia>
+                  <Insignia tono={g.medioPago === "EFECTIVO" ? "marca" : g.medioPago === "CREDITO" ? "neutro" : "info"}>
+                    {textoMedioPagoGasto(g.medioPago)}
+                  </Insignia>
                   {g.personal && <Insignia tono="alerta">Personal · no se resta</Insignia>}
                   {g.anulado && <Insignia tono="peligro">Eliminado</Insignia>}
                 </div>
+                {g.medioPago === "CREDITO" && (
+                  // Un gasto a crédito no suma en los totales: el dinero sale con cada pago de la deuda
+                  <p className="mt-2 text-base text-texto-suave">
+                    Deuda con <strong className="text-texto">{g.deuda?.acreedor ?? "—"}</strong>: se paga en cuotas y no suma aquí (ver
+                    Deudas).
+                    {g.deuda && g.deuda.estado === "PENDIENTE" && ` Saldo: ${pesos(g.deuda.saldo)}.`}
+                    {g.deuda && g.deuda.estado !== "PENDIENTE" && ` Deuda ${TEXTO_ESTADO_DEUDA[g.deuda.estado].toLowerCase()}.`}
+                  </p>
+                )}
                 {g.anulado && (
                   <div className="mt-2 rounded-xl bg-peligro-50 px-3 py-2 text-base text-peligro-800">
                     <p className="break-words">
@@ -131,7 +160,17 @@ function SeccionGastos({
                 )}
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3 sm:flex-col sm:items-end">
-                <p className={`text-2xl font-bold ${g.anulado ? "text-texto-suave line-through" : "text-acento"}`}>{pesos(g.valor)}</p>
+                <p
+                  className={`text-2xl font-bold ${g.anulado ? "text-texto-suave line-through" : g.medioPago === "CREDITO" ? "text-texto-suave" : "text-acento"}`}
+                >
+                  {pesos(g.valor)}
+                  {g.medioPago === "CREDITO" && <span className="block text-base font-bold">a crédito</span>}
+                </p>
+                {onVerDeuda && g.deuda && (
+                  <Boton variante="secundario" icono="dinero" onClick={() => onVerDeuda(g.deuda!.id)}>
+                    Ver deuda
+                  </Boton>
+                )}
                 {onEliminar && !g.anulado && (
                   <Boton
                     variante="peligro"
@@ -160,11 +199,14 @@ export function ConfirmarAnulacionGasto({
   urlAnular,
   onCerrar,
   onAnulado,
+  onVerDeuda,
 }: {
   gasto: GastoFila | null;
   urlAnular: (id: string) => string;
   onCerrar: () => void;
   onAnulado: () => void;
+  /** Si se indica, la ventana de "tiene pagos" ofrece ir directo a la deuda. */
+  onVerDeuda?: (deudaId: string) => void;
 }) {
   const avisos = useAvisos();
   const [motivo, setMotivo] = useState("");
@@ -196,6 +238,44 @@ export function ConfirmarAnulacionGasto({
     }
   }
 
+  /*
+   * Gasto a crédito con pagos vigentes: NO se puede eliminar todavía. Cada pago ya salió de la caja
+   * de un día concreto, así que primero se anula cada pago (con su motivo) desde la pestaña «Deudas».
+   */
+  const deuda = gasto?.deuda;
+  if (gasto && deuda && deuda.pagosVigentes > 0) {
+    return (
+      <Modal abierto onCerrar={cerrar} titulo="Primero anula los pagos">
+        <div className="space-y-4 text-lg">
+          <Mensaje tono="alerta" titulo={`Esta deuda tiene pagos por ${pesos(deuda.valorPagos)}`}>
+            La deuda con {deuda.acreedor} tiene {deuda.pagosVigentes === 1 ? "1 pago" : `${deuda.pagosVigentes} pagos`}. Ese dinero ya salió de
+            la caja.{" "}
+            {onVerDeuda
+              ? "Anula primero cada pago en la pestaña «Deudas» y después elimina el gasto."
+              : // El administrador no maneja las deudas: las maneja el vendedor del local
+                "El vendedor del local debe anular primero cada pago en Gastos → Deudas; después se puede eliminar el gasto."}
+          </Mensaje>
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <Boton variante="secundario" onClick={cerrar}>
+              Cerrar
+            </Boton>
+            {onVerDeuda && (
+              <Boton
+                icono="dinero"
+                onClick={() => {
+                  cerrar();
+                  onVerDeuda(deuda.id);
+                }}
+              >
+                Ir a la deuda
+              </Boton>
+            )}
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <Confirmar
       abierto={gasto !== null}
@@ -208,12 +288,17 @@ export function ConfirmarAnulacionGasto({
       mensaje={
         gasto && (
           <div className="space-y-4">
-            <p>¿Seguro que quieres eliminar este gasto? Dejará de contar en los totales, pero quedará registrado.</p>
+            <p>
+              {gasto.medioPago === "CREDITO"
+                ? "¿Seguro que quieres eliminar este gasto a crédito? Su deuda quedará anulada: ya no tendrá saldo por pagar ni avisos de pago."
+                : "¿Seguro que quieres eliminar este gasto? Dejará de contar en los totales, pero quedará registrado."}
+            </p>
             <dl className="grid gap-1 rounded-xl bg-superficie p-4">
               {[
                 ["Categoría", gasto.categoriaNombre],
                 ["Valor", pesos(gasto.valor)],
-                ["Medio de pago", textoMedioPago(gasto.medioPago)],
+                ["Medio de pago", textoMedioPagoGasto(gasto.medioPago)],
+                ...(gasto.deuda ? [["A quién se le debe", gasto.deuda.acreedor]] : []),
                 ["Fecha", fechaDia(gasto.fecha)],
                 ["Descripción", gasto.descripcion || "—"],
               ].map(([etiqueta, valor]) => (

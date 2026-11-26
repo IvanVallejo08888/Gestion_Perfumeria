@@ -9,6 +9,7 @@ const MENU: ItemMenu[] = [
   { href: "/panel/creditos", texto: "Créditos y abonos", icono: "credito" },
   { href: "/panel/clientes", texto: "Clientes", icono: "usuarios" },
   { href: "/panel/gastos", texto: "Gastos", icono: "dinero" },
+  { href: "/panel/caja", texto: "Caja del día", icono: "calendario" },
   { href: "/panel/notificaciones", texto: "Notificaciones", icono: "campana", conContador: true },
   { href: "/panel/inventario", texto: "Inventario", icono: "inventario" },
   { href: "/panel/reportes", texto: "Reportes y estadísticas", icono: "reporte" },

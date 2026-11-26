@@ -71,6 +71,34 @@
       "when": 1795046855599,
       "tag": "0009_quitar_tamano",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795068007943,
+      "tag": "0010_limpiezas",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795069689760,
+      "tag": "0011_limite_intentos",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795070667152,
+      "tag": "0012_deudas_gastos_credito",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795070668152,
+      "tag": "0013_normalizar_cedulas_clientes",
+      "breakpoints": true
     }
   ]
 }

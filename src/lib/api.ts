@@ -44,6 +44,7 @@ export function manejador<P = Record<string, string>>(
 ) {
   return async (req: NextRequest, segmento: { params: Promise<P> }) => {
     try {
+      verificarOrigen(req);
       const params = (await segmento?.params) ?? ({} as P);
       let usuario = null as unknown as UsuarioSesion;
 
@@ -59,6 +60,40 @@ export function manejador<P = Record<string, string>>(
     }
   };
 }
+
+const METODOS_SEGUROS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/**
+ * Protección CSRF: las peticiones que cambian datos (POST, PUT, PATCH, DELETE) solo se
+ * aceptan si vienen de esta misma aplicación. Así, una página maliciosa abierta en otra
+ * pestaña no puede usar la sesión del usuario para crear facturas, borrar usuarios, etc.
+ * (La cookie ya es SameSite=Lax; esta es una segunda barrera.)
+ *
+ * - Sec-Fetch-Site lo pone el navegador y la página no lo puede falsificar.
+ * - Origin se revisa para navegadores antiguos que no envían Sec-Fetch-Site.
+ * - Sin ninguno de los dos no es un navegador (curl, scripts): no hay riesgo de CSRF,
+ *   y esas peticiones igual necesitan la cookie de sesión.
+ */
+function verificarOrigen(req: NextRequest) {
+  if (METODOS_SEGUROS.has(req.method)) return;
+
+  const sitio = req.headers.get("sec-fetch-site");
+  if (sitio === "same-origin") return;
+  if (sitio === "cross-site" || sitio === "same-site") throw new ApiError(403, MENSAJE_ORIGEN);
+
+  const origen = req.headers.get("origin");
+  if (!origen) return;
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  let hostOrigen: string | null = null;
+  try {
+    hostOrigen = new URL(origen).host;
+  } catch {
+    /* "null" u otro valor inválido: se rechaza abajo */
+  }
+  if (!host || hostOrigen !== host) throw new ApiError(403, MENSAJE_ORIGEN);
+}
+
+const MENSAJE_ORIGEN = "Esta acción solo se puede hacer desde la aplicación.";
 
 /** Lee y valida el cuerpo JSON de la petición con un esquema Zod. */
 export async function leerCuerpo<T>(req: NextRequest, esquema: ZodType<T>): Promise<T> {

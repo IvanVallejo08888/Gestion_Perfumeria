@@ -1,11 +1,15 @@
 /**
  * Ventana con el detalle de una factura (se carga desde la API por su id).
- * Se usa en el Historial y en Créditos.
+ * Se usa en el Historial, en Créditos y en el detalle del cliente.
+ * En un crédito, debajo de la factura aparecen sus abonos, cada uno con «Ver comprobante»
+ * para volver a compartirlo (esta lista no forma parte de la imagen ni del PDF).
  */
 "use client";
 
+import { useState } from "react";
 import { useConsulta } from "@/hooks/useConsulta";
 import type { FacturaDetalle } from "@/tipos";
+import { ListaAbonos, ModalComprobanteAbono } from "../creditos/ComprobanteAbono";
 import { Cargando, Mensaje } from "../ui/Basicos";
 import { Modal } from "../ui/Modal";
 import { VistaFactura } from "./VistaFactura";
@@ -15,10 +19,26 @@ export function DetalleFactura({ facturaId, onCerrar }: { facturaId: string | nu
   const { datos, urlDatos, error } = useConsulta<{ factura: FacturaDetalle }>(url);
   // Mientras carga otra factura no se muestra la anterior
   const factura = urlDatos === url ? (datos?.factura ?? null) : null;
+  const [comprobanteId, setComprobanteId] = useState<string | null>(null);
 
   return (
     <Modal abierto={facturaId !== null} onCerrar={onCerrar} titulo={factura ? `Factura de ${factura.clienteNombre}` : "Detalle de factura"} tamano="xl">
-      {error ? <Mensaje tono="peligro">{error}</Mensaje> : !factura ? <Cargando /> : <VistaFactura factura={factura} />}
+      {error ? (
+        <Mensaje tono="peligro">{error}</Mensaje>
+      ) : !factura ? (
+        <Cargando />
+      ) : (
+        <>
+          <VistaFactura factura={factura} />
+          {factura.tipo === "CREDITO" && factura.abonos.length > 0 && (
+            <section className="mt-6">
+              <h3 className="mb-2 text-xl font-bold">Abonos recibidos</h3>
+              <ListaAbonos abonos={factura.abonos} onVer={setComprobanteId} />
+            </section>
+          )}
+        </>
+      )}
+      <ModalComprobanteAbono abonoId={comprobanteId} onCerrar={() => setComprobanteId(null)} />
     </Modal>
   );
 }

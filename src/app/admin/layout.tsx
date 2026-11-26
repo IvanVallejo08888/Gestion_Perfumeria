@@ -8,6 +8,7 @@ const MENU: ItemMenu[] = [
   { href: "/admin/usuarios", texto: "Usuarios", icono: "usuarios" },
   { href: "/admin/locales", texto: "Locales", icono: "local" },
   { href: "/admin/reportes", texto: "Reportes", icono: "reporte" },
+  { href: "/admin/limpieza", texto: "Limpieza del sistema", icono: "basura" },
   { href: "/admin/cuenta", texto: "Ajustes", icono: "ajustes" },
 ];
 

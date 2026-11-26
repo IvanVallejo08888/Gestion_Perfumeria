@@ -3,6 +3,7 @@
  * Todos los mensajes están en español y redactados de forma clara para el usuario.
  */
 import { z } from "zod";
+import { soloDigitos } from "./formato";
 
 /*
  * Mensajes por defecto de Zod en español (por ejemplo «Opción inválida…» en vez de «Invalid option…»).
@@ -11,7 +12,9 @@ import { z } from "zod";
  */
 z.config(z.locales.es());
 import { CATEGORIAS, CONCENTRACIONES, GENEROS, PUBLICOS, TIPOS_PRODUCTO } from "./clasificacion";
+import { validarPlanCuotas } from "./deudas";
 import { ESTADOS_STOCK } from "./inventario";
+import { ALCANCES_LIMPIEZA } from "./limpieza";
 
 /* --------------------------- Reglas de contraseña --------------------------- */
 
@@ -75,8 +78,9 @@ export const dineroSchema = (campo: string) =>
 /* ------------------------------- Autenticación ------------------------------ */
 
 export const loginSchema = z.object({
-  identificacion: z.string().trim().min(1, "Escribe tu número de identificación."),
-  password: z.string().min(1, "Escribe tu contraseña."),
+  // Con límite de largo: la identificación forma parte de la clave del límite de intentos
+  identificacion: z.string().trim().min(1, "Escribe tu número de identificación.").max(20, "La identificación es demasiado larga."),
+  password: z.string().min(1, "Escribe tu contraseña.").max(200, "La contraseña es demasiado larga."),
 });
 
 export const registroSchema = z
@@ -220,8 +224,18 @@ export const filtroProductosSchema = z.object({
 
 /* ---------------------------------- Clientes -------------------------------- */
 
+/**
+ * Cédula del cliente: se guarda SOLO con dígitos ("1.080.044.910" → "1080044910"), igual en la
+ * factura y en la pantalla Clientes, para que el índice único (local, identificación) no deje
+ * pasar el mismo cliente dos veces por diferencias de formato.
+ */
+export const identificacionClienteSchema = z
+  .string({ error: "La identificación es obligatoria." })
+  .transform(soloDigitos)
+  .pipe(z.string().regex(/^[0-9]{5,15}$/, "La identificación debe tener solo números (entre 5 y 15 dígitos)."));
+
 export const clienteSchema = z.object({
-  identificacion: identificacionSchema,
+  identificacion: identificacionClienteSchema,
   nombre: texto("El nombre del cliente"),
   telefono: telefonoSchema,
   direccion: texto("La dirección", 160, "f"),
@@ -352,12 +366,54 @@ export const editarCategoriaSchema = z.object({
   activo: z.boolean().optional(),
 });
 
-export const gastoSchema = z.object({
-  categoriaId: z.uuid("Elige una categoría."),
-  valor: dineroSchema("El valor del gasto").refine((v) => v > 0, "El gasto debe ser mayor que cero."),
-  medioPago: z.enum(["EFECTIVO", "TRANSFERENCIA"], { error: "Elige cómo se pagó el gasto." }),
+/** Una cuota del plan de pagos de una deuda: fecha y hora + valor (editable). */
+export const cuotaDeudaSchema = z.object({
+  fechaVencimiento: z.iso.datetime({ offset: true, error: "Fecha de cuota no válida." }),
+  valor: dineroSchema("El valor de la cuota").refine((v) => v > 0, "Cada cuota debe ser mayor que cero."),
+});
+
+/**
+ * Gasto. Con medio CREDITO (gasto a crédito) también exige el acreedor y el plan de cuotas,
+ * y que las cuotas sumen exactamente el valor del gasto. Las fechas pasadas se permiten (deudas antiguas).
+ */
+export const gastoSchema = z
+  .object({
+    categoriaId: z.uuid("Elige una categoría."),
+    valor: dineroSchema("El valor del gasto").refine((v) => v > 0, "El gasto debe ser mayor que cero."),
+    medioPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "CREDITO"], { error: "Elige cómo se pagó el gasto." }),
+    fecha: z.iso.date("Escribe una fecha válida."),
+    descripcion: z.string().trim().max(200, "La descripción es demasiado larga.").optional(),
+    /** Solo en CREDITO: a quién se le debe. */
+    acreedor: z.string().trim().max(80, "El nombre es demasiado largo (máximo 80 caracteres).").optional(),
+    /** Solo en CREDITO: plan de pagos. */
+    cuotas: z.array(cuotaDeudaSchema).optional(),
+  })
+  .superRefine((d, ctx) => {
+    if (d.medioPago !== "CREDITO") return;
+    if (!d.acreedor || d.acreedor.length < 2) {
+      ctx.addIssue({ code: "custom", path: ["acreedor"], message: "Escribe a quién le debes (mínimo 2 letras)." });
+    }
+    const error = validarPlanCuotas(d.valor, (d.cuotas ?? []).map((c) => c.valor));
+    if (error) ctx.addIssue({ code: "custom", path: ["cuotas"], message: error });
+  });
+
+/** Pago (abono) a una deuda. Sin fecha = ahora. Con fecha: un pago olvidado (nunca futuro). */
+export const pagoDeudaSchema = z.object({
+  valor: dineroSchema("El valor del pago").refine((v) => v > 0, "El pago debe ser mayor que cero."),
+  medioPago: medioPagoSchema,
+  ...valoresPago,
+  fecha: z.iso.datetime({ offset: true, error: "Escribe una fecha válida." }).optional(),
+  nota: z.string().trim().max(200, "La nota es demasiado larga.").optional(),
+});
+
+/** Filtro de la lista de deudas. */
+export const filtroDeudasSchema = z.object({
+  estado: z.enum(["PENDIENTE", "PAGADA", "ANULADA"]).default("PENDIENTE"),
+});
+
+/** Día de la caja (AAAA-MM-DD). */
+export const cajaSchema = z.object({
   fecha: z.iso.date("Escribe una fecha válida."),
-  descripcion: z.string().trim().max(200, "La descripción es demasiado larga.").optional(),
 });
 
 /** Filtros de la lista de gastos (vienen en la dirección de la petición). */
@@ -408,18 +464,6 @@ export const filtroCreditosSchema = z.object({
   identificacion: z.string().trim().max(30).optional(),
 });
 
-/** Mínimo de letras para empezar a sugerir clientes por nombre. */
-export const MIN_LETRAS_BUSQUEDA_CLIENTE = 2;
-
-/** GET /api/clientes/sugerencias?nombre= — búsqueda de clientes por nombre en la factura. */
-export const busquedaClienteSchema = z.object({
-  nombre: z
-    .string({ error: "Escribe el nombre del cliente." })
-    .trim()
-    .min(MIN_LETRAS_BUSQUEDA_CLIENTE, `Escribe al menos ${MIN_LETRAS_BUSQUEDA_CLIENTE} letras del nombre.`)
-    .max(100, "La búsqueda es demasiado larga."),
-});
-
 /** Convierte los parámetros de la dirección en objeto y descarta los vacíos. */
 export function parametros(url: URLSearchParams): Record<string, string> {
   return Object.fromEntries([...url].filter(([, valor]) => valor !== ""));
@@ -466,3 +510,26 @@ export const quejaSchema = z.object({
 });
 
 export type Queja = z.infer<typeof quejaSchema>;
+
+/* ---------------------------- Limpieza del sistema ---------------------------- */
+
+/** Qué limpiar (lo usan la vista previa, el respaldo y la ejecución). */
+export const solicitudLimpiezaSchema = z.object({
+  localId: z.uuid("Elige un local."),
+  alcance: z.enum(ALCANCES_LIMPIEZA, { error: "Lo que se quiere borrar no es válido." }),
+  anio: z.coerce.number().int().min(2000, "Año no válido.").max(2100, "Año no válido.").optional(),
+  /** Meses 1-12 (vacío = todo el año). En la dirección del respaldo llegan como "3,4". */
+  meses: z
+    .union([z.array(z.coerce.number()), z.string()])
+    .optional()
+    .transform((v) => (typeof v === "string" ? v.split(",").filter(Boolean).map(Number) : (v ?? [])))
+    .pipe(z.array(z.number().int().min(1, "Mes no válido.").max(12, "Mes no válido.")).max(12)),
+});
+
+/** Ejecutar la limpieza: además exige la confirmación escrita, la contraseña y la huella del respaldo. */
+export const ejecutarLimpiezaSchema = solicitudLimpiezaSchema.extend({
+  confirmacion: z.string().max(200, "La confirmación es demasiado larga."),
+  password: z.string().min(1, "Escribe tu contraseña."),
+  huella: z.string().min(1, "Primero se debe descargar la copia de respaldo.").max(10_000),
+  reiniciarConsecutivo: z.boolean().optional().default(false),
+});

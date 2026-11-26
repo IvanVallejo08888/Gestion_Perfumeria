@@ -1,27 +1,21 @@
 /**
- * Reglas del valor de las cuotas de un crédito.
- * La vendedora escribe el valor de cada cuota (o activa "Distribuir automáticamente").
+ * Reglas del valor de las cuotas (crédito de la factura y plan de pagos de una deuda).
+ * La persona escribe el valor de cada cuota (o activa "Distribuir automáticamente").
  * Las usan el navegador (para avisar al instante) y el servidor, que revisa los valores
  * contra el total que ÉL calcula: nunca confía en lo que envía el navegador.
+ * El reparto en partes iguales y la revisión de la suma viven en ./deudas (no se duplican).
  */
-import { pesos } from "./formato";
-
-/** Reparte un total en partes iguales; la última cuota absorbe la diferencia de redondeo. */
-export function repartirEnPartesIguales(total: number, cantidad: number): number[] {
-  if (cantidad <= 0) return [];
-  const base = Math.floor(total / cantidad);
-  return Array.from({ length: cantidad }, (_, i) => (i === cantidad - 1 ? total - base * (cantidad - 1) : base));
-}
+import { repartirEnCuotas, validarPlanCuotas } from "./deudas";
 
 /**
- * "Distribuir automáticamente": la cuota 1 la escribe la vendedora y lo que queda del total
+ * "Distribuir automáticamente": la cuota 1 la escribe la persona y lo que queda del total
  * se reparte en partes iguales entre las cuotas 2..N (la última absorbe el redondeo).
  * Si la cuota 1 está vacía o ya cubre el total, las demás quedan en 0.
  */
 export function repartirDespuesDeLaPrimera(total: number, primera: number, cantidad: number): number[] {
   if (cantidad <= 0) return [];
   const resto = total - primera;
-  const demas = primera > 0 && resto > 0 ? repartirEnPartesIguales(resto, cantidad - 1) : Array<number>(cantidad - 1).fill(0);
+  const demas = primera > 0 && resto > 0 ? repartirEnCuotas(resto, cantidad - 1) : Array<number>(cantidad - 1).fill(0);
   return [primera, ...demas];
 }
 
@@ -44,14 +38,15 @@ export function resumirCuotas(valores: number[], total: number): ResumenCuotas {
   return { asignado, diferencia: total - asignado, sinValor };
 }
 
-/** Mensaje para la persona si los valores no cuadran con el total (null si todo está bien). */
+/**
+ * Mensaje para la persona si los valores no cuadran con el total (null si todo está bien).
+ * Primero dice QUÉ cuotas faltan por escribir; la suma la revisa validarPlanCuotas.
+ */
 export function revisarValoresCuotas(valores: number[], total: number): string | null {
   if (valores.length === 0) return "Un crédito debe tener al menos una cuota.";
   if (valores.some((v) => !Number.isInteger(v) || v < 0)) return "El valor de cada cuota debe ser un número entero positivo.";
-  const { diferencia, sinValor } = resumirCuotas(valores, total);
+  const { sinValor } = resumirCuotas(valores, total);
   if (sinValor.length === 1) return `Escribe el valor de la cuota ${sinValor[0]}.`;
   if (sinValor.length > 1) return `Escribe el valor de las cuotas ${sinValor.join(", ")}.`;
-  if (diferencia > 0) return `Las cuotas suman ${pesos(total - diferencia)}: faltan ${pesos(diferencia)} para llegar al total de ${pesos(total)}.`;
-  if (diferencia < 0) return `Las cuotas suman ${pesos(total - diferencia)}: sobran ${pesos(-diferencia)} sobre el total de ${pesos(total)}.`;
-  return null;
+  return validarPlanCuotas(total, valores);
 }

@@ -1,7 +1,7 @@
 /**
  * GET /api/gastos?anio=&mes=&categoriaId=&estado= — Gastos del local del vendedor, con sus totales.
  *   (estado=eliminados: solo los gastos anulados; los totales siempre son de los vigentes)
- * POST /api/gastos — Registrar un gasto.
+ * POST /api/gastos — Registrar un gasto (de contado, o a crédito con acreedor y plan de cuotas).
  */
 import { comoVendedor, leerCuerpo, manejador, ok } from "@/lib/api";
 import { filtroGastosSchema, gastoSchema, parametros } from "@/lib/validaciones";
@@ -15,6 +15,7 @@ export const GET = manejador("VENDEDOR", async ({ req, usuario }) => {
 
 export const POST = manejador("VENDEDOR", async ({ req, usuario }) => {
   const vendedor = comoVendedor(usuario);
-  await crearGasto(vendedor, await leerCuerpo(req, gastoSchema));
-  return ok({ ok: true }, 201);
+  // Con medio CREDITO crea también la deuda y sus cuotas (devuelve deudaId)
+  const { deudaId } = await crearGasto(vendedor, await leerCuerpo(req, gastoSchema));
+  return ok({ ok: true, deudaId }, 201);
 });

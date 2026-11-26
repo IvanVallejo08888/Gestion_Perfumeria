@@ -13,7 +13,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useIntervalo } from "@/hooks/useIntervalo";
 import { useAlCambiarNotificaciones } from "@/hooks/useNotificaciones";
-import { cerrarSesion, ETIQUETA_COBRO } from "@/lib/cerrar-sesion";
+import { cerrarSesion, ETIQUETA_COBRO, ETIQUETA_DEUDA } from "@/lib/cerrar-sesion";
 import { api } from "@/lib/http";
 import { BotonInstalar } from "../pwa/BotonInstalar";
 import { Icono, type NombreIcono } from "../ui/Icono";
@@ -44,7 +44,8 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
   // La transición se activa después de leer la preferencia, para que al recargar no se vea cerrarse
   const [lateralListo, setLateralListo] = useState(false);
   const [conteo, setConteo] = useState({ total: 0, urgentes: 0 });
-  const ultimoAvisoRef = useRef<string | null>(null);
+  /** Último aviso mostrado por tipo (cobro / deuda): cada uno se muestra una sola vez. */
+  const ultimoAvisoRef = useRef<Record<string, string>>({});
 
   const botonMenuRef = useRef<HTMLButtonElement>(null);
   const botonCerrarRef = useRef<HTMLButtonElement>(null);
@@ -110,17 +111,14 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
   /* ---------- Consulta periódica de notificaciones (solo vendedores) ---------- */
   const consultar = useCallback(async () => {
     try {
-      const datos = await api<{ total: number; urgentes: number; mensaje: string | null }>("/api/notificaciones/conteo");
+      const datos = await api<{ total: number; urgentes: number; avisos?: AvisoNavegador[] }>("/api/notificaciones/conteo");
       setConteo({ total: datos.total, urgentes: datos.urgentes });
-      // Aviso del navegador (una sola vez por mensaje distinto)
-      if (
-        datos.mensaje &&
-        datos.mensaje !== ultimoAvisoRef.current &&
-        typeof Notification !== "undefined" &&
-        Notification.permission === "granted"
-      ) {
-        ultimoAvisoRef.current = datos.mensaje;
-        await mostrarNotificacion("Recordatorio de cobro", datos.mensaje);
+      // Avisos del navegador: uno por tipo (cobro y pago de deuda), una sola vez por mensaje distinto
+      if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+      for (const aviso of datos.avisos ?? []) {
+        if (ultimoAvisoRef.current[aviso.etiqueta] === aviso.cuerpo) continue;
+        ultimoAvisoRef.current[aviso.etiqueta] = aviso.cuerpo;
+        await mostrarNotificacion(aviso);
       }
     } catch {
       /* sin conexión: se vuelve a intentar en el siguiente minuto */
@@ -312,17 +310,32 @@ export function Marco({ items, nombreUsuario, subtitulo, notificaciones = false,
   );
 }
 
+/** Aviso del navegador que arma el servidor (ver contarNotificaciones). */
+interface AvisoNavegador {
+  etiqueta: "cobro" | "deuda";
+  titulo: string;
+  cuerpo: string;
+  /** Dónde lleva al tocarlo (el service worker lo abre). */
+  url: string;
+}
+
 /**
  * Muestra un aviso con el service worker si ya está activo. En Android, con la app instalada,
  * `new Notification` falla: solo sirve como respaldo (por ejemplo, en "npm run dev").
- * La etiqueta hace que cada aviso reemplace al anterior en vez de acumularse.
+ * La etiqueta hace que cada aviso reemplace al anterior del MISMO tipo en vez de acumularse;
+ * los cobros y las deudas tienen etiquetas distintas para que uno no tape al otro.
  */
-async function mostrarNotificacion(titulo: string, cuerpo: string) {
+async function mostrarNotificacion(aviso: AvisoNavegador) {
+  const tag = aviso.etiqueta === "deuda" ? ETIQUETA_DEUDA : ETIQUETA_COBRO;
   const registro = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistration() : undefined;
   if (registro?.active) {
-    await registro.showNotification(titulo, { body: cuerpo, icon: "/icons/icon-192.png", tag: ETIQUETA_COBRO });
+    await registro.showNotification(aviso.titulo, { body: aviso.cuerpo, icon: "/icons/icon-192.png", tag, data: { url: aviso.url } });
   } else {
-    new Notification(titulo, { body: cuerpo });
+    const notificacion = new Notification(aviso.titulo, { body: aviso.cuerpo, tag });
+    notificacion.onclick = () => {
+      window.focus();
+      window.location.href = aviso.url;
+    };
   }
 }
 
