@@ -13,6 +13,18 @@ export function repartirEnPartesIguales(total: number, cantidad: number): number
   return Array.from({ length: cantidad }, (_, i) => (i === cantidad - 1 ? total - base * (cantidad - 1) : base));
 }
 
+/**
+ * "Distribuir automáticamente": la cuota 1 la escribe la vendedora y lo que queda del total
+ * se reparte en partes iguales entre las cuotas 2..N (la última absorbe el redondeo).
+ * Si la cuota 1 está vacía o ya cubre el total, las demás quedan en 0.
+ */
+export function repartirDespuesDeLaPrimera(total: number, primera: number, cantidad: number): number[] {
+  if (cantidad <= 0) return [];
+  const resto = total - primera;
+  const demas = primera > 0 && resto > 0 ? repartirEnPartesIguales(resto, cantidad - 1) : Array<number>(cantidad - 1).fill(0);
+  return [primera, ...demas];
+}
+
 /** Ajusta la lista al nuevo número de cuotas: conserva lo escrito y deja en 0 las nuevas. */
 export function ajustarCantidadValores(valores: number[], cantidad: number): number[] {
   return Array.from({ length: cantidad }, (_, i) => valores[i] ?? 0);

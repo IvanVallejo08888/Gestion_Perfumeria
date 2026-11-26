@@ -3,14 +3,15 @@
  * 1. La persona elige cuántas cuotas, cada cuánto (semanal, quincenal o mensual) y la fecha del primer pago.
  * 2. Las fechas se llenan SOLAS y cada una se puede cambiar a gusto: hora, día, mes y año.
  * 3. El VALOR de cada cuota lo escribe la vendedora. Si activa "Distribuir automáticamente"
- *    (apagado de entrada), el total se reparte en partes iguales.
+ *    (apagado de entrada), ella escribe solo la cuota 1 y lo que queda del total se reparte
+ *    en partes iguales entre las cuotas 2 en adelante.
  * 4. Un resumen muestra cuánto se ha asignado y cuánto falta o sobra: las cuotas deben sumar el total.
  * Estas fechas se usan después como recordatorios de cobro en "Notificaciones".
  */
 "use client";
 
 import { useEffect, useId } from "react";
-import { ajustarCantidadValores, repartirEnPartesIguales, resumirCuotas } from "@/lib/cuotas";
+import { ajustarCantidadValores, repartirDespuesDeLaPrimera, resumirCuotas } from "@/lib/cuotas";
 import { aInputFechaHora, fechaLarga, pesos } from "@/lib/formato";
 import { Campo, CampoDinero, Selector } from "../ui/Campo";
 import { Icono } from "../ui/Icono";
@@ -26,7 +27,7 @@ export interface ConfigCuotas {
   fechas: string[];
   /** Valor de cada cuota en pesos (0 = sin escribir) */
   valores: number[];
-  /** "Distribuir automáticamente": reparte el total en partes iguales */
+  /** "Distribuir automáticamente": la cuota 1 es manual y el resto del total se reparte entre las demás */
   automatico: boolean;
 }
 
@@ -79,32 +80,40 @@ export function EditorCuotas({ config, onCambio, total, error }: Props) {
   const { asignado, diferencia } = resumirCuotas(config.valores, total);
   const cuadra = total > 0 && diferencia === 0 && config.valores.every((v) => v > 0);
   const progreso = total > 0 ? Math.min(100, Math.round((asignado / total) * 100)) : 0;
+  // Con una sola cuota no hay "cuotas después de la primera": el modo automático no aplica
+  const hayVarias = config.cantidad > 1;
+  const auto = config.automatico && hayVarias;
+  const primera = config.valores[0] ?? 0;
 
-  // En modo automático los valores siguen al total (si cambian los productos o el descuento)
+  // En modo automático las cuotas 2..N siguen a la cuota 1 y al total (si cambian los productos o el descuento)
   useEffect(() => {
-    if (!config.automatico) return;
-    const repartidos = repartirEnPartesIguales(total, config.cantidad);
+    if (!auto) return;
+    const repartidos = repartirDespuesDeLaPrimera(total, config.valores[0] ?? 0, config.cantidad);
     if (repartidos.some((v, i) => v !== config.valores[i])) onCambio({ ...config, valores: repartidos });
-  }, [config, total, onCambio]);
+  }, [auto, config, total, onCambio]);
 
   const regenerar = (cambios: Partial<ConfigCuotas>) => {
     const nueva = { ...config, ...cambios };
+    const valores = ajustarCantidadValores(nueva.valores, nueva.cantidad);
     onCambio({
       ...nueva,
       fechas: calcularFechas(nueva.cantidad, nueva.frecuencia, nueva.primera),
-      valores: nueva.automatico
-        ? repartirEnPartesIguales(total, nueva.cantidad)
-        : ajustarCantidadValores(nueva.valores, nueva.cantidad),
+      valores: nueva.automatico && nueva.cantidad > 1 ? repartirDespuesDeLaPrimera(total, valores[0] ?? 0, nueva.cantidad) : valores,
     });
   };
 
   const cambiarAutomatico = () => {
     const automatico = !config.automatico;
     // Al apagarlo, los valores repartidos se quedan para que la vendedora los ajuste a mano
-    onCambio({ ...config, automatico, valores: automatico ? repartirEnPartesIguales(total, config.cantidad) : config.valores });
+    onCambio({
+      ...config,
+      automatico,
+      valores: automatico ? repartirDespuesDeLaPrimera(total, primera, config.cantidad) : config.valores,
+    });
   };
 
   const cambiarValor = (i: number, valor: number) => {
+    if (auto && i === 0) return onCambio({ ...config, valores: repartirDespuesDeLaPrimera(total, valor, config.cantidad) });
     const valores = [...config.valores];
     valores[i] = valor;
     onCambio({ ...config, valores });
@@ -113,6 +122,10 @@ export function EditorCuotas({ config, onCambio, total, error }: Props) {
   /* Estado del resumen: siempre con ícono + texto, nunca solo color */
   const estado = cuadra
     ? { icono: "check" as const, texto: "Las cuotas cuadran con el total", clase: "border-exito-700 bg-exito-50 text-exito-800", barra: "bg-exito-700" }
+    : auto && primera >= total && total > 0
+      ? { icono: "alerta" as const, texto: "La cuota 1 cubre todo el total: bájala para repartir el resto", clase: "border-peligro-700 bg-peligro-50 text-peligro-800", barra: "bg-peligro-700" }
+    : auto && primera === 0
+      ? { icono: "info" as const, texto: "Escribe primero el valor de la cuota 1", clase: "border-alerta-700 bg-alerta-50 text-alerta-800", barra: "bg-marca-600" }
     : diferencia < 0
       ? { icono: "alerta" as const, texto: `Sobran ${pesos(-diferencia)}: baja el valor de alguna cuota`, clase: "border-peligro-700 bg-peligro-50 text-peligro-800", barra: "bg-peligro-700" }
       : { icono: "info" as const, texto: diferencia > 0 ? `Faltan ${pesos(diferencia)} por asignar` : "Escribe el valor de cada cuota", clase: "border-alerta-700 bg-alerta-50 text-alerta-800", barra: "bg-marca-600" };
@@ -185,7 +198,8 @@ export function EditorCuotas({ config, onCambio, total, error }: Props) {
             {estado.texto}
           </p>
 
-          {/* Interruptor accesible: role="switch" + texto Sí/No visible */}
+          {/* Interruptor accesible: role="switch" + texto Activado/Desactivado visible */}
+          {hayVarias && (
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -213,11 +227,14 @@ export function EditorCuotas({ config, onCambio, total, error }: Props) {
               </span>
             </button>
           </div>
+          )}
         </div>
         <p id={ayudaSwitchId} className="border-t-2 border-linea bg-superficie-apagada px-4 py-3 text-base text-texto-suave sm:px-5">
-          {config.automatico
-            ? "El total se reparte en partes iguales (la última cuota ajusta los pesos sobrantes). Desactívalo para escribir cada valor."
-            : "Escribe el valor de cada cuota. Las cuotas deben sumar exactamente el total del crédito."}
+          {!hayVarias
+            ? "Con una sola cuota, su valor debe ser el total del crédito."
+            : auto
+              ? "Tú escribes la cuota 1; lo que queda del total se reparte en partes iguales entre las demás (la última ajusta los pesos sobrantes). Desactívalo para escribir cada valor."
+              : "Escribe el valor de cada cuota. Las cuotas deben sumar exactamente el total del crédito."}
         </p>
       </section>
 
@@ -254,7 +271,7 @@ export function EditorCuotas({ config, onCambio, total, error }: Props) {
                 }}
                 ayuda={f ? fechaLarga(new Date(f)) : undefined}
               />
-              {config.automatico ? (
+              {auto && i > 0 ? (
                 <div>
                   <p className="mb-2 text-lg font-bold">Valor de la cuota {i + 1}</p>
                   <p className="flex min-h-12 items-center rounded-xl border-2 border-dashed border-linea-fuerte bg-superficie-apagada px-4 text-xl font-bold">
@@ -268,7 +285,13 @@ export function EditorCuotas({ config, onCambio, total, error }: Props) {
                   valor={valor}
                   onCambio={(v) => cambiarValor(i, v)}
                   obligatorio
-                  ayuda={valor > 0 ? undefined : "Escribe cuánto paga en esta cuota."}
+                  ayuda={
+                    auto && i === 0
+                      ? "Las demás cuotas se calculan con lo que queda."
+                      : valor > 0
+                        ? undefined
+                        : "Escribe cuánto paga en esta cuota."
+                  }
                 />
               )}
             </li>
