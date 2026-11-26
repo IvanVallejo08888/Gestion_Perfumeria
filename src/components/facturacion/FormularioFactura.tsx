@@ -25,6 +25,7 @@ import type { ClienteDatos, FacturaDetalle, MedioPago, NombreActivo, ProductoVen
 import { Mensaje, Tarjeta } from "../ui/Basicos";
 import { Boton } from "../ui/Boton";
 import { CampoDinero } from "../ui/Campo";
+import { revisarValoresCuotas } from "@/lib/cuotas";
 import { Desplegable } from "../ui/Desplegable";
 import { Icono } from "../ui/Icono";
 import { Modal } from "../ui/Modal";
@@ -32,6 +33,9 @@ import { useAvisos } from "../ui/Avisos";
 import { BuscadorProductos } from "./BuscadorProductos";
 import { CLIENTE_VACIO, DatosCliente } from "./DatosCliente";
 import { configInicial, EditorCuotas, type ConfigCuotas } from "./EditorCuotas";
+
+/** Las 3 cuotas iniciales empiezan sin valor: la vendedora los escribe. */
+const VALORES_INICIALES = [0, 0, 0];
 import { SelectorMedioPago } from "./MedioPago";
 import { VistaFactura } from "./VistaFactura";
 
@@ -63,6 +67,8 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
   const [errorPago, setErrorPago] = useState("");
   // Las fechas se crean en el navegador (para usar la hora local del dispositivo)
   const [cuotas, setCuotas] = useState<ConfigCuotas | null>(null);
+  // Valor de cada cuota (0 = sin escribir): lo escribe la vendedora, empieza vacío
+  const [valoresCuotas, setValoresCuotas] = useState<number[]>(VALORES_INICIALES);
   const [erroresGenerales, setErroresGenerales] = useState<string[]>([]);
   const avisoErrorRef = useRef<HTMLDivElement>(null);
   // Cada vez que aparecen errores, el aviso sube a la vista y recibe el foco (también lo anuncia el lector de pantalla)
@@ -82,7 +88,9 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
   const sinSectores = sectores?.length === 0;
 
   useEffect(() => {
-    if (esCredito) setCuotas(configInicial());
+    if (!esCredito) return;
+    setCuotas(configInicial());
+    setValoresCuotas(VALORES_INICIALES);
   }, [esCredito]);
 
   /* ------------- Borrador: la factura sin terminar no se pierde al recargar ------------- */
@@ -114,7 +122,11 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
     }
     if (mismoTipo && esCredito) {
       const vigentes = cuotasVigentes(borrador.cuotas);
-      if (vigentes) setCuotas(vigentes);
+      if (vigentes) {
+        const { valores, ...config } = vigentes;
+        setCuotas(config);
+        setValoresCuotas(valores);
+      }
       else if (borrador.cuotas) cambios.push("Algunas fechas de las cuotas ya pasaron: se calcularon de nuevo.");
     }
     if (mismoTipo || cambios.length > 0) setRecuperado({ productos: borrador.lineas.length, cambios });
@@ -154,8 +166,18 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
 
   useEffect(() => {
     if (!restaurado) return;
-    guardarBorradorFactura({ tipo, cliente, lineas, descuento, adicional, notas, medioPago, transferencia, cuotas });
-  }, [restaurado, tipo, cliente, lineas, descuento, adicional, notas, medioPago, transferencia, cuotas]);
+    guardarBorradorFactura({
+      tipo,
+      cliente,
+      lineas,
+      descuento,
+      adicional,
+      notas,
+      medioPago,
+      transferencia,
+      cuotas: cuotas ? { ...cuotas, valores: valoresCuotas } : null,
+    });
+  }, [restaurado, tipo, cliente, lineas, descuento, adicional, notas, medioPago, transferencia, cuotas, valoresCuotas]);
 
   /* --------------- Perfume que llega desde «Vender» del inventario --------------- */
   const cargadoRef = useRef<string | null>(null);
@@ -223,6 +245,7 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
     setErrorCuotas("");
     setRecuperado(null);
     if (esCredito) setCuotas(configInicial());
+    setValoresCuotas(VALORES_INICIALES);
   }
 
   /* -------------------------------- Registrar ------------------------------- */
@@ -271,18 +294,23 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
       }
     }
 
-    // 3. Cuotas (deben estar completas y ser fechas futuras)
-    let fechasIso: string[] | undefined;
+    // 3. Cuotas (fechas completas y futuras; valores que sumen exacto el total)
+    let cuotasEnvio: { fechaVencimiento: string; valor: number }[] | undefined;
     if (esCredito) {
       const fechas = cuotas?.fechas ?? [];
+      const valores = valoresCuotas;
+      const errorValores = productosOk ? revisarValoresCuotas(valores, total) : null;
       if (fechas.length === 0 || fechas.some((f) => !f || Number.isNaN(new Date(f).getTime()))) {
         setErrorCuotas("Completa la fecha y hora de todas las cuotas.");
         errores.push("Paso 3: faltan fechas en las cuotas.");
       } else if (fechas.some((f) => new Date(f).getTime() < Date.now())) {
         setErrorCuotas("Hay cuotas con fecha pasada. Todas las fechas de cobro deben ser futuras.");
         errores.push("Paso 3: revisa las fechas de las cuotas.");
+      } else if (errorValores) {
+        setErrorCuotas(errorValores);
+        errores.push(`Paso 3: ${errorValores}`);
       } else {
-        fechasIso = fechas.map((f) => new Date(f).toISOString());
+        cuotasEnvio = fechas.map((f, i) => ({ fechaVencimiento: new Date(f).toISOString(), valor: valores[i] ?? 0 }));
       }
     }
 
@@ -299,7 +327,7 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
           adicional,
           descuento,
           notas: notas.trim() || undefined,
-          cuotas: fechasIso?.map((fechaVencimiento) => ({ fechaVencimiento })),
+          cuotas: cuotasEnvio,
           ...(esCredito ? {} : { medioPago }),
           // En Mixto se envían los dos valores: el servidor los compara con el total que él calcula
           ...(!esCredito && medioPago === "MIXTO" ? { valorTransferencia: transferencia, valorEfectivo: total - transferencia } : {}),
@@ -478,7 +506,14 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
 
       {esCredito && cuotas && (
         <Tarjeta>
-          <EditorCuotas config={cuotas} onCambio={setCuotas} total={Math.max(0, total)} error={errorCuotas} />
+          <EditorCuotas
+            config={cuotas}
+            onCambio={setCuotas}
+            total={Math.max(0, total)}
+            valores={valoresCuotas}
+            onValores={setValoresCuotas}
+            error={errorCuotas}
+          />
         </Tarjeta>
       )}
 

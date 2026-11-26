@@ -23,6 +23,10 @@ export interface CuotasBorrador {
   frecuencia: "semanal" | "quincenal" | "mensual";
   primera: string;
   fechas: string[];
+  /** Valor de cada cuota (0 = sin escribir) */
+  valores: number[];
+  /** true si la vendedora activó "Distribuir automáticamente" */
+  automatico: boolean;
 }
 
 export interface BorradorFactura {
@@ -68,6 +72,9 @@ const esquemaBorrador = z.object({
       frecuencia: z.enum(["semanal", "quincenal", "mensual"]),
       primera: z.string(),
       fechas: z.array(z.string()),
+      // Borradores anteriores no traían valores: quedan vacíos y en modo manual
+      valores: z.array(entero).default([]),
+      automatico: z.boolean().default(false),
     })
     .nullable(),
 });
@@ -135,7 +142,10 @@ export function cuotasVigentes(cuotas: CuotasBorrador | null, ahora = Date.now()
     const t = new Date(f).getTime();
     return !Number.isNaN(t) && t > ahora;
   });
-  return validas ? cuotas : null;
+  if (!validas) return null;
+  // Un valor por cuota (los que falten quedan en 0 para que la vendedora los escriba)
+  const valores = Array.from({ length: cuotas.fechas.length }, (_, i) => cuotas.valores?.[i] ?? 0);
+  return { ...cuotas, cantidad: cuotas.fechas.length, valores, automatico: cuotas.automatico ?? false };
 }
 
 /* ------------------------- Almacenamiento (navegador) ------------------------- */

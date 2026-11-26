@@ -1,22 +1,24 @@
 /**
  * Editor de cuotas: lo usan el crédito de la factura (cobros a clientes) y el gasto a crédito (pagos de deudas).
  * 1. La persona elige cuántas cuotas, cada cuánto (semanal, quincenal o mensual) y la fecha del primer pago.
- * 2. Las fechas se llenan SOLAS.
- * 3. Cada fecha se puede cambiar a gusto: hora, día, mes y año.
+ * 2. Las fechas se llenan SOLAS y cada una se puede cambiar a gusto: hora, día, mes y año.
+ * 3. El VALOR de cada cuota lo escribe la persona. Si activa "Distribuir automáticamente"
+ *    (apagado de entrada), escribe solo la cuota 1 y lo que queda del total se reparte
+ *    en partes iguales entre las cuotas 2 en adelante.
+ * 4. Un resumen muestra cuánto se ha asignado y cuánto falta o sobra: las cuotas deben sumar el total.
  * Estas fechas se usan después como recordatorios en "Notificaciones".
  *
- * Opciones (las usa el gasto a crédito; la factura usa los valores por defecto y no cambia):
+ * Opciones (las usa el gasto a crédito; la factura usa los valores por defecto):
  *  - permitirPersonalizadas: frecuencia «Fechas personalizadas» (las fechas no se recalculan solas).
- *  - valores + onValores: el valor de cada cuota se puede editar (deben sumar el total).
  *  - avisarVencidas: muestra «Esta cuota ya está vencida» si la fecha ya pasó (deudas antiguas).
  */
 "use client";
 
-import { useId } from "react";
-import { repartirEnCuotas } from "@/lib/deudas";
+import { useEffect, useId } from "react";
+import { ajustarCantidadValores, repartirDespuesDeLaPrimera, resumirCuotas } from "@/lib/cuotas";
 import { aInputFechaHora, fechaLarga, pesos } from "@/lib/formato";
-import { Boton } from "../ui/Boton";
 import { Campo, CampoDinero, Selector } from "../ui/Campo";
+import { Icono } from "../ui/Icono";
 
 export type Frecuencia = "semanal" | "quincenal" | "mensual";
 /** «personalizada»: la persona pone cada fecha a mano (solo en el gasto a crédito). */
@@ -29,6 +31,8 @@ export interface ConfigCuotas<F extends FrecuenciaEditor = Frecuencia> {
   primera: string;
   /** Fecha y hora de cada cuota (editable) */
   fechas: string[];
+  /** "Distribuir automáticamente": la cuota 1 es manual y el resto del total se reparte entre las demás */
+  automatico: boolean;
 }
 
 /** Suma periodos a una fecha (el mensual respeta el fin de mes: 31 ene → 28/29 feb). */
@@ -63,32 +67,27 @@ function ajustarFechasPersonalizadas(fechas: string[], cantidad: number, primera
   return lista;
 }
 
-/** Configuración inicial: 3 cuotas mensuales, la primera dentro de un mes a las 10:00 a. m. */
+/** Configuración inicial: 3 cuotas mensuales, la primera dentro de un mes a las 10:00 a. m., en modo manual. */
 export function configInicial(): ConfigCuotas {
   const primera = sumarPeriodo(new Date(), "mensual", 1);
   primera.setHours(10, 0, 0, 0);
   const valor = aInputFechaHora(primera);
-  return { cantidad: 3, frecuencia: "mensual", primera: valor, fechas: calcularFechas(3, "mensual", valor) };
-}
-
-/** Valor de cada cuota (iguales; la última ajusta la diferencia de redondeo). */
-export function valoresCuotas(total: number, cantidad: number): number[] {
-  return repartirEnCuotas(total, cantidad);
+  return { cantidad: 3, frecuencia: "mensual", primera: valor, fechas: calcularFechas(3, "mensual", valor), automatico: false };
 }
 
 interface Props<F extends FrecuenciaEditor> {
   config: ConfigCuotas<F>;
   onCambio: (c: ConfigCuotas<F>) => void;
   total: number;
+  /** Valor de cada cuota (0 = sin escribir). Deben sumar el total. */
+  valores: number[];
+  onValores: (valores: number[]) => void;
   error?: string;
   /** Título del grupo (por defecto, el de la factura). */
   titulo?: string;
   /** "cobro" (cuotas de un cliente) o "pago" (cuotas de una deuda). */
   accion?: "cobro" | "pago";
   permitirPersonalizadas?: boolean;
-  /** Valores editables de cada cuota. Si no se envían, se reparten en partes iguales y no se editan. */
-  valores?: number[];
-  onValores?: (valores: number[]) => void;
   avisarVencidas?: boolean;
 }
 
@@ -96,19 +95,31 @@ export function EditorCuotas<F extends FrecuenciaEditor = Frecuencia>({
   config,
   onCambio,
   total,
+  valores,
+  onValores,
   error,
   titulo = "3. Cuotas del crédito",
   accion = "cobro",
   permitirPersonalizadas = false,
-  valores: valoresEditables,
-  onValores,
   avisarVencidas = false,
 }: Props<F>) {
   const tituloId = useId();
-  const editables = !!valoresEditables && !!onValores;
-  const valores = editables ? valoresEditables : valoresCuotas(total, config.cantidad);
-  const suma = valores.reduce((a, v) => a + v, 0);
+  const ayudaSwitchId = useId();
   const ahora = Date.now();
+  const { asignado, diferencia } = resumirCuotas(valores, total);
+  const cuadra = total > 0 && diferencia === 0 && valores.length === config.cantidad && valores.every((v) => v > 0);
+  const progreso = total > 0 ? Math.min(100, Math.round((asignado / total) * 100)) : 0;
+  // Con una sola cuota no hay "cuotas después de la primera": el modo automático no aplica
+  const hayVarias = config.cantidad > 1;
+  const auto = config.automatico && hayVarias;
+  const primera = valores[0] ?? 0;
+
+  // En modo automático las cuotas 2..N siguen a la cuota 1 y al total (si cambian los productos, el descuento o el valor)
+  useEffect(() => {
+    if (!auto) return;
+    const repartidos = repartirDespuesDeLaPrimera(total, valores[0] ?? 0, config.cantidad);
+    if (repartidos.length !== valores.length || repartidos.some((v, i) => v !== valores[i])) onValores(repartidos);
+  }, [auto, valores, total, config.cantidad, onValores]);
 
   const regenerar = (cambios: Partial<ConfigCuotas<F>>) => {
     const nueva = { ...config, ...cambios };
@@ -117,9 +128,37 @@ export function EditorCuotas<F extends FrecuenciaEditor = Frecuencia>({
         ? ajustarFechasPersonalizadas(cambios.primera ? [cambios.primera, ...config.fechas.slice(1)] : config.fechas, nueva.cantidad, nueva.primera)
         : calcularFechas(nueva.cantidad, nueva.frecuencia as Frecuencia, nueva.primera);
     onCambio({ ...nueva, fechas });
-    // Si cambia la cantidad, los valores se vuelven a repartir en partes iguales
-    if (editables && cambios.cantidad !== undefined && cambios.cantidad !== config.cantidad) onValores!(repartirEnCuotas(total, nueva.cantidad));
+    // Si cambia la cantidad, se conservan los valores escritos (las cuotas nuevas quedan vacías o se reparten)
+    if (cambios.cantidad !== undefined && cambios.cantidad !== config.cantidad) {
+      const ajustados = ajustarCantidadValores(valores, nueva.cantidad);
+      onValores(nueva.automatico && nueva.cantidad > 1 ? repartirDespuesDeLaPrimera(total, ajustados[0] ?? 0, nueva.cantidad) : ajustados);
+    }
   };
+
+  const cambiarAutomatico = () => {
+    const automatico = !config.automatico;
+    onCambio({ ...config, automatico });
+    // Al apagarlo, los valores repartidos se quedan para que la persona los ajuste a mano
+    if (automatico) onValores(repartirDespuesDeLaPrimera(total, primera, config.cantidad));
+  };
+
+  const cambiarValor = (i: number, valor: number) => {
+    if (auto && i === 0) return onValores(repartirDespuesDeLaPrimera(total, valor, config.cantidad));
+    const nuevos = ajustarCantidadValores(valores, config.cantidad);
+    nuevos[i] = valor;
+    onValores(nuevos);
+  };
+
+  /* Estado del resumen: siempre con ícono + texto, nunca solo color */
+  const estado = cuadra
+    ? { icono: "check" as const, texto: "Las cuotas cuadran con el total", clase: "border-exito-700 bg-exito-50 text-exito-800", barra: "bg-exito-700" }
+    : auto && primera >= total && total > 0
+      ? { icono: "alerta" as const, texto: "La cuota 1 cubre todo el total: bájala para repartir el resto", clase: "border-peligro-700 bg-peligro-50 text-peligro-800", barra: "bg-peligro-700" }
+      : auto && primera === 0
+        ? { icono: "info" as const, texto: "Escribe primero el valor de la cuota 1", clase: "border-alerta-700 bg-alerta-50 text-alerta-800", barra: "bg-marca-600" }
+        : diferencia < 0
+          ? { icono: "alerta" as const, texto: `Sobran ${pesos(-diferencia)}: baja el valor de alguna cuota`, clase: "border-peligro-700 bg-peligro-50 text-peligro-800", barra: "bg-peligro-700" }
+          : { icono: "info" as const, texto: diferencia > 0 ? `Faltan ${pesos(diferencia)} por asignar` : "Escribe el valor de cada cuota", clase: "border-alerta-700 bg-alerta-50 text-alerta-800", barra: "bg-marca-600" };
 
   return (
     <fieldset aria-labelledby={tituloId} className="min-w-0">
@@ -160,26 +199,109 @@ export function EditorCuotas<F extends FrecuenciaEditor = Frecuencia>({
         {config.frecuencia === "personalizada"
           ? "Fechas personalizadas: escribe la fecha y hora de cada cuota abajo."
           : "Las fechas se calculan solas. Si cambias los datos de arriba, se vuelven a calcular. Puedes ajustar cada fecha abajo."}
-        {editables && " El valor de cada cuota se reparte en partes iguales; puedes cambiarlo, pero la suma debe ser igual al total."}
       </p>
 
+      {/* ------------------------- Resumen del reparto ------------------------- */}
+      <section aria-label="Reparto del valor en cuotas" className="mt-5 overflow-hidden rounded-2xl border-2 border-linea bg-superficie">
+        <div className="grid gap-4 p-4 sm:grid-cols-3 sm:p-5">
+          <div>
+            <p className="text-base font-bold text-texto-suave">{accion === "cobro" ? "Total del crédito" : "Total de la deuda"}</p>
+            <p className="text-2xl font-bold">{pesos(total)}</p>
+          </div>
+          <div>
+            <p className="text-base font-bold text-texto-suave">Asignado en cuotas</p>
+            <p className="text-2xl font-bold">{pesos(asignado)}</p>
+          </div>
+          <div>
+            <p className="text-base font-bold text-texto-suave">{diferencia < 0 ? "Sobra" : "Falta"}</p>
+            <p className={`text-2xl font-bold ${diferencia < 0 ? "text-peligro-800" : diferencia > 0 ? "text-alerta-800" : "text-exito-800"}`}>
+              {pesos(Math.abs(diferencia))}
+            </p>
+          </div>
+        </div>
+
+        <div className="px-4 sm:px-5">
+          <div
+            role="progressbar"
+            aria-label="Porcentaje del total asignado en cuotas"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={progreso}
+            className="h-3 w-full overflow-hidden rounded-full bg-superficie-apagada"
+          >
+            <div className={`h-full rounded-full transition-all duration-300 ${estado.barra}`} style={{ width: `${progreso}%` }} />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4 p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
+          <p aria-live="polite" className={`flex items-center gap-2 rounded-xl border-2 px-3 py-2 text-lg font-bold ${estado.clase}`}>
+            <Icono nombre={estado.icono} />
+            {estado.texto}
+          </p>
+
+          {/* Interruptor accesible: role="switch" + texto Activado/Desactivado visible */}
+          {hayVarias && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={config.automatico}
+              aria-describedby={ayudaSwitchId}
+              onClick={cambiarAutomatico}
+              className="flex min-h-12 items-center gap-3 rounded-xl px-2 text-left text-lg font-bold focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-marca-600"
+            >
+              <span
+                aria-hidden="true"
+                className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full border-2 transition-colors ${
+                  config.automatico ? "border-marca-700 bg-marca-700" : "border-linea-fuerte bg-superficie-apagada"
+                }`}
+              >
+                <span
+                  className={`inline-block size-6 rounded-full bg-white shadow transition-transform duration-200 ${
+                    config.automatico ? "translate-x-6" : "translate-x-0.5"
+                  }`}
+                />
+              </span>
+              <span>
+                Distribuir automáticamente
+                <span className="block text-base font-normal text-texto-suave">{config.automatico ? "Activado" : "Desactivado"}</span>
+              </span>
+            </button>
+          )}
+        </div>
+        <p id={ayudaSwitchId} className="border-t-2 border-linea bg-superficie-apagada px-4 py-3 text-base text-texto-suave sm:px-5">
+          {!hayVarias
+            ? `Con una sola cuota, su valor debe ser el total ${accion === "cobro" ? "del crédito" : "de la deuda"}.`
+            : auto
+              ? "Tú escribes la cuota 1; lo que queda del total se reparte en partes iguales entre las demás (la última ajusta los pesos sobrantes). Desactívalo para escribir cada valor."
+              : "Escribe el valor de cada cuota. Las cuotas deben sumar exactamente el total."}
+        </p>
+      </section>
+
       {error && (
-        <p role="alert" className="mt-3 text-lg font-bold text-peligro-800">
+        <p role="alert" className="mt-3 flex items-center gap-2 text-lg font-bold text-peligro-800">
+          <Icono nombre="alerta" />
           {error}
         </p>
       )}
 
+      {/* ------------------------------ Cuotas ------------------------------ */}
       <ol className="mt-4 space-y-3">
         {config.fechas.map((f, i) => {
+          const valor = valores[i] ?? 0;
           const vencida = avisarVencidas && f !== "" && new Date(f).getTime() < ahora;
           return (
             <li
               key={i}
-              className={`grid grid-cols-[minmax(0,1fr)] items-end gap-3 rounded-xl border-2 bg-superficie p-4 md:grid-cols-[8rem_minmax(0,1fr)_12rem] ${
+              className={`grid grid-cols-[minmax(0,1fr)] gap-4 rounded-2xl border-2 bg-superficie p-4 md:grid-cols-[auto_minmax(0,1fr)_minmax(0,16rem)] md:items-start ${
                 vencida ? "border-alerta-700" : "border-linea"
               }`}
             >
-              <p className="text-lg font-bold">Cuota {i + 1}</p>
+              <div className="flex items-center gap-3 md:flex-col md:items-center md:gap-1 md:pt-8">
+                <span aria-hidden="true" className="flex size-11 items-center justify-center rounded-full bg-marca-700 text-xl font-bold text-white">
+                  {i + 1}
+                </span>
+                <p className="text-lg font-bold md:text-base">Cuota {i + 1}</p>
+              </div>
               <div>
                 <Campo
                   etiqueta={`Fecha y hora de ${accion} de la cuota ${i + 1}`}
@@ -193,51 +315,39 @@ export function EditorCuotas<F extends FrecuenciaEditor = Frecuencia>({
                   ayuda={f ? fechaLarga(new Date(f)) : undefined}
                 />
                 {vencida && (
-                  <p className="mt-1 text-base font-bold text-alerta-800" role="status">
-                    ⚠ Esta cuota ya está vencida
+                  <p className="mt-1 flex items-center gap-2 text-base font-bold text-alerta-800" role="status">
+                    <Icono nombre="alerta" className="size-5" />
+                    Esta cuota ya está vencida
                   </p>
                 )}
               </div>
-              {editables ? (
+              {auto && i > 0 ? (
+                <div>
+                  <p className="mb-2 text-lg font-bold">Valor de la cuota {i + 1}</p>
+                  <p className="flex min-h-12 items-center rounded-xl border-2 border-dashed border-linea-fuerte bg-superficie-apagada px-4 text-xl font-bold">
+                    {pesos(valor)}
+                  </p>
+                  <p className="mt-1 text-base text-texto-suave">Repartido automáticamente</p>
+                </div>
+              ) : (
                 <CampoDinero
                   etiqueta={`Valor de la cuota ${i + 1}`}
-                  valor={valores[i] ?? 0}
-                  onCambio={(v) => {
-                    const nuevos = [...valores];
-                    nuevos[i] = v;
-                    onValores!(nuevos);
-                  }}
+                  valor={valor}
+                  onCambio={(v) => cambiarValor(i, v)}
+                  obligatorio
+                  ayuda={
+                    auto && i === 0
+                      ? "Las demás cuotas se calculan con lo que queda."
+                      : valor > 0
+                        ? undefined
+                        : `Escribe cuánto ${accion === "cobro" ? "paga" : "pagas"} en esta cuota.`
+                  }
                 />
-              ) : (
-                <div className="md:text-right">
-                  <p className="text-base font-bold text-texto-suave">Valor</p>
-                  <p className="text-xl font-bold">{pesos(valores[i] ?? 0)}</p>
-                </div>
               )}
             </li>
           );
         })}
       </ol>
-
-      {editables && (
-        <div
-          aria-live="polite"
-          className={`mt-4 flex flex-col gap-3 rounded-xl border-2 p-4 sm:flex-row sm:items-center sm:justify-between ${
-            suma === total ? "border-exito-700 bg-exito-50" : "border-peligro-700 bg-peligro-50"
-          }`}
-        >
-          <p className="text-lg font-bold">
-            {suma === total
-              ? `✓ Las cuotas suman ${pesos(suma)}: igual al total.`
-              : `✗ Las cuotas suman ${pesos(suma)} y el total es ${pesos(total)} (${suma < total ? "faltan" : "sobran"} ${pesos(Math.abs(total - suma))}).`}
-          </p>
-          {suma !== total && (
-            <Boton variante="secundario" onClick={() => onValores!(repartirEnCuotas(total, config.cantidad))}>
-              Repartir en partes iguales
-            </Boton>
-          )}
-        </div>
-      )}
     </fieldset>
   );
 }

@@ -64,9 +64,33 @@ describe("reconciliarLineas", () => {
 });
 
 describe("cuotasVigentes", () => {
-  const cuotas = { cantidad: 2, frecuencia: "mensual" as const, primera: "2026-12-11T10:00", fechas: ["2026-12-11T10:00", "2027-01-11T10:00"] };
-  it("conserva cuotas con fechas futuras", () => {
-    assert.equal(cuotasVigentes(cuotas, AHORA), cuotas);
+  const cuotas = {
+    cantidad: 2,
+    frecuencia: "mensual" as const,
+    primera: "2026-12-11T10:00",
+    fechas: ["2026-12-11T10:00", "2027-01-11T10:00"],
+    valores: [60_000, 40_000],
+    automatico: false,
+  };
+  it("conserva cuotas con fechas futuras y sus valores", () => {
+    assert.deepEqual(cuotasVigentes(cuotas, AHORA), cuotas);
+  });
+  it("un borrador anterior sin valores queda en modo manual con valores vacíos", () => {
+    const texto = JSON.stringify({
+      version: 1,
+      guardadoEn: AHORA,
+      tipo: "CREDITO",
+      cliente: { identificacion: "1", nombre: "Ana", telefono: "", direccion: "", sector: "" },
+      lineas: [],
+      descuento: 0,
+      adicional: 0,
+      notas: "",
+      medioPago: null,
+      transferencia: 0,
+      cuotas: { cantidad: 2, frecuencia: "mensual", primera: cuotas.primera, fechas: cuotas.fechas },
+    });
+    const b = leerBorrador(texto, AHORA);
+    assert.deepEqual(cuotasVigentes(b?.cuotas ?? null, AHORA), { ...cuotas, valores: [0, 0] });
   });
   it("descarta cuotas con alguna fecha pasada o vacía", () => {
     assert.equal(cuotasVigentes({ ...cuotas, fechas: ["2026-11-01T10:00", "2027-01-11T10:00"] }, AHORA), null);
