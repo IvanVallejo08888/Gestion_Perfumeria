@@ -17,6 +17,7 @@ import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-o
 import { db } from "@/db";
 import { abonos, clientes, cuotas, facturaItems, facturas, locales, marcas, productos, sectores } from "@/db/schema";
 import { ApiError, type VendedorSesion } from "@/lib/api";
+import { revisarValoresCuotas } from "@/lib/cuotas";
 import { camposBusquedaCliente, escaparLike, normalizarTexto } from "@/lib/formato";
 import type { ClienteDatos, FacturaDetalle, FacturaResumen, MedioPago, ResultadoAnulacion } from "@/tipos";
 import { registrarMovimientos } from "./movimientos";
@@ -29,7 +30,7 @@ export interface DatosNuevaFactura {
   adicional: number;
   descuento: number;
   notas?: string;
-  cuotas?: { fechaVencimiento: string }[];
+  cuotas?: { fechaVencimiento: string; valor: number }[];
   medioPago?: MedioPago;
   valorTransferencia?: number;
   valorEfectivo?: number;
@@ -209,17 +210,23 @@ export async function crearFactura(vendedor: VendedorSesion, datos: DatosNuevaFa
       })),
     );
 
-    /* 6. Cuotas: el valor se reparte en partes iguales; la última absorbe la diferencia de redondeo */
+    /* 6. Cuotas: el valor de cada una lo define la vendedora; deben sumar EXACTO el total que calcula el servidor.
+          Se ordenan por fecha y cada valor viaja con su fecha. */
     if (esCredito && datos.cuotas?.length) {
-      const fechas = datos.cuotas.map((c) => new Date(c.fechaVencimiento)).sort((a, b) => a.getTime() - b.getTime());
-      const n = fechas.length;
-      const base = Math.floor(total / n);
+      const errorValores = revisarValoresCuotas(
+        datos.cuotas.map((c) => c.valor),
+        total,
+      );
+      if (errorValores) throw new ApiError(400, errorValores);
+      const ordenadas = datos.cuotas
+        .map((c) => ({ fecha: new Date(c.fechaVencimiento), valor: c.valor }))
+        .sort((a, b) => a.fecha.getTime() - b.fecha.getTime());
       await tx.insert(cuotas).values(
-        fechas.map((f, i) => ({
+        ordenadas.map((c, i) => ({
           facturaId: factura.id,
           numero: i + 1,
-          fechaVencimiento: f,
-          valor: i === n - 1 ? total - base * (n - 1) : base,
+          fechaVencimiento: c.fecha,
+          valor: c.valor,
         })),
       );
     }

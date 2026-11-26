@@ -239,6 +239,11 @@ export const cuotaSchema = z.object({
   fechaVencimiento: z.iso.datetime({ offset: true, error: "Fecha de cuota no válida." }),
 });
 
+/** Cuota al crear un crédito: fecha + valor que escribió la vendedora (el servidor revisa que sumen el total). */
+export const cuotaNuevaSchema = cuotaSchema.extend({
+  valor: dineroSchema("El valor de la cuota").refine((v) => v > 0, "Cada cuota debe tener un valor mayor que cero."),
+});
+
 const medioPagoSchema = z.enum(["EFECTIVO", "TRANSFERENCIA", "MIXTO"], { error: "Elige el medio de pago." });
 
 /**
@@ -258,7 +263,7 @@ export const crearFacturaSchema = z
     adicional: dineroSchema("El pago adicional").default(0),
     descuento: dineroSchema("El descuento").default(0),
     notas: z.string().trim().max(300).optional(),
-    cuotas: z.array(cuotaSchema).max(60, "Máximo 60 cuotas.").optional(),
+    cuotas: z.array(cuotaNuevaSchema).max(60, "Máximo 60 cuotas.").optional(),
     // Solo para ventas de contado: en el crédito el dinero entra con cada abono
     medioPago: medioPagoSchema.optional(),
     ...valoresPago,

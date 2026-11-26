@@ -25,6 +25,7 @@ import type { ClienteDatos, FacturaDetalle, MedioPago, NombreActivo, ProductoVen
 import { Mensaje, Tarjeta } from "../ui/Basicos";
 import { Boton } from "../ui/Boton";
 import { CampoDinero } from "../ui/Campo";
+import { revisarValoresCuotas } from "@/lib/cuotas";
 import { Desplegable } from "../ui/Desplegable";
 import { Icono } from "../ui/Icono";
 import { Modal } from "../ui/Modal";
@@ -271,18 +272,23 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
       }
     }
 
-    // 3. Cuotas (deben estar completas y ser fechas futuras)
-    let fechasIso: string[] | undefined;
+    // 3. Cuotas (fechas completas y futuras; valores que sumen exacto el total)
+    let cuotasEnvio: { fechaVencimiento: string; valor: number }[] | undefined;
     if (esCredito) {
       const fechas = cuotas?.fechas ?? [];
+      const valores = cuotas?.valores ?? [];
+      const errorValores = productosOk ? revisarValoresCuotas(valores, total) : null;
       if (fechas.length === 0 || fechas.some((f) => !f || Number.isNaN(new Date(f).getTime()))) {
         setErrorCuotas("Completa la fecha y hora de todas las cuotas.");
         errores.push("Paso 3: faltan fechas en las cuotas.");
       } else if (fechas.some((f) => new Date(f).getTime() < Date.now())) {
         setErrorCuotas("Hay cuotas con fecha pasada. Todas las fechas de cobro deben ser futuras.");
         errores.push("Paso 3: revisa las fechas de las cuotas.");
+      } else if (errorValores) {
+        setErrorCuotas(errorValores);
+        errores.push(`Paso 3: ${errorValores}`);
       } else {
-        fechasIso = fechas.map((f) => new Date(f).toISOString());
+        cuotasEnvio = fechas.map((f, i) => ({ fechaVencimiento: new Date(f).toISOString(), valor: valores[i] ?? 0 }));
       }
     }
 
@@ -299,7 +305,7 @@ export function FormularioFactura({ tipo, productoInicialId, onRegistrada }: Pro
           adicional,
           descuento,
           notas: notas.trim() || undefined,
-          cuotas: fechasIso?.map((fechaVencimiento) => ({ fechaVencimiento })),
+          cuotas: cuotasEnvio,
           ...(esCredito ? {} : { medioPago }),
           // En Mixto se envían los dos valores: el servidor los compara con el total que él calcula
           ...(!esCredito && medioPago === "MIXTO" ? { valorTransferencia: transferencia, valorEfectivo: total - transferencia } : {}),
